@@ -408,8 +408,11 @@ bool editConfiguration(SDL_Renderer* renderer, int width, int height, widemelon:
                         widemelon::Logger::info("Configuration saved from setup form");
                         return true;
                     }
-                    status = "SAVE ERROR";
-                    widemelon::Logger::error("Configuration save error: " + error);
+                    // Persistence is optional: the values entered in this
+                    // session remain valid and must not prevent connecting.
+                    status = "NOT SAVED - CONTINUING";
+                    widemelon::Logger::error("Configuration save warning: " + error);
+                    return true;
                 }
             }
         }

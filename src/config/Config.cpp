@@ -8,6 +8,7 @@
 #include <system_error>
 #include <string_view>
 #include <unistd.h>
+#include <vector>
 
 namespace
 {
@@ -41,9 +42,14 @@ std::filesystem::path executableConfigPath()
     return std::filesystem::path(executablePath.data()).parent_path() / "widemelon-client.conf";
 }
 
-std::filesystem::path persistentConfigPath()
+std::vector<std::filesystem::path> persistentConfigPaths()
 {
-    return "/mnt/SDCARD/Saves/WideMelonClient/widemelon-client.conf";
+    // SpruceOS images have used both mount-point spellings. Try the actual
+    // mounted path first, then retain compatibility with uppercase images.
+    return {
+        "/mnt/sdcard/Saves/WideMelonClient/widemelon-client.conf",
+        "/mnt/SDCARD/Saves/WideMelonClient/widemelon-client.conf"
+    };
 }
 
 bool writeConfigFile(const std::filesystem::path& path, const widemelon::Config& config, std::string& error)
@@ -148,11 +154,11 @@ ConfigLoadResult ConfigLoader::validate(Config config)
 
 ConfigLoadResult ConfigLoader::loadNextToExecutable()
 {
-    const std::filesystem::path saved = persistentConfigPath();
-    std::error_code existsError;
-    if (std::filesystem::exists(saved, existsError)) return loadFile(saved);
-    if (existsError)
-        return failure("Cannot access saved configuration: " + existsError.message());
+    for (const auto& saved : persistentConfigPaths())
+    {
+        std::error_code existsError;
+        if (std::filesystem::exists(saved, existsError)) return loadFile(saved);
+    }
     const std::filesystem::path bundled = executableConfigPath();
     if (bundled.empty())
         return failure("Cannot determine executable path");
@@ -167,7 +173,15 @@ bool ConfigLoader::saveNextToExecutable(const Config& config, std::string& error
         error = checked.error;
         return false;
     }
-    return writeConfigFile(persistentConfigPath(), config, error);
+    std::string lastError;
+    for (const auto& saved : persistentConfigPaths())
+    {
+        std::string candidateError;
+        if (writeConfigFile(saved, config, candidateError)) return true;
+        lastError = saved.string() + ": " + candidateError;
+    }
+    error = "Cannot persist configuration (continuing without save): " + lastError;
+    return false;
 }
 
 }

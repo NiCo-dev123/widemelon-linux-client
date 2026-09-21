@@ -11,8 +11,8 @@ Wide Melon Linux Client is an ARM64 Linux app that lets you play NDS games on th
 
 The bundled `widemelon-client.conf` supplies initial values. Values confirmed
 in the console setup form are stored persistently in
-`/mnt/SDCARD/Saves/WideMelonClient/widemelon-client.conf`, so app updates do
-not overwrite them. Set `host` to the private IPv4 address displayed by
+`/mnt/sdcard/Saves/WideMelonClient/widemelon-client.conf` (or the equivalent
+uppercase `/mnt/SDCARD` path), so app updates do not overwrite them. Set `host` to the private IPv4 address displayed by
 WideMelon and set `pairing_code` to its current ten-digit pairing code.
 
 ## Trimui Smart Pro S / SpruceOS installation
