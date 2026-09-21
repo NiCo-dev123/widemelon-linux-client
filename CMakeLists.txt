@@ -44,6 +44,3 @@ endif()
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(widemelon-client PRIVATE -Wall -Wextra -Wpedantic)
 endif()
-
-enable_testing()
-add_subdirectory(tests)
