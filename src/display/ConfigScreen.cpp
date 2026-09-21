@@ -1,13 +1,16 @@
 #include "display/ConfigScreen.h"
 
 #include "input/EvdevInput.h"
+#include "network/WebSocketClient.h"
 
 #include <SDL.h>
 
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <chrono>
 #include <cstdint>
+#include <future>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
@@ -88,7 +91,7 @@ void drawText(SDL_Renderer* renderer, std::string_view text, int x, int y, int s
     }
 }
 
-void render(SDL_Renderer* renderer, int width, int height, const widemelon::Config& config)
+void render(SDL_Renderer* renderer, int width, int height, const widemelon::Config& config, const std::string& status)
 {
     const std::vector<std::string> lines{
         "WIDEMELON LINUX CLIENT",
@@ -97,6 +100,8 @@ void render(SDL_Renderer* renderer, int width, int height, const widemelon::Conf
         "HOST: " + config.host,
         "PORT: " + std::to_string(config.port),
         "PAIRING CODE: " + config.pairingCode,
+        "",
+        status,
         "",
         "HOLD START + L + R TO EXIT",
     };
@@ -152,13 +157,20 @@ bool ConfigScreen::show(const Config& config, std::string& error)
     int width = 0;
     int height = 0;
     SDL_GetWindowSize(window, &width, &height);
-    render(renderer, width, height, config);
+    std::string status = "SEARCHING FOR WIDEMELON";
+    widemelon::WebSocketClient client;
+    auto connection = std::async(std::launch::async, [&client, &config]
+    {
+        return client.connectAndAuthenticate(config, std::chrono::seconds(30));
+    });
+    render(renderer, width, height, config, status);
 
     EvdevInput exitInput;
     std::string inputError;
     exitInput.open("/dev/input/event4", inputError);
 
     bool running = true;
+    bool connectionReported = false;
     while (running)
     {
         SDL_Event event;
@@ -176,12 +188,18 @@ bool ConfigScreen::show(const Config& config, std::string& error)
                 if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
                 {
                     SDL_GetWindowSize(window, &width, &height);
-                    render(renderer, width, height, config);
+                    render(renderer, width, height, config, status);
                 }
                 break;
             default:
                 break;
             }
+        }
+        if (!connectionReported && connection.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
+        {
+            status = connection.get().empty() ? "CONNECTION OK" : "CONNECTION ERROR";
+            render(renderer, width, height, config, status);
+            connectionReported = true;
         }
         if (exitInput.exitComboPressed()) running = false;
         SDL_Delay(10);
