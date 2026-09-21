@@ -1,6 +1,9 @@
 # Wide Melon Linux Client
 
-**Status : Early development, not ready for testing**
+> [!WARNING]
+> **USE AT YOUR OWN RISK**
+> This software is currently in early development and untested, it can potentially damage your console
+> If you want to compile and run this app, be aware of the risks.
 
 Wide Melon Linux Client is an ARM64 Linux app that lets you play NDS games on the [WideMelon DS](https://github.com/pruefsumme/widemelon) emulator, using your linux handheld as a controller.
 
