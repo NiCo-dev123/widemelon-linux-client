@@ -1,5 +1,7 @@
 #include "network/WebSocketClient.h"
 
+#include "common/Logger.h"
+
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netdb.h>
@@ -52,14 +54,23 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
     const std::string port = std::to_string(config.port);
     while (std::chrono::steady_clock::now() < end)
     {
+        Logger::info("Attempting TCP connection to " + config.host + ':' + port);
         addrinfo hints{};
         hints.ai_family = AF_INET;
         hints.ai_socktype = SOCK_STREAM;
         addrinfo* result = nullptr;
-        if (getaddrinfo(config.host.c_str(), port.c_str(), &hints, &result) != 0) return "Invalid host";
+        if (getaddrinfo(config.host.c_str(), port.c_str(), &hints, &result) != 0)
+        {
+            Logger::error("Cannot resolve configured host");
+            return "Invalid host";
+        }
         const int fd = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
         freeaddrinfo(result);
-        if (fd < 0) continue;
+        if (fd < 0)
+        {
+            Logger::error("Cannot create TCP socket");
+            continue;
+        }
         fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
         sockaddr_in address{};
         address.sin_family = AF_INET;
@@ -74,6 +85,7 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
         }
         if (connected)
         {
+            Logger::info("TCP connection established; sending WebSocket upgrade request");
             const std::string host = config.host + ':' + port;
             const std::string request = "GET /bridge HTTP/1.1\r\nHost: " + host + "\r\nOrigin: http://" + host
                 + "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n";
@@ -87,22 +99,31 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
             if (reply.rfind("HTTP/1.1 101", 0) == 0
                 && reply.find("s3pPLMBiTxaQ9kYGzzhZRbK+xOo=") != std::string::npos)
             {
+                Logger::info("WebSocket upgrade accepted; sending auth message");
                 const std::string auth = "{\"v\":2,\"type\":\"auth\",\"credential\":\"" + config.pairingCode + "\"}";
                 if (sendAll(fd, textFrame(auth)) && waitFor(fd, POLLIN, 1000))
                 {
                     const ssize_t count = recv(fd, buffer.data(), buffer.size(), 0);
                     if (count > 0 && std::string(buffer.data(), static_cast<std::size_t>(count)).find("\"type\":\"hello\"") != std::string::npos)
                     {
+                        Logger::info("Received WebSocket message: hello; authentication succeeded");
+                        Logger::info("WebSocket disconnected by current one-shot client implementation");
                         close(fd);
                         return {};
                     }
+                    Logger::error("WebSocket authentication reply did not contain hello");
                 }
+                else Logger::error("Failed to send auth message or receive authentication reply");
             }
+            else Logger::error("WebSocket upgrade was rejected or timed out");
         }
+        else Logger::error("TCP connection attempt failed");
+        Logger::info("WebSocket disconnected; retrying connection");
         close(fd);
         usleep(250000);
     }
-    return "Timed out after 30 seconds";
+    Logger::error("Connection timed out after " + std::to_string(timeout.count()) + " seconds");
+    return "Timed out after " + std::to_string(timeout.count()) + " seconds";
 }
 
 }

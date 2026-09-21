@@ -7,6 +7,7 @@ find_package(Threads REQUIRED)
 
 add_executable(widemelon-client
     src/main.cpp
+    src/common/Logger.cpp
     src/config/Config.cpp
     src/display/ConfigScreen.cpp
     src/input/EvdevInput.cpp
