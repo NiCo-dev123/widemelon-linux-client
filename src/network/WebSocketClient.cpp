@@ -13,8 +13,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include <array>
 #include <algorithm>
+#include <array>
 #include <cerrno>
 #include <cstring>
 #include <cstdint>
@@ -24,7 +24,7 @@
 namespace
 {
 
-constexpr std::size_t MaximumFramePayload = 8 * 1024 * 1024;
+constexpr std::size_t MaximumFramePayload = 2 * 1024 * 1024 + 24;
 constexpr int RetryDelayMs = 300;
 std::mutex wireSendMutex;
 
@@ -163,15 +163,13 @@ bool replyToApplicationPing(int fd, const std::string& message, const std::atomi
     return sendAll(fd, clientFrame(0x1, "{\"v\":2,\"type\":\"pong\",\"sent\":" + sent + '}'), stopped);
 }
 
-bool acknowledgeFrame(int fd, const std::string& frame, const std::atomic<bool>& stopped)
+bool sendFrameAck(int fd, std::uint32_t sequence, double decodeMs, bool decoded,
+    const std::atomic<bool>& stopped)
 {
-    if (frame.size() < 8) return false;
-    const std::uint32_t sequence = static_cast<unsigned char>(frame[4])
-        | (static_cast<std::uint32_t>(static_cast<unsigned char>(frame[5])) << 8)
-        | (static_cast<std::uint32_t>(static_cast<unsigned char>(frame[6])) << 16)
-        | (static_cast<std::uint32_t>(static_cast<unsigned char>(frame[7])) << 24);
-    return sendAll(fd, clientFrame(0x1, "{\"v\":2,\"type\":\"frameAck\",\"seq\":"
-        + std::to_string(sequence) + ",\"decodeMs\":0}"), stopped);
+    std::string message = "{\"v\":2,\"type\":\"frameAck\",\"seq\":" + std::to_string(sequence);
+    if (decoded) message += ",\"decodeMs\":" + std::to_string(decodeMs);
+    message += '}';
+    return sendAll(fd, clientFrame(0x1, message), stopped);
 }
 
 bool waitForRetry(int delayMs, const std::atomic<bool>& stopped)
@@ -186,14 +184,27 @@ bool waitForRetry(int delayMs, const std::atomic<bool>& stopped)
 namespace widemelon
 {
 
+WebSocketClient::WebSocketClient()
+{
+#ifdef WIDEMELON_HAVE_JPEG
+    decoderThread = std::thread(&WebSocketClient::decodeLoop, this);
+#endif
+}
+
 WebSocketClient::~WebSocketClient()
 {
     requestStop();
+#ifdef WIDEMELON_HAVE_JPEG
+    if (decoderThread.joinable()) decoderThread.join();
+#endif
 }
 
 void WebSocketClient::requestStop()
 {
     stopRequested.store(true);
+#ifdef WIDEMELON_HAVE_JPEG
+    videoCondition.notify_all();
+#endif
     std::lock_guard<std::mutex> lock(socketMutex);
     if (activeSocket >= 0) shutdown(activeSocket, SHUT_RDWR);
 }
@@ -207,6 +218,86 @@ std::uint64_t WebSocketClient::connectionGeneration() const
 {
     return generation.load();
 }
+
+void WebSocketClient::clearVideoFrames()
+{
+    std::lock_guard<std::mutex> lock(videoMutex);
+    latestJpeg = {};
+    latestDecoded = {};
+    hasJpeg = false;
+    hasDecoded = false;
+    ++videoEpoch;
+#ifdef WIDEMELON_HAVE_JPEG
+    pendingJpeg.reset();
+    completedAcks.clear();
+#endif
+}
+
+#ifdef WIDEMELON_HAVE_JPEG
+void WebSocketClient::queueVideoFrame(VideoJpegFrame frame)
+{
+    {
+        std::lock_guard<std::mutex> lock(videoMutex);
+        latestJpeg = frame;
+        hasJpeg = true;
+        pendingJpeg = PendingVideoFrame{std::move(frame), videoEpoch};
+    }
+    videoCondition.notify_one();
+}
+
+void WebSocketClient::decodeLoop()
+{
+    while (true)
+    {
+        PendingVideoFrame pending;
+        {
+            std::unique_lock<std::mutex> lock(videoMutex);
+            videoCondition.wait(lock, [this] { return stopRequested.load() || pendingJpeg.has_value(); });
+            if (stopRequested.load()) return;
+            pending = std::move(*pendingJpeg);
+            pendingJpeg.reset();
+        }
+
+        const auto started = std::chrono::steady_clock::now();
+        DecodedJpeg decoded;
+        std::string error;
+        const bool decodedSuccessfully = JpegDecoder::decode(pending.frame.jpeg, decoded, error);
+        const double decodeMs = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - started).count();
+
+        std::lock_guard<std::mutex> lock(videoMutex);
+        if (stopRequested.load()) return;
+        if (pending.epoch != videoEpoch) continue;
+        if (decodedSuccessfully)
+        {
+            latestDecoded.sequence = pending.frame.sequence;
+            latestDecoded.capturedUs = pending.frame.capturedUs;
+            latestDecoded.width = decoded.width;
+            latestDecoded.height = decoded.height;
+            latestDecoded.rgb = std::move(decoded.rgb);
+            hasDecoded = true;
+        }
+        else Logger::error("JPEG decode failed: " + error);
+        completedAcks.push_back({pending.frame.sequence, decodeMs, decodedSuccessfully});
+    }
+}
+
+bool WebSocketClient::flushFrameAcks(int fileDescriptor)
+{
+    std::vector<FrameAck> acknowledgements;
+    {
+        std::lock_guard<std::mutex> lock(videoMutex);
+        acknowledgements.swap(completedAcks);
+    }
+    for (const FrameAck& acknowledgement : acknowledgements)
+    {
+        if (!sendFrameAck(fileDescriptor, acknowledgement.sequence, acknowledgement.decodeMs,
+                acknowledgement.decoded, stopRequested))
+            return false;
+    }
+    return true;
+}
+#endif
 
 bool WebSocketClient::latestJpegFrame(VideoJpegFrame& frame) const
 {
@@ -374,6 +465,7 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
 
         if (authenticated)
         {
+            clearVideoFrames();
             state.store(ConnectionState::Connected);
             generation.fetch_add(1);
             hasConnected = true;
@@ -381,6 +473,13 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
             std::string disconnectReason = "Server closed the WebSocket connection";
             while (!stopRequested.load())
             {
+#ifdef WIDEMELON_HAVE_JPEG
+                if (!flushFrameAcks(fd))
+                {
+                    disconnectReason = "Could not acknowledge decoded video frame";
+                    break;
+                }
+#endif
                 Frame frame;
                 FrameResult result = FrameResult::Incomplete;
                 bool processingFailed = false;
@@ -430,33 +529,21 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
                             Logger::error("Invalid video frame: " + videoError);
                             continue;
                         }
+#ifdef WIDEMELON_HAVE_JPEG
+                        queueVideoFrame(std::move(jpegFrame));
+#else
                         {
                             std::lock_guard<std::mutex> lock(videoMutex);
-                            latestJpeg = jpegFrame;
+                            latestJpeg = std::move(jpegFrame);
                             hasJpeg = true;
                         }
-#ifdef WIDEMELON_HAVE_JPEG
-                        DecodedJpeg decoded;
-                        if (JpegDecoder::decode(jpegFrame.jpeg, decoded, videoError))
-                        {
-                            DecodedVideoFrame decodedFrame;
-                            decodedFrame.sequence = jpegFrame.sequence;
-                            decodedFrame.capturedUs = jpegFrame.capturedUs;
-                            decodedFrame.width = decoded.width;
-                            decodedFrame.height = decoded.height;
-                            decodedFrame.rgb = std::move(decoded.rgb);
-                            std::lock_guard<std::mutex> lock(videoMutex);
-                            latestDecoded = std::move(decodedFrame);
-                            hasDecoded = true;
-                        }
-                        else Logger::error("JPEG decode failed: " + videoError);
-#endif
-                        if (!acknowledgeFrame(fd, frame.payload, stopRequested))
+                        if (!sendFrameAck(fd, jpegFrame.sequence, 0, false, stopRequested))
                         {
                             disconnectReason = "Could not acknowledge video frame";
                             processingFailed = true;
                             break;
                         }
+#endif
                     }
                     else if (frame.opcode == 0x1)
                         Logger::info("Received WebSocket text message");

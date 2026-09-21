@@ -62,6 +62,11 @@ bool WideMelonProtocol::parseVideoFrame(const std::string& payload, VideoJpegFra
     frame.capturedUs = readLe64(payload.data() + 8);
     frame.width = readLe16(payload.data() + 16);
     frame.height = readLe16(payload.data() + 18);
+    if (frame.width != 256 || frame.height != 192)
+    {
+        error = "Unexpected video dimensions";
+        return false;
+    }
     frame.jpeg.assign(payload.begin() + VideoHeaderSize, payload.end());
     if (frame.jpeg.empty())
     {

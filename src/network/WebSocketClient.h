@@ -2,8 +2,11 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <mutex>
+#include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "config/Config.h"
@@ -32,7 +35,7 @@ struct DecodedVideoFrame
 class WebSocketClient
 {
 public:
-    WebSocketClient() = default;
+    WebSocketClient();
     ~WebSocketClient();
 
     WebSocketClient(const WebSocketClient&) = delete;
@@ -50,6 +53,23 @@ private:
     bool registerSocket(int fileDescriptor);
     void closeSocket(int fileDescriptor);
     bool sendOnSocket(int fileDescriptor, const std::string& frame);
+    void clearVideoFrames();
+#ifdef WIDEMELON_HAVE_JPEG
+    struct FrameAck
+    {
+        std::uint32_t sequence = 0;
+        double decodeMs = 0;
+        bool decoded = false;
+    };
+    struct PendingVideoFrame
+    {
+        VideoJpegFrame frame;
+        std::uint64_t epoch = 0;
+    };
+    void queueVideoFrame(VideoJpegFrame frame);
+    void decodeLoop();
+    bool flushFrameAcks(int fileDescriptor);
+#endif
 
     std::atomic<bool> stopRequested{false};
     std::atomic<ConnectionState> state{ConnectionState::Connecting};
@@ -61,6 +81,13 @@ private:
     DecodedVideoFrame latestDecoded;
     bool hasJpeg = false;
     bool hasDecoded = false;
+#ifdef WIDEMELON_HAVE_JPEG
+    std::condition_variable videoCondition;
+    std::optional<PendingVideoFrame> pendingJpeg;
+    std::vector<FrameAck> completedAcks;
+    std::thread decoderThread;
+#endif
+    std::uint64_t videoEpoch = 0;
     int activeSocket = -1;
 };
 

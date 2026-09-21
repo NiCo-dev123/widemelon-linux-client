@@ -214,7 +214,32 @@ void drawTextColored(SDL_Renderer* renderer, std::string_view text, int x, int y
     SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
 }
 
-void render(SDL_Renderer* renderer, int width, int height, const widemelon::Config& config, const std::string& status)
+bool updateVideoTexture(SDL_Renderer* renderer, SDL_Texture*& texture, const widemelon::DecodedVideoFrame& frame)
+{
+    if (frame.width == 0 || frame.height == 0
+        || frame.rgb.size() != static_cast<std::size_t>(frame.width) * frame.height * 3)
+        return false;
+    if (!texture)
+    {
+        texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING,
+            frame.width, frame.height);
+        if (!texture)
+        {
+            widemelon::Logger::error(std::string("Cannot create video texture: ") + SDL_GetError());
+            return false;
+        }
+        SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE);
+    }
+    if (SDL_UpdateTexture(texture, nullptr, frame.rgb.data(), frame.width * 3) != 0)
+    {
+        widemelon::Logger::error(std::string("Cannot update video texture: ") + SDL_GetError());
+        return false;
+    }
+    return true;
+}
+
+void render(SDL_Renderer* renderer, int width, int height, const widemelon::Config& config, const std::string& status,
+    SDL_Texture* videoTexture)
 {
     (void)height;
     (void)config;
@@ -222,13 +247,14 @@ void render(SDL_Renderer* renderer, int width, int height, const widemelon::Conf
     SDL_RenderClear(renderer);
     SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
     const std::string title = "WideMelon Client";
-    drawText(renderer, title, (width - textWidth(title, 4)) / 2, 48, 4);
-    const SDL_Rect video{(width - 512) / 2, 125, 512, 384};
-    SDL_RenderFillRect(renderer, &video);
+    drawText(renderer, title, (width - textWidth(title, 4)) / 2, 20, 4);
+    const SDL_Rect video{(width - 768) / 2, 70, 768, 576};
+    if (videoTexture) SDL_RenderCopy(renderer, videoTexture, nullptr, &video);
+    else SDL_RenderFillRect(renderer, &video);
     const std::string connection = "Connection status: " + status;
     const std::string exit = "Press START + R + L to quit";
-    drawText(renderer, connection, video.x, video.y + video.h + 22, 2);
-    drawText(renderer, exit, video.x, video.y + video.h + 44, 2);
+    drawText(renderer, connection, video.x, video.y + video.h + 16, 2);
+    drawText(renderer, exit, video.x, video.y + video.h + 38, 2);
     SDL_RenderPresent(renderer);
 }
 
@@ -489,8 +515,10 @@ bool ConfigScreen::show(Config config, bool inputTest, std::string& error)
         SDL_Quit();
         return false;
     }
+    SDL_Texture* videoTexture = nullptr;
     auto closeDisplay = [&]
     {
+        SDL_DestroyTexture(videoTexture);
 #ifdef WIDEMELON_HAVE_SDL_TTF
         closeFonts();
         TTF_Quit();
@@ -548,12 +576,13 @@ bool ConfigScreen::show(Config config, bool inputTest, std::string& error)
     {
         connection = std::async(std::launch::async, [] { return std::string{}; });
     }
-    render(renderer, width, height, config, status);
+    render(renderer, width, height, config, status, videoTexture);
 
     bool running = true;
     ConnectionState displayedConnectionState = client->connectionState();
     bool inputDirty = true;
     std::uint32_t inputSequence = 0;
+    std::uint32_t displayedVideoSequence = 0;
     std::uint64_t inputConnectionGeneration = 0;
     bool sendReleasedSnapshot = false;
     auto nextInputSnapshot = std::chrono::steady_clock::now();
@@ -574,7 +603,7 @@ bool ConfigScreen::show(Config config, bool inputTest, std::string& error)
                 if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
                 {
                     SDL_GetWindowSize(window, &width, &height);
-                    render(renderer, width, height, config, status);
+                    render(renderer, width, height, config, status, videoTexture);
                 }
                 break;
             default:
@@ -586,7 +615,7 @@ bool ConfigScreen::show(Config config, bool inputTest, std::string& error)
         if (inputTest && !inputEvent.empty())
         {
             status = inputEvent;
-            render(renderer, width, height, config, status);
+            render(renderer, width, height, config, status, videoTexture);
         }
         const ConnectionState currentConnectionState = client->connectionState();
         if (!inputTest && currentConnectionState != displayedConnectionState)
@@ -597,7 +626,7 @@ bool ConfigScreen::show(Config config, bool inputTest, std::string& error)
                 status = "RECONNECTING";
             else if (currentConnectionState == ConnectionState::Failed)
                 status = "CONNECTION ERROR";
-            render(renderer, width, height, config, status);
+            render(renderer, width, height, config, status, videoTexture);
             displayedConnectionState = currentConnectionState;
         }
         if (!inputTest && connection.valid() && connection.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
@@ -606,7 +635,7 @@ bool ConfigScreen::show(Config config, bool inputTest, std::string& error)
             if (result != "Cancelled")
             {
                 status = "CONNECTION ERROR";
-                render(renderer, width, height, config, status);
+                render(renderer, width, height, config, status, videoTexture);
             }
         }
         if (!inputTest && client->connectionState() == ConnectionState::Connected)
@@ -617,9 +646,13 @@ bool ConfigScreen::show(Config config, bool inputTest, std::string& error)
             {
                 inputConnectionGeneration = generation;
                 inputSequence = 0;
+                displayedVideoSequence = 0;
+                SDL_DestroyTexture(videoTexture);
+                videoTexture = nullptr;
                 inputDirty = true;
                 sendReleasedSnapshot = true;
                 nextInputSnapshot = now;
+                render(renderer, width, height, config, status, videoTexture);
             }
             if (sendReleasedSnapshot)
             {
@@ -631,6 +664,14 @@ bool ConfigScreen::show(Config config, bool inputTest, std::string& error)
                 client->sendInputSnapshot(++inputSequence, exitInput.buttonMask());
                 inputDirty = false;
                 nextInputSnapshot = now + std::chrono::milliseconds(200);
+            }
+
+            DecodedVideoFrame decodedFrame;
+            if (client->latestDecodedVideoFrame(decodedFrame) && decodedFrame.sequence != displayedVideoSequence
+                && updateVideoTexture(renderer, videoTexture, decodedFrame))
+            {
+                displayedVideoSequence = decodedFrame.sequence;
+                render(renderer, width, height, config, status, videoTexture);
             }
         }
         if (exitInput.exitComboPressed())
