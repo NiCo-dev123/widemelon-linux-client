@@ -14,6 +14,7 @@ enum class UiAction
     Left,
     Right,
     Confirm,
+    Delete,
     Back,
     Start,
 };

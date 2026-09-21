@@ -186,6 +186,29 @@ void drawText(SDL_Renderer* renderer, std::string_view text, int x, int y, int s
     }
 }
 
+void drawTextColored(SDL_Renderer* renderer, std::string_view text, int x, int y, int scale, SDL_Color color)
+{
+#ifdef WIDEMELON_HAVE_SDL_TTF
+    if (TTF_Font* font = fontForSize(scale * 7))
+    {
+        const std::string rendered(text);
+        SDL_Surface* surface = TTF_RenderUTF8_Blended(font, rendered.c_str(), color);
+        if (surface)
+        {
+            SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+            const SDL_Rect destination{x, y, surface->w, surface->h};
+            if (texture) SDL_RenderCopy(renderer, texture, nullptr, &destination);
+            SDL_DestroyTexture(texture);
+            SDL_FreeSurface(surface);
+            return;
+        }
+    }
+#endif
+    SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+    drawText(renderer, text, x, y, scale);
+    SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
+}
+
 void render(SDL_Renderer* renderer, int width, int height, const widemelon::Config& config, const std::string& status)
 {
     (void)height;
@@ -224,23 +247,28 @@ void renderSetup(SDL_Renderer* renderer, int width, int height, const widemelon:
     {
         drawText(renderer, labels[index], centerX - textWidth(labels[index], 2) / 2, positions[index] - 31, 2);
         const SDL_Rect field{fieldX, positions[index], fieldWidth, fieldHeight};
-        SDL_RenderDrawRect(renderer, &field);
+        if (selected == index) SDL_RenderFillRect(renderer, &field);
+        else SDL_RenderDrawRect(renderer, &field);
         if (selected == index)
         {
-            const SDL_Rect accent{field.x - 2, field.y - 2, field.w + 4, field.h + 4};
-            SDL_RenderDrawRect(renderer, &accent);
+            drawTextColored(renderer, values[index], centerX - textWidth(values[index], 2) / 2,
+                positions[index] + 7, 2, palette.background);
         }
-        drawText(renderer, values[index], centerX - textWidth(values[index], 2) / 2, positions[index] + 7, 2);
+        else drawText(renderer, values[index], centerX - textWidth(values[index], 2) / 2, positions[index] + 7, 2);
     }
     const SDL_Rect connect{fieldX, 402, fieldWidth, fieldHeight};
-    SDL_RenderDrawRect(renderer, &connect);
+    if (selected == 3) SDL_RenderFillRect(renderer, &connect);
+    else SDL_RenderDrawRect(renderer, &connect);
     if (selected == 3)
     {
-        const SDL_Rect accent{connect.x - 2, connect.y - 2, connect.w + 4, connect.h + 4};
-        SDL_RenderDrawRect(renderer, &accent);
+        const std::string connectLabel = "CONNECT";
+        drawTextColored(renderer, connectLabel, centerX - textWidth(connectLabel, 2) / 2, 409, 2, palette.background);
     }
-    const std::string connectLabel = "CONNECT";
-    drawText(renderer, connectLabel, centerX - textWidth(connectLabel, 2) / 2, 409, 2);
+    else
+    {
+        const std::string connectLabel = "CONNECT";
+        drawText(renderer, connectLabel, centerX - textWidth(connectLabel, 2) / 2, 409, 2);
+    }
     drawText(renderer, status, centerX - textWidth(status, 2) / 2, 470, 2);
     const std::string hint = "A EDIT   START CONNECT";
     drawText(renderer, hint, centerX - textWidth(hint, 2) / 2, 510, 2);
@@ -273,7 +301,7 @@ void renderKeyboard(SDL_Renderer* renderer, int width, int height, const std::st
         drawText(renderer, keys[index], key.x + (key.w - textWidth(keys[index], scale)) / 2,
             key.y + (key.h - 7 * scale) / 2, scale);
     }
-    drawText(renderer, "A SELECT  B CANCEL", (width - textWidth("A SELECT  B CANCEL", 3)) / 2, height - 60, 3);
+    drawText(renderer, "A SELECT B DELETE X BACK START OK", (width - textWidth("A SELECT B DELETE X BACK START OK", 2)) / 2, height - 60, 2);
     SDL_RenderPresent(renderer);
 }
 
@@ -305,11 +333,15 @@ bool editNumericField(SDL_Renderer* renderer, int width, int height, widemelon::
         case widemelon::UiAction::Right:
             selectedKey = (selectedKey + 1) % keyCount;
             break;
+        case widemelon::UiAction::Delete:
+            if (!value.empty()) value.pop_back();
+            break;
         case widemelon::UiAction::Back:
             value = original;
             return false;
-        case widemelon::UiAction::Confirm:
         case widemelon::UiAction::Start:
+            return true;
+        case widemelon::UiAction::Confirm:
         {
             const std::string_view key = keys[static_cast<std::size_t>(selectedKey)];
             if (key == "OK") return true;
@@ -426,6 +458,9 @@ bool ConfigScreen::show(Config config, bool inputTest, std::string& error)
         SDL_Quit();
         return false;
     }
+    if (!fontForSize(14))
+        Logger::error("Cannot load UI font: " + fontPath + "; " + TTF_GetError());
+    else Logger::info("Loaded UI font: " + fontPath);
 #endif
 
     int width = 0;

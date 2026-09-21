@@ -99,7 +99,8 @@ std::string EvdevInput::pollEvent()
             if (event.value == 1 && uiAction == UiAction::None)
             {
                 if (event.code == 305) uiAction = UiAction::Confirm;
-                else if (event.code == 304) uiAction = UiAction::Back;
+                else if (event.code == 304) uiAction = UiAction::Delete;
+                else if (event.code == 308) uiAction = UiAction::Back;
                 else if (event.code == BTN_START) uiAction = UiAction::Start;
             }
         }
