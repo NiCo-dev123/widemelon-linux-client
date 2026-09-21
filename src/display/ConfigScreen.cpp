@@ -172,9 +172,11 @@ bool ConfigScreen::show(const Config& config, bool inputTest, std::string& error
     exitInput.open("/dev/input/event4", inputError);
 
     bool running = true;
-    bool connectionReported = false;
+    ConnectionState displayedConnectionState = client.connectionState();
     bool inputDirty = true;
     std::uint32_t inputSequence = 0;
+    std::uint64_t inputConnectionGeneration = 0;
+    bool sendReleasedSnapshot = false;
     auto nextInputSnapshot = std::chrono::steady_clock::now();
     while (running)
     {
@@ -207,11 +209,17 @@ bool ConfigScreen::show(const Config& config, bool inputTest, std::string& error
             status = inputEvent;
             render(renderer, width, height, config, status);
         }
-        if (!inputTest && !connectionReported && client.connectionState() == ConnectionState::Connected)
+        const ConnectionState currentConnectionState = client.connectionState();
+        if (!inputTest && currentConnectionState != displayedConnectionState)
         {
-            status = "CONNECTION OK";
+            if (currentConnectionState == ConnectionState::Connected)
+                status = "CONNECTION OK";
+            else if (currentConnectionState == ConnectionState::Connecting)
+                status = "RECONNECTING";
+            else if (currentConnectionState == ConnectionState::Failed)
+                status = "CONNECTION ERROR";
             render(renderer, width, height, config, status);
-            connectionReported = true;
+            displayedConnectionState = currentConnectionState;
         }
         if (!inputTest && connection.valid() && connection.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
         {
@@ -225,7 +233,21 @@ bool ConfigScreen::show(const Config& config, bool inputTest, std::string& error
         if (!inputTest && client.connectionState() == ConnectionState::Connected)
         {
             const auto now = std::chrono::steady_clock::now();
-            if (inputDirty || now >= nextInputSnapshot)
+            const std::uint64_t generation = client.connectionGeneration();
+            if (generation != inputConnectionGeneration)
+            {
+                inputConnectionGeneration = generation;
+                inputSequence = 0;
+                inputDirty = true;
+                sendReleasedSnapshot = true;
+                nextInputSnapshot = now;
+            }
+            if (sendReleasedSnapshot)
+            {
+                client.sendInputSnapshot(++inputSequence, 0);
+                sendReleasedSnapshot = false;
+            }
+            else if (inputDirty || now >= nextInputSnapshot)
             {
                 client.sendInputSnapshot(++inputSequence, exitInput.buttonMask());
                 inputDirty = false;

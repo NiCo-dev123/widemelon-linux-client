@@ -30,6 +30,7 @@ public:
     std::string connectAndAuthenticate(const Config& config, std::chrono::seconds timeout);
     void requestStop();
     ConnectionState connectionState() const;
+    std::uint64_t connectionGeneration() const;
     bool sendInputSnapshot(std::uint32_t sequence, std::uint16_t buttons);
 
 private:
@@ -39,6 +40,7 @@ private:
 
     std::atomic<bool> stopRequested{false};
     std::atomic<ConnectionState> state{ConnectionState::Connecting};
+    std::atomic<std::uint64_t> generation{0};
     std::mutex socketMutex;
     std::mutex sendMutex;
     int activeSocket = -1;

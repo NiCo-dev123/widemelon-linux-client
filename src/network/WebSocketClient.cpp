@@ -168,6 +168,13 @@ bool acknowledgeFrame(int fd, const std::string& frame, const std::atomic<bool>&
         + std::to_string(sequence) + ",\"decodeMs\":0}"), stopped);
 }
 
+bool waitForRetry(int delayMs, const std::atomic<bool>& stopped)
+{
+    for (int waited = 0; waited < delayMs && !stopped.load(); waited += 100)
+        usleep(static_cast<useconds_t>(std::min(100, delayMs - waited)) * 1000);
+    return !stopped.load();
+}
+
 }
 
 namespace widemelon
@@ -188,6 +195,11 @@ void WebSocketClient::requestStop()
 ConnectionState WebSocketClient::connectionState() const
 {
     return state.load();
+}
+
+std::uint64_t WebSocketClient::connectionGeneration() const
+{
+    return generation.load();
 }
 
 bool WebSocketClient::sendOnSocket(int fileDescriptor, const std::string& frame)
@@ -226,10 +238,11 @@ void WebSocketClient::closeSocket(int fileDescriptor)
 
 std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::chrono::seconds timeout)
 {
-    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    const auto initialDeadline = std::chrono::steady_clock::now() + timeout;
     const std::string port = std::to_string(config.port);
     int retryDelayMs = 250;
-    while (!stopRequested.load() && std::chrono::steady_clock::now() < deadline)
+    bool hasConnected = false;
+    while (!stopRequested.load() && (hasConnected || std::chrono::steady_clock::now() < initialDeadline))
     {
         Logger::info("Attempting TCP connection to " + config.host + ':' + port);
         addrinfo hints{};
@@ -337,6 +350,9 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
         if (authenticated)
         {
             state.store(ConnectionState::Connected);
+            generation.fetch_add(1);
+            hasConnected = true;
+            retryDelayMs = 250;
             Logger::info("WebSocket connection is active");
             std::string disconnectReason = "Server closed the WebSocket connection";
             while (!stopRequested.load())
@@ -418,15 +434,18 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
                 Logger::info("Network connection stopped at application exit");
                 return "Cancelled";
             }
-            state.store(ConnectionState::Failed);
             Logger::error("WebSocket disconnected: " + disconnectReason);
-            return disconnectReason;
+            state.store(ConnectionState::Connecting);
+            Logger::info("Reconnecting in " + std::to_string(retryDelayMs) + " ms");
+            if (!waitForRetry(retryDelayMs, stopRequested)) break;
+            retryDelayMs = std::min(retryDelayMs * 2, 4000);
+            continue;
         }
 
         closeSocket(fd);
         if (stopRequested.load()) break;
         Logger::info("Connection attempt failed; retrying in " + std::to_string(retryDelayMs) + " ms");
-        usleep(static_cast<useconds_t>(retryDelayMs) * 1000);
+        if (!waitForRetry(retryDelayMs, stopRequested)) break;
         retryDelayMs = std::min(retryDelayMs * 2, 4000);
     }
     if (stopRequested.load())
