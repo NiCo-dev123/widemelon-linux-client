@@ -1,2 +1,7 @@
 documentation/hardware.md
 TODO.md
+dist/
+build*/
+CMakeUserPresets.json
+widemelon-client.conf
+widemelon-client.log
