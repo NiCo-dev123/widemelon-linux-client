@@ -48,11 +48,40 @@ std::string textFrame(const std::string& text)
 namespace widemelon
 {
 
+WebSocketClient::~WebSocketClient()
+{
+    requestStop();
+}
+
+void WebSocketClient::requestStop()
+{
+    stopRequested.store(true);
+    std::lock_guard<std::mutex> lock(socketMutex);
+    if (activeSocket >= 0) shutdown(activeSocket, SHUT_RDWR);
+}
+
+bool WebSocketClient::registerSocket(int fileDescriptor)
+{
+    std::lock_guard<std::mutex> lock(socketMutex);
+    if (stopRequested.load()) return false;
+    activeSocket = fileDescriptor;
+    return true;
+}
+
+void WebSocketClient::closeSocket(int fileDescriptor)
+{
+    {
+        std::lock_guard<std::mutex> lock(socketMutex);
+        if (activeSocket == fileDescriptor) activeSocket = -1;
+    }
+    close(fileDescriptor);
+}
+
 std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::chrono::seconds timeout)
 {
     const auto end = std::chrono::steady_clock::now() + timeout;
     const std::string port = std::to_string(config.port);
-    while (std::chrono::steady_clock::now() < end)
+    while (!stopRequested.load() && std::chrono::steady_clock::now() < end)
     {
         Logger::info("Attempting TCP connection to " + config.host + ':' + port);
         addrinfo hints{};
@@ -72,6 +101,11 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
             continue;
         }
         fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
+        if (!registerSocket(fd))
+        {
+            close(fd);
+            break;
+        }
         sockaddr_in address{};
         address.sin_family = AF_INET;
         address.sin_port = htons(config.port);
@@ -108,7 +142,7 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
                     {
                         Logger::info("Received WebSocket message: hello; authentication succeeded");
                         Logger::info("WebSocket disconnected by current one-shot client implementation");
-                        close(fd);
+                        closeSocket(fd);
                         return {};
                     }
                     Logger::error("WebSocket authentication reply did not contain hello");
@@ -119,8 +153,14 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
         }
         else Logger::error("TCP connection attempt failed");
         Logger::info("WebSocket disconnected; retrying connection");
-        close(fd);
+        closeSocket(fd);
+        if (stopRequested.load()) break;
         usleep(250000);
+    }
+    if (stopRequested.load())
+    {
+        Logger::info("Network connection stopped at application exit");
+        return "Cancelled";
     }
     Logger::error("Connection timed out after " + std::to_string(timeout.count()) + " seconds");
     return "Timed out after " + std::to_string(timeout.count()) + " seconds";

@@ -1,5 +1,6 @@
 #include "display/ConfigScreen.h"
 
+#include "common/Logger.h"
 #include "input/EvdevInput.h"
 #include "network/WebSocketClient.h"
 
@@ -208,10 +209,27 @@ bool ConfigScreen::show(const Config& config, bool inputTest, std::string& error
             render(renderer, width, height, config, status);
             connectionReported = true;
         }
-        if (exitInput.exitComboPressed()) running = false;
+        if (exitInput.exitComboPressed())
+        {
+            Logger::info("Exit requested by Start + L + R; stopping network connection");
+            client.requestStop();
+            running = false;
+        }
         SDL_Delay(10);
     }
 
+    client.requestStop();
+    if (connection.valid())
+    {
+        try
+        {
+            connection.get();
+        }
+        catch (const std::exception& exception)
+        {
+            Logger::error(std::string("Network worker stopped with exception: ") + exception.what());
+        }
+    }
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
