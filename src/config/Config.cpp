@@ -3,7 +3,9 @@
 #include <array>
 #include <arpa/inet.h>
 #include <charconv>
+#include <cstdio>
 #include <fstream>
+#include <system_error>
 #include <string_view>
 #include <unistd.h>
 
@@ -28,6 +30,49 @@ bool isIPv4Address(const std::string& value)
 widemelon::ConfigLoadResult failure(std::string error)
 {
     return {false, {}, std::move(error)};
+}
+
+std::filesystem::path executableConfigPath()
+{
+    std::array<char, 4096> executablePath{};
+    const ssize_t length = readlink("/proc/self/exe", executablePath.data(), executablePath.size() - 1);
+    if (length <= 0 || static_cast<std::size_t>(length) >= executablePath.size() - 1) return {};
+    executablePath[static_cast<std::size_t>(length)] = '\0';
+    return std::filesystem::path(executablePath.data()).parent_path() / "widemelon-client.conf";
+}
+
+std::filesystem::path persistentConfigPath()
+{
+    return "/mnt/SDCARD/Saves/WideMelonClient/widemelon-client.conf";
+}
+
+bool writeConfigFile(const std::filesystem::path& path, const widemelon::Config& config, std::string& error)
+{
+    std::error_code directoryError;
+    std::filesystem::create_directories(path.parent_path(), directoryError);
+    if (directoryError)
+    {
+        error = "Cannot create configuration directory";
+        return false;
+    }
+    const std::filesystem::path temporary = path.string() + ".tmp";
+    std::ofstream file(temporary, std::ios::trunc);
+    if (!file)
+    {
+        error = "Cannot write configuration file";
+        return false;
+    }
+    file << "host=" << config.host << '\n'
+         << "port=" << config.port << '\n'
+         << "pairing_code=" << config.pairingCode << '\n';
+    file.close();
+    if (!file || std::rename(temporary.c_str(), path.c_str()) != 0)
+    {
+        std::remove(temporary.c_str());
+        error = "Cannot save configuration file";
+        return false;
+    }
+    return true;
 }
 
 }
@@ -103,12 +148,15 @@ ConfigLoadResult ConfigLoader::validate(Config config)
 
 ConfigLoadResult ConfigLoader::loadNextToExecutable()
 {
-    std::array<char, 4096> executablePath{};
-    const ssize_t length = readlink("/proc/self/exe", executablePath.data(), executablePath.size() - 1);
-    if (length <= 0 || static_cast<std::size_t>(length) >= executablePath.size() - 1)
+    const std::filesystem::path saved = persistentConfigPath();
+    std::error_code existsError;
+    if (std::filesystem::exists(saved, existsError)) return loadFile(saved);
+    if (existsError)
+        return failure("Cannot access saved configuration: " + existsError.message());
+    const std::filesystem::path bundled = executableConfigPath();
+    if (bundled.empty())
         return failure("Cannot determine executable path");
-    executablePath[static_cast<std::size_t>(length)] = '\0';
-    return loadFile(std::filesystem::path(executablePath.data()).parent_path() / "widemelon-client.conf");
+    return loadFile(bundled);
 }
 
 bool ConfigLoader::saveNextToExecutable(const Config& config, std::string& error)
@@ -119,34 +167,7 @@ bool ConfigLoader::saveNextToExecutable(const Config& config, std::string& error
         error = checked.error;
         return false;
     }
-    std::array<char, 4096> executablePath{};
-    const ssize_t length = readlink("/proc/self/exe", executablePath.data(), executablePath.size() - 1);
-    if (length <= 0 || static_cast<std::size_t>(length) >= executablePath.size() - 1)
-    {
-        error = "Cannot determine executable path";
-        return false;
-    }
-    executablePath[static_cast<std::size_t>(length)] = '\0';
-    const std::filesystem::path path = std::filesystem::path(executablePath.data()).parent_path()
-        / "widemelon-client.conf";
-    const std::filesystem::path temporary = path.string() + ".tmp";
-    std::ofstream file(temporary, std::ios::trunc);
-    if (!file)
-    {
-        error = "Cannot write configuration file";
-        return false;
-    }
-    file << "host=" << config.host << '\n'
-         << "port=" << config.port << '\n'
-         << "pairing_code=" << config.pairingCode << '\n';
-    file.close();
-    if (!file || std::rename(temporary.c_str(), path.c_str()) != 0)
-    {
-        std::remove(temporary.c_str());
-        error = "Cannot save configuration file";
-        return false;
-    }
-    return true;
+    return writeConfigFile(persistentConfigPath(), config, error);
 }
 
 }
