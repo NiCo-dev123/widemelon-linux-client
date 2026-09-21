@@ -10,6 +10,14 @@
 namespace widemelon
 {
 
+enum class ConnectionState
+{
+    Connecting,
+    Connected,
+    Failed,
+    Stopped,
+};
+
 class WebSocketClient
 {
 public:
@@ -21,12 +29,14 @@ public:
 
     std::string connectAndAuthenticate(const Config& config, std::chrono::seconds timeout);
     void requestStop();
+    ConnectionState connectionState() const;
 
 private:
     bool registerSocket(int fileDescriptor);
     void closeSocket(int fileDescriptor);
 
     std::atomic<bool> stopRequested{false};
+    std::atomic<ConnectionState> state{ConnectionState::Connecting};
     std::mutex socketMutex;
     int activeSocket = -1;
 };

@@ -203,11 +203,20 @@ bool ConfigScreen::show(const Config& config, bool inputTest, std::string& error
             status = inputEvent;
             render(renderer, width, height, config, status);
         }
-        if (!inputTest && !connectionReported && connection.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
+        if (!inputTest && !connectionReported && client.connectionState() == ConnectionState::Connected)
         {
-            status = connection.get().empty() ? "CONNECTION OK" : "CONNECTION ERROR";
+            status = "CONNECTION OK";
             render(renderer, width, height, config, status);
             connectionReported = true;
+        }
+        if (!inputTest && connection.valid() && connection.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
+        {
+            const std::string result = connection.get();
+            if (result != "Cancelled")
+            {
+                status = "CONNECTION ERROR";
+                render(renderer, width, height, config, status);
+            }
         }
         if (exitInput.exitComboPressed())
         {
