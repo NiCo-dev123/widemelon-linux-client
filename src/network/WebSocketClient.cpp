@@ -273,6 +273,7 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
         }
 
         bool authenticated = false;
+        std::string inbound;
         if (connected && !stopRequested.load())
         {
             Logger::info("TCP connection established; sending WebSocket upgrade request");
@@ -288,7 +289,6 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
                 const std::string auth = "{\"v\":2,\"type\":\"auth\",\"credential\":\"" + config.pairingCode + "\"}";
                 if (sendAll(fd, clientFrame(0x1, auth), stopRequested))
                 {
-                    std::string inbound;
                     const auto authDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
                     while (!stopRequested.load() && std::chrono::steady_clock::now() < authDeadline && !authenticated)
                     {
@@ -338,32 +338,27 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
         {
             state.store(ConnectionState::Connected);
             Logger::info("WebSocket connection is active");
-            std::string inbound;
             std::string disconnectReason = "Server closed the WebSocket connection";
             while (!stopRequested.load())
             {
-                const short events = pollSocket(fd, POLLIN, 100);
-                if (events & (POLLERR | POLLHUP | POLLNVAL)) break;
-                if (!(events & POLLIN)) continue;
-                std::array<char, 4096> buffer{};
-                const ssize_t count = recv(fd, buffer.data(), buffer.size(), 0);
-                if (count <= 0) break;
-                inbound.append(buffer.data(), static_cast<std::size_t>(count));
                 Frame frame;
                 FrameResult result = FrameResult::Incomplete;
                 bool processingFailed = false;
+                bool receivedClose = false;
                 while ((result = takeFrame(inbound, frame)) == FrameResult::Ready)
                 {
                     if (!frame.final)
                     {
                         disconnectReason = "Fragmented WebSocket frames are not supported";
                         Logger::error(disconnectReason);
+                        processingFailed = true;
                         break;
                     }
                     if (frame.opcode == 0x8)
                     {
                         Logger::info("Received WebSocket close message");
                         sendOnSocket(fd, clientFrame(0x8, frame.payload));
+                        receivedClose = true;
                         break;
                     }
                     if (frame.opcode == 0x9)
@@ -404,7 +399,17 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
                     Logger::error(disconnectReason);
                     break;
                 }
-                if (processingFailed || frame.opcode == 0x8 || !frame.final) break;
+                if (processingFailed || receivedClose) break;
+
+                // `inbound` may contain only part of a WebSocket frame. Keep it
+                // intact and append more TCP bytes on the next readable event.
+                const short events = pollSocket(fd, POLLIN, 100);
+                if (events & (POLLERR | POLLHUP | POLLNVAL)) break;
+                if (!(events & POLLIN)) continue;
+                std::array<char, 4096> buffer{};
+                const ssize_t count = recv(fd, buffer.data(), buffer.size(), 0);
+                if (count <= 0) break;
+                inbound.append(buffer.data(), static_cast<std::size_t>(count));
             }
             closeSocket(fd);
             if (stopRequested.load())
