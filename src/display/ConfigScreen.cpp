@@ -5,6 +5,9 @@
 #include "network/WebSocketClient.h"
 
 #include <SDL.h>
+#ifdef WIDEMELON_HAVE_SDL_TTF
+#include <SDL_ttf.h>
+#endif
 
 #include <algorithm>
 #include <array>
@@ -13,14 +16,80 @@
 #include <chrono>
 #include <cstdint>
 #include <future>
+#include <fstream>
+#include <map>
 #include <string_view>
 #include <unordered_map>
+#include <unistd.h>
 #include <vector>
 
 namespace
 {
 
 using Glyph = std::array<std::uint8_t, 7>;
+
+struct Palette
+{
+    SDL_Color background{15, 18, 36, 255};
+    SDL_Color primary{255, 255, 255, 255};
+};
+
+Palette palette;
+
+#ifdef WIDEMELON_HAVE_SDL_TTF
+std::string fontPath;
+std::map<int, TTF_Font*> fonts;
+
+TTF_Font* fontForSize(int size)
+{
+    const auto existing = fonts.find(size);
+    if (existing != fonts.end()) return existing->second;
+    TTF_Font* font = TTF_OpenFont(fontPath.c_str(), size);
+    if (font) fonts.emplace(size, font);
+    return font;
+}
+
+void closeFonts()
+{
+    for (const auto& entry : fonts) TTF_CloseFont(entry.second);
+    fonts.clear();
+}
+#endif
+
+bool parseColor(const std::string& value, SDL_Color& color)
+{
+    if (value.size() != 7 || value.front() != '#') return false;
+    unsigned int rgb = 0;
+    const auto parsed = std::from_chars(value.data() + 1, value.data() + value.size(), rgb, 16);
+    if (parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size()) return false;
+    color = SDL_Color{static_cast<Uint8>((rgb >> 16) & 0xff), static_cast<Uint8>((rgb >> 8) & 0xff),
+        static_cast<Uint8>(rgb & 0xff), 255};
+    return true;
+}
+
+void loadUiResources()
+{
+    std::array<char, 4096> executable{};
+    const ssize_t length = readlink("/proc/self/exe", executable.data(), executable.size() - 1);
+    if (length <= 0) return;
+    executable[static_cast<std::size_t>(length)] = '\0';
+    const std::string directory = std::string(executable.data()).substr(0,
+        std::string(executable.data()).find_last_of('/'));
+    std::ifstream file(directory + "/widemelon-client-ui.conf");
+    std::string line;
+    while (std::getline(file, line))
+    {
+        const std::size_t separator = line.find('=');
+        if (separator == std::string::npos) continue;
+        SDL_Color color{};
+        if (!parseColor(line.substr(separator + 1), color)) continue;
+        if (line.substr(0, separator) == "background") palette.background = color;
+        else if (line.substr(0, separator) == "primary") palette.primary = color;
+    }
+#ifdef WIDEMELON_HAVE_SDL_TTF
+    fontPath = directory + "/assets/fonts/Roboto-Regular.ttf";
+#endif
+}
 
 const Glyph& glyphFor(char character)
 {
@@ -72,11 +141,35 @@ const Glyph& glyphFor(char character)
 
 int textWidth(std::string_view text, int scale)
 {
+#ifdef WIDEMELON_HAVE_SDL_TTF
+    int width = 0;
+    if (TTF_Font* font = fontForSize(scale * 7))
+    {
+        TTF_SizeUTF8(font, std::string(text).c_str(), &width, nullptr);
+        return width;
+    }
+#endif
     return static_cast<int>(text.size()) * 6 * scale - scale;
 }
 
 void drawText(SDL_Renderer* renderer, std::string_view text, int x, int y, int scale)
 {
+#ifdef WIDEMELON_HAVE_SDL_TTF
+    if (TTF_Font* font = fontForSize(scale * 7))
+    {
+        const std::string rendered(text);
+        SDL_Surface* surface = TTF_RenderUTF8_Blended(font, rendered.c_str(), palette.primary);
+        if (surface)
+        {
+            SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+            const SDL_Rect destination{x, y, surface->w, surface->h};
+            if (texture) SDL_RenderCopy(renderer, texture, nullptr, &destination);
+            SDL_DestroyTexture(texture);
+            SDL_FreeSurface(surface);
+            return;
+        }
+    }
+#endif
     for (char character : text)
     {
         const Glyph& glyph = glyphFor(static_cast<char>(std::toupper(static_cast<unsigned char>(character))));
@@ -95,71 +188,62 @@ void drawText(SDL_Renderer* renderer, std::string_view text, int x, int y, int s
 
 void render(SDL_Renderer* renderer, int width, int height, const widemelon::Config& config, const std::string& status)
 {
-    const std::vector<std::string> lines{
-        "WIDEMELON LINUX CLIENT",
-        "CONFIGURATION LOADED",
-        "",
-        "HOST: " + config.host,
-        "PORT: " + std::to_string(config.port),
-        "PAIRING CODE: " + config.pairingCode,
-        "",
-        status,
-        "",
-        "HOLD START + L + R TO EXIT",
-    };
-    const int widest = static_cast<int>(std::max_element(lines.begin(), lines.end(),
-        [](const std::string& left, const std::string& right) { return left.size() < right.size(); })->size());
-    const int scale = std::max(1, std::min(width / (widest * 6 + 4), height / 80));
-    const int lineHeight = 9 * scale;
-    const int blockHeight = static_cast<int>(lines.size()) * lineHeight;
-
-    SDL_SetRenderDrawColor(renderer, 11, 18, 32, 255);
+    (void)height;
+    (void)config;
+    SDL_SetRenderDrawColor(renderer, palette.background.r, palette.background.g, palette.background.b, 255);
     SDL_RenderClear(renderer);
-    SDL_SetRenderDrawColor(renderer, 115, 216, 164, 255);
-    int y = (height - blockHeight) / 2;
-    for (const std::string& line : lines)
-    {
-        drawText(renderer, line, (width - textWidth(line, scale)) / 2, y, scale);
-        y += lineHeight;
-    }
+    SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
+    const std::string title = "WideMelon Client";
+    drawText(renderer, title, (width - textWidth(title, 4)) / 2, 48, 4);
+    const SDL_Rect video{(width - 512) / 2, 125, 512, 384};
+    SDL_RenderFillRect(renderer, &video);
+    const std::string connection = "Connection status: " + status;
+    const std::string exit = "Press START + R + L to quit";
+    drawText(renderer, connection, video.x, video.y + video.h + 22, 2);
+    drawText(renderer, exit, video.x, video.y + video.h + 44, 2);
     SDL_RenderPresent(renderer);
 }
 
 void renderSetup(SDL_Renderer* renderer, int width, int height, const widemelon::Config& config,
     int selected, const std::string& status)
 {
-    const std::vector<std::string> lines{
-        "WIDEMELON SETUP",
-        "HOST: " + config.host,
-        "PORT: " + std::to_string(config.port),
-        "CODE: " + config.pairingCode,
-        "CONNECT",
-        "",
-        status,
-        "A EDIT   START CONNECT",
-        "HOLD START L R TO EXIT",
-    };
-    const int widest = static_cast<int>(std::max_element(lines.begin(), lines.end(),
-        [](const std::string& left, const std::string& right) { return left.size() < right.size(); })->size());
-    const int scale = std::max(1, std::min(width / (widest * 6 + 4), height / 90));
-    const int lineHeight = 9 * scale;
-    const int blockHeight = static_cast<int>(lines.size()) * lineHeight;
-    const int startY = (height - blockHeight) / 2;
-
-    SDL_SetRenderDrawColor(renderer, 11, 18, 32, 255);
+    (void)height;
+    SDL_SetRenderDrawColor(renderer, palette.background.r, palette.background.g, palette.background.b, 255);
     SDL_RenderClear(renderer);
-    SDL_SetRenderDrawColor(renderer, 115, 216, 164, 255);
-    for (std::size_t index = 0; index < lines.size(); ++index)
+    SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
+    const std::string title = "WideMelon Client";
+    drawText(renderer, title, (width - textWidth(title, 4)) / 2, 48, 4);
+    const int centerX = width / 2;
+    const int fieldWidth = 320;
+    const int fieldHeight = 34;
+    const int fieldX = centerX - fieldWidth / 2;
+    const std::array<std::string, 3> labels{"Server Address", "Port", "Session code"};
+    const std::array<std::string, 3> values{config.host, std::to_string(config.port), config.pairingCode};
+    const std::array<int, 3> positions{128, 214, 300};
+    for (int index = 0; index < 3; ++index)
     {
-        const int y = startY + static_cast<int>(index) * lineHeight;
-        const int textX = (width - textWidth(lines[index], scale)) / 2;
-        if (static_cast<int>(index) == selected + 1)
+        drawText(renderer, labels[index], centerX - textWidth(labels[index], 2) / 2, positions[index] - 31, 2);
+        const SDL_Rect field{fieldX, positions[index], fieldWidth, fieldHeight};
+        SDL_RenderDrawRect(renderer, &field);
+        if (selected == index)
         {
-            const SDL_Rect border{textX - 7, y - 3, textWidth(lines[index], scale) + 14, lineHeight - 1};
-            SDL_RenderDrawRect(renderer, &border);
+            const SDL_Rect accent{field.x - 2, field.y - 2, field.w + 4, field.h + 4};
+            SDL_RenderDrawRect(renderer, &accent);
         }
-        drawText(renderer, lines[index], textX, y, scale);
+        drawText(renderer, values[index], centerX - textWidth(values[index], 2) / 2, positions[index] + 7, 2);
     }
+    const SDL_Rect connect{fieldX, 402, fieldWidth, fieldHeight};
+    SDL_RenderDrawRect(renderer, &connect);
+    if (selected == 3)
+    {
+        const SDL_Rect accent{connect.x - 2, connect.y - 2, connect.w + 4, connect.h + 4};
+        SDL_RenderDrawRect(renderer, &accent);
+    }
+    const std::string connectLabel = "CONNECT";
+    drawText(renderer, connectLabel, centerX - textWidth(connectLabel, 2) / 2, 409, 2);
+    drawText(renderer, status, centerX - textWidth(status, 2) / 2, 470, 2);
+    const std::string hint = "A EDIT   START CONNECT";
+    drawText(renderer, hint, centerX - textWidth(hint, 2) / 2, 510, 2);
     SDL_RenderPresent(renderer);
 }
 
@@ -174,9 +258,9 @@ void renderKeyboard(SDL_Renderer* renderer, int width, int height, const std::st
     constexpr int startX = 290;
     constexpr int startY = 205;
 
-    SDL_SetRenderDrawColor(renderer, 11, 18, 32, 255);
+    SDL_SetRenderDrawColor(renderer, palette.background.r, palette.background.g, palette.background.b, 255);
     SDL_RenderClear(renderer);
-    SDL_SetRenderDrawColor(renderer, 115, 216, 164, 255);
+    SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
     drawText(renderer, title, (width - textWidth(title, 5)) / 2, 65, 5);
     drawText(renderer, value.empty() ? "_" : value, (width - textWidth(value.empty() ? "_" : value, 5)) / 2, 125, 5);
     for (std::size_t index = 0; index < keys.size(); ++index)
@@ -332,6 +416,18 @@ bool ConfigScreen::show(Config config, bool inputTest, std::string& error)
         return false;
     }
 
+    loadUiResources();
+#ifdef WIDEMELON_HAVE_SDL_TTF
+    if (TTF_Init() != 0)
+    {
+        error = TTF_GetError();
+        SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return false;
+    }
+#endif
+
     int width = 0;
     int height = 0;
     SDL_GetWindowSize(window, &width, &height);
@@ -341,6 +437,10 @@ bool ConfigScreen::show(Config config, bool inputTest, std::string& error)
     if (!exitInput.open("/dev/input/event4", inputError))
     {
         error = "Cannot open controller input: " + inputError;
+#ifdef WIDEMELON_HAVE_SDL_TTF
+        closeFonts();
+        TTF_Quit();
+#endif
         SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(window);
         SDL_Quit();
@@ -349,6 +449,10 @@ bool ConfigScreen::show(Config config, bool inputTest, std::string& error)
     if (!inputTest && !editConfiguration(renderer, width, height, config, exitInput))
     {
         Logger::info("Configuration form cancelled");
+#ifdef WIDEMELON_HAVE_SDL_TTF
+        closeFonts();
+        TTF_Quit();
+#endif
         SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(window);
         SDL_Quit();
@@ -472,6 +576,10 @@ bool ConfigScreen::show(Config config, bool inputTest, std::string& error)
     }
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
+#ifdef WIDEMELON_HAVE_SDL_TTF
+    closeFonts();
+    TTF_Quit();
+#endif
     SDL_Quit();
     return true;
 }

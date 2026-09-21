@@ -20,6 +20,9 @@ target_compile_features(widemelon-client PRIVATE cxx_std_17)
 target_link_libraries(widemelon-client PRIVATE SDL2::SDL2 Threads::Threads)
 
 if(CMAKE_CROSSCOMPILING)
+    find_library(SDL2_TTF_LIBRARY SDL_ttf REQUIRED)
+    target_link_libraries(widemelon-client PRIVATE ${SDL2_TTF_LIBRARY})
+    target_compile_definitions(widemelon-client PRIVATE WIDEMELON_HAVE_SDL_TTF=1)
     target_link_libraries(widemelon-client PRIVATE pthread)
 endif()
 
