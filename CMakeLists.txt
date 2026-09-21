@@ -4,6 +4,11 @@ project(widemelon-linux-client VERSION 0.1.0 LANGUAGES CXX)
 
 find_package(SDL2 REQUIRED)
 find_package(Threads REQUIRED)
+if(CMAKE_CROSSCOMPILING)
+    find_package(JPEG REQUIRED)
+else()
+    find_package(JPEG QUIET)
+endif()
 
 add_executable(widemelon-client
     src/main.cpp
@@ -18,6 +23,12 @@ add_executable(widemelon-client
 target_include_directories(widemelon-client PRIVATE src)
 target_compile_features(widemelon-client PRIVATE cxx_std_17)
 target_link_libraries(widemelon-client PRIVATE SDL2::SDL2 Threads::Threads)
+
+if(JPEG_FOUND)
+    target_sources(widemelon-client PRIVATE src/video/JpegDecoder.cpp)
+    target_link_libraries(widemelon-client PRIVATE JPEG::JPEG)
+    target_compile_definitions(widemelon-client PRIVATE WIDEMELON_HAVE_JPEG=1)
+endif()
 
 if(CMAKE_CROSSCOMPILING)
     find_library(SDL2_TTF_LIBRARY SDL_ttf REQUIRED)

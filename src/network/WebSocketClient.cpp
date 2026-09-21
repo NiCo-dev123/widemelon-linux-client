@@ -1,6 +1,10 @@
 #include "network/WebSocketClient.h"
 
 #include "common/Logger.h"
+#include "protocol/WideMelonProtocol.h"
+#ifdef WIDEMELON_HAVE_JPEG
+#include "video/JpegDecoder.h"
+#endif
 
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -204,6 +208,22 @@ std::uint64_t WebSocketClient::connectionGeneration() const
     return generation.load();
 }
 
+bool WebSocketClient::latestJpegFrame(VideoJpegFrame& frame) const
+{
+    std::lock_guard<std::mutex> lock(videoMutex);
+    if (!hasJpeg) return false;
+    frame = latestJpeg;
+    return true;
+}
+
+bool WebSocketClient::latestDecodedVideoFrame(DecodedVideoFrame& frame) const
+{
+    std::lock_guard<std::mutex> lock(videoMutex);
+    if (!hasDecoded) return false;
+    frame = latestDecoded;
+    return true;
+}
+
 bool WebSocketClient::sendOnSocket(int fileDescriptor, const std::string& frame)
 {
     std::lock_guard<std::mutex> lock(socketMutex);
@@ -403,6 +423,34 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
                     }
                     else if (frame.opcode == 0x2)
                     {
+                        VideoJpegFrame jpegFrame;
+                        std::string videoError;
+                        if (!WideMelonProtocol::parseVideoFrame(frame.payload, jpegFrame, videoError))
+                        {
+                            Logger::error("Invalid video frame: " + videoError);
+                            continue;
+                        }
+                        {
+                            std::lock_guard<std::mutex> lock(videoMutex);
+                            latestJpeg = jpegFrame;
+                            hasJpeg = true;
+                        }
+#ifdef WIDEMELON_HAVE_JPEG
+                        DecodedJpeg decoded;
+                        if (JpegDecoder::decode(jpegFrame.jpeg, decoded, videoError))
+                        {
+                            DecodedVideoFrame decodedFrame;
+                            decodedFrame.sequence = jpegFrame.sequence;
+                            decodedFrame.capturedUs = jpegFrame.capturedUs;
+                            decodedFrame.width = decoded.width;
+                            decodedFrame.height = decoded.height;
+                            decodedFrame.rgb = std::move(decoded.rgb);
+                            std::lock_guard<std::mutex> lock(videoMutex);
+                            latestDecoded = std::move(decodedFrame);
+                            hasDecoded = true;
+                        }
+                        else Logger::error("JPEG decode failed: " + videoError);
+#endif
                         if (!acknowledgeFrame(fd, frame.payload, stopRequested))
                         {
                             disconnectReason = "Could not acknowledge video frame";
