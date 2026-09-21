@@ -1,7 +1,16 @@
 #include <iostream>
 
+#include "config/Config.h"
+
 int main()
 {
-    std::cout << "WideMelon Linux Client MVP skeleton\n";
+    const widemelon::ConfigLoadResult result = widemelon::ConfigLoader::loadNextToExecutable();
+    if (!result.ok)
+    {
+        std::cerr << "Configuration error: " << result.error << '\n';
+        return 1;
+    }
+
+    std::cout << "Configuration loaded for " << result.config.host << ':' << result.config.port << '\n';
     return 0;
 }

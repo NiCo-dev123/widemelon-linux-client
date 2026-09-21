@@ -1,5 +1,6 @@
 add_executable(widemelon-client-tests
     protocol_test.cpp
+    ../src/config/Config.cpp
 )
 
 target_compile_features(widemelon-client-tests PRIVATE cxx_std_17)
