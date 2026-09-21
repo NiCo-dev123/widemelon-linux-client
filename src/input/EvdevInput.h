@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 namespace widemelon
@@ -17,6 +18,8 @@ public:
     bool open(const std::string& path, std::string& error);
     std::string pollEvent();
     bool exitComboPressed();
+    std::uint16_t buttonMask() const { return mask; }
+    bool takeStateChanged();
 
 private:
     int fileDescriptor = -1;
@@ -24,6 +27,8 @@ private:
     bool leftPressed = false;
     bool rightPressed = false;
     bool exitCombo = false;
+    std::uint16_t mask = 0;
+    bool stateChanged = false;
 };
 
 }

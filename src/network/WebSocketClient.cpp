@@ -14,11 +14,13 @@
 #include <cerrno>
 #include <cstdint>
 #include <limits>
+#include <mutex>
 
 namespace
 {
 
 constexpr std::size_t MaximumFramePayload = 8 * 1024 * 1024;
+std::mutex wireSendMutex;
 
 short pollSocket(int fd, short events, int timeoutMs)
 {
@@ -28,6 +30,7 @@ short pollSocket(int fd, short events, int timeoutMs)
 
 bool sendAll(int fd, const std::string& bytes, const std::atomic<bool>& stopped)
 {
+    std::lock_guard<std::mutex> lock(wireSendMutex);
     std::size_t sent = 0;
     while (sent < bytes.size() && !stopped.load())
     {
@@ -187,6 +190,23 @@ ConnectionState WebSocketClient::connectionState() const
     return state.load();
 }
 
+bool WebSocketClient::sendOnSocket(int fileDescriptor, const std::string& frame)
+{
+    std::lock_guard<std::mutex> lock(socketMutex);
+    if (activeSocket != fileDescriptor) return false;
+    return sendAll(fileDescriptor, frame, stopRequested);
+}
+
+bool WebSocketClient::sendInputSnapshot(std::uint32_t sequence, std::uint16_t buttons)
+{
+    const std::string message = "{\"v\":2,\"type\":\"input\",\"seq\":" + std::to_string(sequence)
+        + ",\"buttons\":" + std::to_string(buttons)
+        + ",\"hotkeys\":0,\"touch\":{\"active\":false,\"x\":0,\"y\":0}}";
+    std::lock_guard<std::mutex> lock(socketMutex);
+    if (activeSocket < 0 || state.load() != ConnectionState::Connected) return false;
+    return sendAll(activeSocket, clientFrame(0x1, message), stopRequested);
+}
+
 bool WebSocketClient::registerSocket(int fileDescriptor)
 {
     std::lock_guard<std::mutex> lock(socketMutex);
@@ -292,7 +312,7 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
                             if (frame.opcode == 0x9)
                             {
                                 Logger::info("Received WebSocket ping; sending pong");
-                                if (!sendAll(fd, clientFrame(0xA, frame.payload), stopRequested)) break;
+                                if (!sendOnSocket(fd, clientFrame(0xA, frame.payload))) break;
                             }
                             if (frame.opcode == 0x1 && frame.payload.find("\"type\":\"ping\"") != std::string::npos)
                             {
@@ -343,13 +363,13 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
                     if (frame.opcode == 0x8)
                     {
                         Logger::info("Received WebSocket close message");
-                        sendAll(fd, clientFrame(0x8, frame.payload), stopRequested);
+                        sendOnSocket(fd, clientFrame(0x8, frame.payload));
                         break;
                     }
                     if (frame.opcode == 0x9)
                     {
                         Logger::info("Received WebSocket ping; sending pong");
-                        if (!sendAll(fd, clientFrame(0xA, frame.payload), stopRequested))
+                        if (!sendOnSocket(fd, clientFrame(0xA, frame.payload)))
                         {
                             disconnectReason = "Could not send WebSocket pong";
                             processingFailed = true;

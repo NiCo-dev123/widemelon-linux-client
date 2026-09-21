@@ -173,6 +173,9 @@ bool ConfigScreen::show(const Config& config, bool inputTest, std::string& error
 
     bool running = true;
     bool connectionReported = false;
+    bool inputDirty = true;
+    std::uint32_t inputSequence = 0;
+    auto nextInputSnapshot = std::chrono::steady_clock::now();
     while (running)
     {
         SDL_Event event;
@@ -198,6 +201,7 @@ bool ConfigScreen::show(const Config& config, bool inputTest, std::string& error
             }
         }
         const std::string inputEvent = exitInput.pollEvent();
+        inputDirty = exitInput.takeStateChanged() || inputDirty;
         if (inputTest && !inputEvent.empty())
         {
             status = inputEvent;
@@ -218,6 +222,16 @@ bool ConfigScreen::show(const Config& config, bool inputTest, std::string& error
                 render(renderer, width, height, config, status);
             }
         }
+        if (!inputTest && client.connectionState() == ConnectionState::Connected)
+        {
+            const auto now = std::chrono::steady_clock::now();
+            if (inputDirty || now >= nextInputSnapshot)
+            {
+                client.sendInputSnapshot(++inputSequence, exitInput.buttonMask());
+                inputDirty = false;
+                nextInputSnapshot = now + std::chrono::milliseconds(200);
+            }
+        }
         if (exitInput.exitComboPressed())
         {
             Logger::info("Exit requested by Start + L + R; stopping network connection");
@@ -227,6 +241,8 @@ bool ConfigScreen::show(const Config& config, bool inputTest, std::string& error
         SDL_Delay(10);
     }
 
+    if (!inputTest && client.connectionState() == ConnectionState::Connected)
+        client.sendInputSnapshot(++inputSequence, 0);
     client.requestStop();
     if (connection.valid())
     {

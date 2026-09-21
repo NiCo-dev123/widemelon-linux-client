@@ -30,14 +30,17 @@ public:
     std::string connectAndAuthenticate(const Config& config, std::chrono::seconds timeout);
     void requestStop();
     ConnectionState connectionState() const;
+    bool sendInputSnapshot(std::uint32_t sequence, std::uint16_t buttons);
 
 private:
     bool registerSocket(int fileDescriptor);
     void closeSocket(int fileDescriptor);
+    bool sendOnSocket(int fileDescriptor, const std::string& frame);
 
     std::atomic<bool> stopRequested{false};
     std::atomic<ConnectionState> state{ConnectionState::Connecting};
     std::mutex socketMutex;
+    std::mutex sendMutex;
     int activeSocket = -1;
 };
 
