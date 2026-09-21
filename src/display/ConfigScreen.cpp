@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <charconv>
 #include <chrono>
 #include <cstdint>
 #include <future>
@@ -124,12 +125,188 @@ void render(SDL_Renderer* renderer, int width, int height, const widemelon::Conf
     SDL_RenderPresent(renderer);
 }
 
+void renderSetup(SDL_Renderer* renderer, int width, int height, const widemelon::Config& config,
+    int selected, const std::string& status)
+{
+    const std::vector<std::string> lines{
+        "WIDEMELON SETUP",
+        "HOST: " + config.host,
+        "PORT: " + std::to_string(config.port),
+        "CODE: " + config.pairingCode,
+        "CONNECT",
+        "",
+        status,
+        "A EDIT   START CONNECT",
+        "HOLD START L R TO EXIT",
+    };
+    const int widest = static_cast<int>(std::max_element(lines.begin(), lines.end(),
+        [](const std::string& left, const std::string& right) { return left.size() < right.size(); })->size());
+    const int scale = std::max(1, std::min(width / (widest * 6 + 4), height / 90));
+    const int lineHeight = 9 * scale;
+    const int blockHeight = static_cast<int>(lines.size()) * lineHeight;
+    const int startY = (height - blockHeight) / 2;
+
+    SDL_SetRenderDrawColor(renderer, 11, 18, 32, 255);
+    SDL_RenderClear(renderer);
+    SDL_SetRenderDrawColor(renderer, 115, 216, 164, 255);
+    for (std::size_t index = 0; index < lines.size(); ++index)
+    {
+        const int y = startY + static_cast<int>(index) * lineHeight;
+        const int textX = (width - textWidth(lines[index], scale)) / 2;
+        if (static_cast<int>(index) == selected + 1)
+        {
+            const SDL_Rect border{textX - 7, y - 3, textWidth(lines[index], scale) + 14, lineHeight - 1};
+            SDL_RenderDrawRect(renderer, &border);
+        }
+        drawText(renderer, lines[index], textX, y, scale);
+    }
+    SDL_RenderPresent(renderer);
+}
+
+void renderKeyboard(SDL_Renderer* renderer, int width, int height, const std::string& title,
+    const std::string& value, int selectedKey)
+{
+    static const std::array<const char*, 13> keys{
+        "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ".", "DEL", "OK"};
+    constexpr int columns = 4;
+    constexpr int keyWidth = 170;
+    constexpr int keyHeight = 62;
+    constexpr int startX = 290;
+    constexpr int startY = 205;
+
+    SDL_SetRenderDrawColor(renderer, 11, 18, 32, 255);
+    SDL_RenderClear(renderer);
+    SDL_SetRenderDrawColor(renderer, 115, 216, 164, 255);
+    drawText(renderer, title, (width - textWidth(title, 5)) / 2, 65, 5);
+    drawText(renderer, value.empty() ? "_" : value, (width - textWidth(value.empty() ? "_" : value, 5)) / 2, 125, 5);
+    for (std::size_t index = 0; index < keys.size(); ++index)
+    {
+        const int row = static_cast<int>(index) / columns;
+        const int column = static_cast<int>(index) % columns;
+        const SDL_Rect key{startX + column * keyWidth, startY + row * keyHeight, keyWidth - 10, keyHeight - 8};
+        if (static_cast<int>(index) == selectedKey) SDL_RenderDrawRect(renderer, &key);
+        const int scale = std::string_view(keys[index]).size() > 1 ? 4 : 5;
+        drawText(renderer, keys[index], key.x + (key.w - textWidth(keys[index], scale)) / 2,
+            key.y + (key.h - 7 * scale) / 2, scale);
+    }
+    drawText(renderer, "A SELECT  B CANCEL", (width - textWidth("A SELECT  B CANCEL", 3)) / 2, height - 60, 3);
+    SDL_RenderPresent(renderer);
+}
+
+bool editNumericField(SDL_Renderer* renderer, int width, int height, widemelon::EvdevInput& input,
+    const std::string& title, std::string& value, std::size_t maximumLength, bool allowDot)
+{
+    static constexpr int keyCount = 13;
+    static constexpr int columns = 4;
+    static const std::array<const char*, keyCount> keys{
+        "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ".", "DEL", "OK"};
+    const std::string original = value;
+    int selectedKey = 0;
+    while (true)
+    {
+        renderKeyboard(renderer, width, height, title, value, selectedKey);
+        input.pollEvent();
+        if (input.exitComboPressed()) return false;
+        switch (input.takeUiAction())
+        {
+        case widemelon::UiAction::Up:
+            selectedKey = (selectedKey + keyCount - columns) % keyCount;
+            break;
+        case widemelon::UiAction::Down:
+            selectedKey = (selectedKey + columns) % keyCount;
+            break;
+        case widemelon::UiAction::Left:
+            selectedKey = (selectedKey + keyCount - 1) % keyCount;
+            break;
+        case widemelon::UiAction::Right:
+            selectedKey = (selectedKey + 1) % keyCount;
+            break;
+        case widemelon::UiAction::Back:
+            value = original;
+            return false;
+        case widemelon::UiAction::Confirm:
+        case widemelon::UiAction::Start:
+        {
+            const std::string_view key = keys[static_cast<std::size_t>(selectedKey)];
+            if (key == "OK") return true;
+            if (key == "DEL")
+            {
+                if (!value.empty()) value.pop_back();
+            }
+            else if (value.size() < maximumLength && (key != "." || allowDot))
+                value.append(key);
+            break;
+        }
+        default:
+            break;
+        }
+        SDL_Delay(10);
+    }
+}
+
+bool editConfiguration(SDL_Renderer* renderer, int width, int height, widemelon::Config& config,
+    widemelon::EvdevInput& input)
+{
+    int selected = 0;
+    std::string status = "EDIT A FIELD THEN CONNECT";
+    while (true)
+    {
+        renderSetup(renderer, width, height, config, selected, status);
+        input.pollEvent();
+        if (input.exitComboPressed()) return false;
+        const widemelon::UiAction action = input.takeUiAction();
+        if (action == widemelon::UiAction::Up) selected = (selected + 3) % 4;
+        else if (action == widemelon::UiAction::Down) selected = (selected + 1) % 4;
+        else if (action == widemelon::UiAction::Confirm || action == widemelon::UiAction::Start)
+        {
+            if (action == widemelon::UiAction::Start) selected = 3;
+            if (selected == 0)
+                editNumericField(renderer, width, height, input, "HOST ADDRESS", config.host, 15, true);
+            else if (selected == 1)
+            {
+                std::string port = std::to_string(config.port);
+                if (editNumericField(renderer, width, height, input, "PORT", port, 5, false))
+                {
+                    unsigned int parsed = 0;
+                    const auto result = std::from_chars(port.data(), port.data() + port.size(), parsed);
+                    if (result.ec == std::errc{} && result.ptr == port.data() + port.size() && parsed <= 65535)
+                        config.port = static_cast<std::uint16_t>(parsed);
+                    else status = "INVALID PORT";
+                }
+            }
+            else if (selected == 2)
+                editNumericField(renderer, width, height, input, "SESSION CODE", config.pairingCode, 10, false);
+            else
+            {
+                const widemelon::ConfigLoadResult checked = widemelon::ConfigLoader::validate(config);
+                if (!checked.ok)
+                {
+                    status = "INVALID CONFIG";
+                    widemelon::Logger::error("Configuration form error: " + checked.error);
+                }
+                else
+                {
+                    std::string error;
+                    if (widemelon::ConfigLoader::saveNextToExecutable(config, error))
+                    {
+                        widemelon::Logger::info("Configuration saved from setup form");
+                        return true;
+                    }
+                    status = "SAVE ERROR";
+                    widemelon::Logger::error("Configuration save error: " + error);
+                }
+            }
+        }
+        SDL_Delay(10);
+    }
+}
+
 }
 
 namespace widemelon
 {
 
-bool ConfigScreen::show(const Config& config, bool inputTest, std::string& error)
+bool ConfigScreen::show(Config config, bool inputTest, std::string& error)
 {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER) != 0)
     {
@@ -158,6 +335,26 @@ bool ConfigScreen::show(const Config& config, bool inputTest, std::string& error
     int width = 0;
     int height = 0;
     SDL_GetWindowSize(window, &width, &height);
+
+    EvdevInput exitInput;
+    std::string inputError;
+    if (!exitInput.open("/dev/input/event4", inputError))
+    {
+        error = "Cannot open controller input: " + inputError;
+        SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return false;
+    }
+    if (!inputTest && !editConfiguration(renderer, width, height, config, exitInput))
+    {
+        Logger::info("Configuration form cancelled");
+        SDL_DestroyRenderer(renderer);
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return true;
+    }
+
     std::string status = inputTest ? "INPUT TEST ACTIVE" : "SEARCHING FOR WIDEMELON";
     widemelon::WebSocketClient client;
     auto connection = std::async(std::launch::async, [&client, &config, inputTest]
@@ -166,10 +363,6 @@ bool ConfigScreen::show(const Config& config, bool inputTest, std::string& error
         return client.connectAndAuthenticate(config, std::chrono::seconds(30));
     });
     render(renderer, width, height, config, status);
-
-    EvdevInput exitInput;
-    std::string inputError;
-    exitInput.open("/dev/input/event4", inputError);
 
     bool running = true;
     ConnectionState displayedConnectionState = client.connectionState();

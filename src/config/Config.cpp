@@ -87,12 +87,17 @@ ConfigLoadResult ConfigLoader::loadFile(const std::filesystem::path& path)
     }
 
     if (!hasHost) return failure("Missing host setting");
-    if (!isIPv4Address(config.host)) return failure("host must be an IPv4 address");
     if (!hasPairingCode) return failure("Missing pairing_code setting");
+    return validate(std::move(config));
+}
+
+ConfigLoadResult ConfigLoader::validate(Config config)
+{
+    if (!isIPv4Address(config.host)) return failure("host must be an IPv4 address");
+    if (config.port == 0) return failure("Invalid port");
     if (config.pairingCode.size() != 10
         || config.pairingCode.find_first_not_of("0123456789") != std::string::npos)
         return failure("pairing_code must contain exactly ten digits");
-
     return {true, std::move(config), {}};
 }
 
@@ -104,6 +109,44 @@ ConfigLoadResult ConfigLoader::loadNextToExecutable()
         return failure("Cannot determine executable path");
     executablePath[static_cast<std::size_t>(length)] = '\0';
     return loadFile(std::filesystem::path(executablePath.data()).parent_path() / "widemelon-client.conf");
+}
+
+bool ConfigLoader::saveNextToExecutable(const Config& config, std::string& error)
+{
+    const ConfigLoadResult checked = validate(config);
+    if (!checked.ok)
+    {
+        error = checked.error;
+        return false;
+    }
+    std::array<char, 4096> executablePath{};
+    const ssize_t length = readlink("/proc/self/exe", executablePath.data(), executablePath.size() - 1);
+    if (length <= 0 || static_cast<std::size_t>(length) >= executablePath.size() - 1)
+    {
+        error = "Cannot determine executable path";
+        return false;
+    }
+    executablePath[static_cast<std::size_t>(length)] = '\0';
+    const std::filesystem::path path = std::filesystem::path(executablePath.data()).parent_path()
+        / "widemelon-client.conf";
+    const std::filesystem::path temporary = path.string() + ".tmp";
+    std::ofstream file(temporary, std::ios::trunc);
+    if (!file)
+    {
+        error = "Cannot write configuration file";
+        return false;
+    }
+    file << "host=" << config.host << '\n'
+         << "port=" << config.port << '\n'
+         << "pairing_code=" << config.pairingCode << '\n';
+    file.close();
+    if (!file || std::rename(temporary.c_str(), path.c_str()) != 0)
+    {
+        std::remove(temporary.c_str());
+        error = "Cannot save configuration file";
+        return false;
+    }
+    return true;
 }
 
 }

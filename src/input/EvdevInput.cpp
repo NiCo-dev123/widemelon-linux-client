@@ -55,6 +55,13 @@ bool EvdevInput::takeStateChanged()
     return changed;
 }
 
+UiAction EvdevInput::takeUiAction()
+{
+    const UiAction action = uiAction;
+    uiAction = UiAction::None;
+    return action;
+}
+
 std::string EvdevInput::pollEvent()
 {
     if (fileDescriptor < 0) return {};
@@ -89,6 +96,12 @@ std::string EvdevInput::pollEvent()
                 stateChanged = stateChanged || previous != mask;
             }
             if (startPressed && leftPressed && rightPressed) exitCombo = true;
+            if (event.value == 1 && uiAction == UiAction::None)
+            {
+                if (event.code == 305) uiAction = UiAction::Confirm;
+                else if (event.code == 304) uiAction = UiAction::Back;
+                else if (event.code == BTN_START) uiAction = UiAction::Start;
+            }
         }
         else if (event.type == EV_ABS && (event.code == 16 || event.code == 17))
         {
@@ -102,6 +115,11 @@ std::string EvdevInput::pollEvent()
             mask &= static_cast<std::uint16_t>(~affected);
             mask |= direction;
             stateChanged = stateChanged || previous != mask;
+            if (event.value != 0 && uiAction == UiAction::None)
+            {
+                if (event.code == 16) uiAction = event.value < 0 ? UiAction::Left : UiAction::Right;
+                else uiAction = event.value < 0 ? UiAction::Up : UiAction::Down;
+            }
         }
     }
     return description;

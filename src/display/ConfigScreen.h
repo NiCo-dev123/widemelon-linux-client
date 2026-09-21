@@ -10,7 +10,7 @@ namespace widemelon
 class ConfigScreen
 {
 public:
-    static bool show(const Config& config, bool inputTest, std::string& error);
+    static bool show(Config config, bool inputTest, std::string& error);
 };
 
 }

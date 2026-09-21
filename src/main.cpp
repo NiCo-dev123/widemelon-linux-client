@@ -14,10 +14,9 @@ int main(int argc, char** argv)
     if (!result.ok)
     {
         widemelon::Logger::error("Configuration error: " + result.error);
-        std::cerr << "Configuration error: " << result.error << '\n';
-        return 1;
+        widemelon::Logger::info("Opening configuration form with default values");
     }
-    widemelon::Logger::info("Configuration loaded for host " + result.config.host + ':'
+    else widemelon::Logger::info("Configuration loaded for host " + result.config.host + ':'
         + std::to_string(result.config.port));
 
     std::string screenError;

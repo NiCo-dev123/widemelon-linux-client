@@ -24,8 +24,10 @@ struct ConfigLoadResult
 class ConfigLoader
 {
 public:
+    static ConfigLoadResult validate(Config config);
     static ConfigLoadResult loadFile(const std::filesystem::path& path);
     static ConfigLoadResult loadNextToExecutable();
+    static bool saveNextToExecutable(const Config& config, std::string& error);
 };
 
 }
