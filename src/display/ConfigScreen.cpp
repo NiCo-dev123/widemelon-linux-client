@@ -46,13 +46,17 @@ TTF_Font* fontForSize(int size)
     const auto existing = fonts.find(size);
     if (existing != fonts.end()) return existing->second;
     TTF_Font* font = TTF_OpenFont(fontPath.c_str(), size);
-    if (font) fonts.emplace(size, font);
+    // Remember failures too. SDL_ttf may allocate a file descriptor while
+    // attempting to open a damaged or unsupported font; retrying this once
+    // per frame eventually exhausts the very small descriptor limit on TSPS.
+    fonts.emplace(size, font);
     return font;
 }
 
 void closeFonts()
 {
-    for (const auto& entry : fonts) TTF_CloseFont(entry.second);
+    for (const auto& entry : fonts)
+        if (entry.second) TTF_CloseFont(entry.second);
     fonts.clear();
 }
 #endif
