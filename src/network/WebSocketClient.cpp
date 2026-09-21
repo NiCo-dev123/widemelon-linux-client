@@ -12,6 +12,7 @@
 #include <array>
 #include <algorithm>
 #include <cerrno>
+#include <cstring>
 #include <cstdint>
 #include <limits>
 #include <mutex>
@@ -20,6 +21,7 @@ namespace
 {
 
 constexpr std::size_t MaximumFramePayload = 8 * 1024 * 1024;
+constexpr int RetryDelayMs = 300;
 std::mutex wireSendMutex;
 
 short pollSocket(int fd, short events, int timeoutMs)
@@ -240,7 +242,6 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
 {
     const auto initialDeadline = std::chrono::steady_clock::now() + timeout;
     const std::string port = std::to_string(config.port);
-    int retryDelayMs = 250;
     bool hasConnected = false;
     while (!stopRequested.load() && (hasConnected || std::chrono::steady_clock::now() < initialDeadline))
     {
@@ -259,7 +260,11 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
         freeaddrinfo(result);
         if (fd < 0)
         {
-            Logger::error("Cannot create TCP socket");
+            const int socketError = errno;
+            Logger::error("Cannot create TCP socket (errno " + std::to_string(socketError) + ": "
+                + std::strerror(socketError) + ')');
+            Logger::info("Connection attempt failed; retrying in " + std::to_string(RetryDelayMs) + " ms");
+            if (!waitForRetry(RetryDelayMs, stopRequested)) break;
             continue;
         }
         fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
@@ -352,7 +357,6 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
             state.store(ConnectionState::Connected);
             generation.fetch_add(1);
             hasConnected = true;
-            retryDelayMs = 250;
             Logger::info("WebSocket connection is active");
             std::string disconnectReason = "Server closed the WebSocket connection";
             while (!stopRequested.load())
@@ -436,17 +440,15 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
             }
             Logger::error("WebSocket disconnected: " + disconnectReason);
             state.store(ConnectionState::Connecting);
-            Logger::info("Reconnecting in " + std::to_string(retryDelayMs) + " ms");
-            if (!waitForRetry(retryDelayMs, stopRequested)) break;
-            retryDelayMs = std::min(retryDelayMs * 2, 4000);
+            Logger::info("Reconnecting in " + std::to_string(RetryDelayMs) + " ms");
+            if (!waitForRetry(RetryDelayMs, stopRequested)) break;
             continue;
         }
 
         closeSocket(fd);
         if (stopRequested.load()) break;
-        Logger::info("Connection attempt failed; retrying in " + std::to_string(retryDelayMs) + " ms");
-        if (!waitForRetry(retryDelayMs, stopRequested)) break;
-        retryDelayMs = std::min(retryDelayMs * 2, 4000);
+        Logger::info("Connection attempt failed; retrying in " + std::to_string(RetryDelayMs) + " ms");
+        if (!waitForRetry(RetryDelayMs, stopRequested)) break;
     }
     if (stopRequested.load())
     {

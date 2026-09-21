@@ -49,8 +49,8 @@ int main()
            "rejects a non-IPv4 host");
     expect(!loadText("host=192.168.1.20\nport=70000\npairing_code=1234567890\n").ok,
            "rejects an invalid port");
-    expect(!loadText("host=192.168.1.20\npairing_code=123\n").ok,
-           "rejects an invalid pairing code");
+    expect(loadText("host=192.168.1.20\npairing_code=873321355\n").ok,
+           "accepts the server's nine-digit pairing code");
     expect(!loadText("host=192.168.1.20\nunknown=value\npairing_code=1234567890\n").ok,
            "rejects unknown settings");
 

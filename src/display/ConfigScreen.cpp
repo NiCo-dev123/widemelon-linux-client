@@ -18,6 +18,7 @@
 #include <future>
 #include <fstream>
 #include <map>
+#include <memory>
 #include <string_view>
 #include <unordered_map>
 #include <unistd.h>
@@ -391,7 +392,7 @@ bool editConfiguration(SDL_Renderer* renderer, int width, int height, widemelon:
                 }
             }
             else if (selected == 2)
-                editNumericField(renderer, width, height, input, "SESSION CODE", config.pairingCode, 10, false);
+                editNumericField(renderer, width, height, input, "SESSION CODE", config.pairingCode, 16, false);
             else
             {
                 const widemelon::ConfigLoadResult checked = widemelon::ConfigLoader::validate(config);
@@ -484,9 +485,8 @@ bool ConfigScreen::show(Config config, bool inputTest, std::string& error)
         SDL_Quit();
         return false;
     }
-    if (!inputTest && !editConfiguration(renderer, width, height, config, exitInput))
+    auto closeDisplay = [&]
     {
-        Logger::info("Configuration form cancelled");
 #ifdef WIDEMELON_HAVE_SDL_TTF
         closeFonts();
         TTF_Quit();
@@ -494,20 +494,60 @@ bool ConfigScreen::show(Config config, bool inputTest, std::string& error)
         SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(window);
         SDL_Quit();
-        return true;
+    };
+
+    std::unique_ptr<widemelon::WebSocketClient> client = std::make_unique<widemelon::WebSocketClient>();
+    std::future<std::string> connection;
+    if (!inputTest)
+    {
+        while (true)
+        {
+            if (!editConfiguration(renderer, width, height, config, exitInput))
+            {
+                Logger::info("Configuration form cancelled");
+                closeDisplay();
+                return true;
+            }
+
+            client = std::make_unique<widemelon::WebSocketClient>();
+            connection = std::async(std::launch::async, [&client, &config]
+            {
+                return client->connectAndAuthenticate(config, std::chrono::seconds(5));
+            });
+
+            while (connection.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready
+                && client->connectionState() != widemelon::ConnectionState::Connected)
+            {
+                renderSetup(renderer, width, height, config, 3, "CHECKING CONNECTION...");
+                exitInput.pollEvent();
+                if (exitInput.exitComboPressed())
+                {
+                    client->requestStop();
+                    connection.get();
+                    closeDisplay();
+                    return true;
+                }
+                SDL_Delay(10);
+            }
+
+            if (client->connectionState() == widemelon::ConnectionState::Connected) break;
+            const std::string connectionError = connection.get();
+            client->requestStop();
+            if (connectionError != "Cancelled")
+                Logger::error("Configuration connection test failed: " + connectionError);
+            continue;
+        }
     }
 
-    std::string status = inputTest ? "INPUT TEST ACTIVE" : "SEARCHING FOR WIDEMELON";
-    widemelon::WebSocketClient client;
-    auto connection = std::async(std::launch::async, [&client, &config, inputTest]
+    std::string status = inputTest ? "INPUT TEST ACTIVE" : "CONNECTION OK";
+    if (inputTest)
     {
-        if (inputTest) return std::string{};
-        return client.connectAndAuthenticate(config, std::chrono::seconds(30));
-    });
+        connection = std::async(std::launch::async, [] { return std::string{}; });
+    }
     render(renderer, width, height, config, status);
 
     bool running = true;
-    ConnectionState displayedConnectionState = client.connectionState();
+    ConnectionState displayedConnectionState = client->connectionState();
     bool inputDirty = true;
     std::uint32_t inputSequence = 0;
     std::uint64_t inputConnectionGeneration = 0;
@@ -544,7 +584,7 @@ bool ConfigScreen::show(Config config, bool inputTest, std::string& error)
             status = inputEvent;
             render(renderer, width, height, config, status);
         }
-        const ConnectionState currentConnectionState = client.connectionState();
+        const ConnectionState currentConnectionState = client->connectionState();
         if (!inputTest && currentConnectionState != displayedConnectionState)
         {
             if (currentConnectionState == ConnectionState::Connected)
@@ -565,10 +605,10 @@ bool ConfigScreen::show(Config config, bool inputTest, std::string& error)
                 render(renderer, width, height, config, status);
             }
         }
-        if (!inputTest && client.connectionState() == ConnectionState::Connected)
+        if (!inputTest && client->connectionState() == ConnectionState::Connected)
         {
             const auto now = std::chrono::steady_clock::now();
-            const std::uint64_t generation = client.connectionGeneration();
+            const std::uint64_t generation = client->connectionGeneration();
             if (generation != inputConnectionGeneration)
             {
                 inputConnectionGeneration = generation;
@@ -579,12 +619,12 @@ bool ConfigScreen::show(Config config, bool inputTest, std::string& error)
             }
             if (sendReleasedSnapshot)
             {
-                client.sendInputSnapshot(++inputSequence, 0);
+                client->sendInputSnapshot(++inputSequence, 0);
                 sendReleasedSnapshot = false;
             }
             else if (inputDirty || now >= nextInputSnapshot)
             {
-                client.sendInputSnapshot(++inputSequence, exitInput.buttonMask());
+                client->sendInputSnapshot(++inputSequence, exitInput.buttonMask());
                 inputDirty = false;
                 nextInputSnapshot = now + std::chrono::milliseconds(200);
             }
@@ -592,15 +632,15 @@ bool ConfigScreen::show(Config config, bool inputTest, std::string& error)
         if (exitInput.exitComboPressed())
         {
             Logger::info("Exit requested by Start + L + R; stopping network connection");
-            client.requestStop();
+            client->requestStop();
             running = false;
         }
         SDL_Delay(10);
     }
 
-    if (!inputTest && client.connectionState() == ConnectionState::Connected)
-        client.sendInputSnapshot(++inputSequence, 0);
-    client.requestStop();
+    if (!inputTest && client->connectionState() == ConnectionState::Connected)
+        client->sendInputSnapshot(++inputSequence, 0);
+    client->requestStop();
     if (connection.valid())
     {
         try
@@ -612,13 +652,7 @@ bool ConfigScreen::show(Config config, bool inputTest, std::string& error)
             Logger::error(std::string("Network worker stopped with exception: ") + exception.what());
         }
     }
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
-#ifdef WIDEMELON_HAVE_SDL_TTF
-    closeFonts();
-    TTF_Quit();
-#endif
-    SDL_Quit();
+    closeDisplay();
     return true;
 }
 

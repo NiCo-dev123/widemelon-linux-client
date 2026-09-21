@@ -146,9 +146,6 @@ ConfigLoadResult ConfigLoader::validate(Config config)
 {
     if (!isIPv4Address(config.host)) return failure("host must be an IPv4 address");
     if (config.port == 0) return failure("Invalid port");
-    if (config.pairingCode.size() != 10
-        || config.pairingCode.find_first_not_of("0123456789") != std::string::npos)
-        return failure("pairing_code must contain exactly ten digits");
     return {true, std::move(config), {}};
 }
 
