@@ -1,6 +1,7 @@
 #include <iostream>
 
 #include "config/Config.h"
+#include "display/ConfigScreen.h"
 
 int main()
 {
@@ -11,6 +12,11 @@ int main()
         return 1;
     }
 
-    std::cout << "Configuration loaded for " << result.config.host << ':' << result.config.port << '\n';
+    std::string screenError;
+    if (!widemelon::ConfigScreen::show(result.config, screenError))
+    {
+        std::cerr << "Display error: " << screenError << '\n';
+        return 1;
+    }
     return 0;
 }
