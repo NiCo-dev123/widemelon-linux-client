@@ -7,47 +7,14 @@
 
 Wide Melon Linux Client is an ARM64 Linux app that lets you play NDS games on the [WideMelon DS](https://github.com/pruefsumme/widemelon) emulator, using your linux handheld as a controller.
 
-## Configuration
+## Download the app
 
-The bundled `widemelon-client.conf` supplies initial values. Values confirmed
-in the console setup form are stored persistently in
-`/mnt/sdcard/Saves/WideMelonClient/widemelon-client.conf` (or the equivalent
-uppercase `/mnt/SDCARD` path), so app updates do not overwrite them. Set `host` to the private IPv4 address displayed by
-WideMelon and set `pairing_code` to its current ten-digit pairing code.
+[Check the releases](https://github.com/NiCo-dev123/widemelon-linux-client/releases) and download the latest on your computer.
+Extract the .zip file, copy the folder on your SD card in `/Apps/`
 
-## Trimui Smart Pro S / SpruceOS installation
-
-Create this directory on the SD card:
-
-```text
-/mnt/SDCARD/App/WideMelonClient/
-├── config.json
-├── launch.sh
-├── widemelon-client
-└── widemelon-client.conf
-```
-
-Copy `config.json` and `launch.sh` from
-`packaging/spruce/WideMelonClient/`. Copy the ARM64 `widemelon-client` binary
-to the same directory. Copy `config/widemelon-client.conf.example` there as
-`widemelon-client.conf`, then edit it with the private IPv4 address and current
-pairing code shown by WideMelon.
-
-Restart SpruceOS (or return to its main menu) after copying the folder. The
-**WideMelon Client** entry should appear in the Apps menu because its
-`config.json` declares `TRIMUI_SMART_PRO_S`. Launch it to display the loaded
-host, port, and pairing code. Hold **Start + L + R** to close the smoke-test
-screen.
-
-If the app returns immediately, inspect:
-
-```text
-/mnt/SDCARD/App/WideMelonClient/widemelon-client.log
-```
-
-If the ARM64 build needs a non-system SDL2 library, place it and its required
-dependencies in `/mnt/SDCARD/App/WideMelonClient/lib/`; `launch.sh` adds that
-directory to `LD_LIBRARY_PATH` for this app only.
+> [!NOTE]
+> This project is only compatible with the Trimui Smart Pro S and SpruceOS.
+> In the future, compatibility will be extended.
 
 ## Building on a development machine
 
