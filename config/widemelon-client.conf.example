@@ -1,0 +1,8 @@
+# WideMelon server address on the local network.
+host=192.168.1.20
+
+# WideMelon phone-bridge TCP port.
+port=24872
+
+# Ten-digit pairing code displayed by WideMelon.
+pairing_code=1234567890
