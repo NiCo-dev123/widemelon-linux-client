@@ -32,8 +32,8 @@ pairing code shown by WideMelon.
 Restart SpruceOS (or return to its main menu) after copying the folder. The
 **WideMelon Client** entry should appear in the Apps menu because its
 `config.json` declares `TRIMUI_SMART_PRO_S`. Launch it to display the loaded
-host, port, and pairing code. Press any key or controller button to close the
-smoke-test screen.
+host, port, and pairing code. Hold **Start + L + R** to close the smoke-test
+screen.
 
 If the app returns immediately, inspect:
 

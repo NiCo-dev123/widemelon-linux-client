@@ -1,5 +1,7 @@
 #include "display/ConfigScreen.h"
 
+#include "input/EvdevInput.h"
+
 #include <SDL.h>
 
 #include <algorithm>
@@ -96,7 +98,7 @@ void render(SDL_Renderer* renderer, int width, int height, const widemelon::Conf
         "PORT: " + std::to_string(config.port),
         "PAIRING CODE: " + config.pairingCode,
         "",
-        "PRESS ANY KEY OR BUTTON TO EXIT",
+        "HOLD START + L + R TO EXIT",
     };
     const int widest = static_cast<int>(std::max_element(lines.begin(), lines.end(),
         [](const std::string& left, const std::string& right) { return left.size() < right.size(); })->size());
@@ -152,29 +154,37 @@ bool ConfigScreen::show(const Config& config, std::string& error)
     SDL_GetWindowSize(window, &width, &height);
     render(renderer, width, height, config);
 
+    EvdevInput exitInput;
+    std::string inputError;
+    exitInput.open("/dev/input/event4", inputError);
+
     bool running = true;
     while (running)
     {
         SDL_Event event;
-        SDL_WaitEvent(&event);
-        switch (event.type)
+        while (SDL_PollEvent(&event))
         {
-        case SDL_QUIT:
-        case SDL_KEYDOWN:
-        case SDL_CONTROLLERBUTTONDOWN:
-        case SDL_JOYBUTTONDOWN:
-            running = false;
-            break;
-        case SDL_WINDOWEVENT:
-            if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
+            switch (event.type)
             {
-                SDL_GetWindowSize(window, &width, &height);
-                render(renderer, width, height, config);
+            case SDL_QUIT:
+                running = false;
+                break;
+            case SDL_KEYDOWN:
+                if (event.key.keysym.sym == SDLK_ESCAPE) running = false;
+                break;
+            case SDL_WINDOWEVENT:
+                if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
+                {
+                    SDL_GetWindowSize(window, &width, &height);
+                    render(renderer, width, height, config);
+                }
+                break;
+            default:
+                break;
             }
-            break;
-        default:
-            break;
         }
+        if (exitInput.exitComboPressed()) running = false;
+        SDL_Delay(10);
     }
 
     SDL_DestroyRenderer(renderer);
