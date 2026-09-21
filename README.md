@@ -62,7 +62,7 @@ ARM64 SDL2 headers and library; do not use the host x86_64 SDL2 library.
 With the official SDK extracted under `.toolchains/trimui-smartpro-s/`, run:
 
 ```sh
-export TRIMUI_TSPS_SDK=/home/nicolas/Documents/wide-melon-ds/.toolchains/trimui-smartpro-s/sdk_tg5050_linux_v1.0.0
+export TRIMUI_TSPS_SDK=/PATH_TO_PROJECT/.toolchains/trimui-smartpro-s/sdk_tg5050_linux_v1.0.0
 cmake -S . -B build-tsps -G "Unix Makefiles" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_TOOLCHAIN_FILE=cmake/TrimuiSmartProS.cmake

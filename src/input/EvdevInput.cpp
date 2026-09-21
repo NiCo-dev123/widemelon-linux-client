@@ -27,11 +27,21 @@ bool EvdevInput::open(const std::string& path, std::string& error)
 
 bool EvdevInput::exitComboPressed()
 {
-    if (fileDescriptor < 0) return false;
+    const bool pressed = exitCombo;
+    exitCombo = false;
+    return pressed;
+}
+
+std::string EvdevInput::pollEvent()
+{
+    if (fileDescriptor < 0) return {};
 
     input_event event{};
+    std::string description;
     while (::read(fileDescriptor, &event, sizeof(event)) == sizeof(event))
     {
+        description = "EVENT T" + std::to_string(event.type) + " C" + std::to_string(event.code)
+            + " V" + std::to_string(event.value);
         if (event.type != EV_KEY) continue;
         const bool pressed = event.value != 0;
         switch (event.code)
@@ -41,8 +51,9 @@ bool EvdevInput::exitComboPressed()
         case BTN_TR: rightPressed = pressed; break;
         default: break;
         }
+        if (startPressed && leftPressed && rightPressed) exitCombo = true;
     }
-    return startPressed && leftPressed && rightPressed;
+    return description;
 }
 
 }

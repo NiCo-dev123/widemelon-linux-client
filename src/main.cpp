@@ -1,9 +1,10 @@
 #include <iostream>
+#include <string>
 
 #include "config/Config.h"
 #include "display/ConfigScreen.h"
 
-int main()
+int main(int argc, char** argv)
 {
     const widemelon::ConfigLoadResult result = widemelon::ConfigLoader::loadNextToExecutable();
     if (!result.ok)
@@ -13,7 +14,8 @@ int main()
     }
 
     std::string screenError;
-    if (!widemelon::ConfigScreen::show(result.config, screenError))
+    const bool inputTest = argc == 2 && std::string(argv[1]) == "--input-test";
+    if (!widemelon::ConfigScreen::show(result.config, inputTest, screenError))
     {
         std::cerr << "Display error: " << screenError << '\n';
         return 1;

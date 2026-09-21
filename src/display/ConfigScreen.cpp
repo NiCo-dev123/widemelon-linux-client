@@ -128,7 +128,7 @@ void render(SDL_Renderer* renderer, int width, int height, const widemelon::Conf
 namespace widemelon
 {
 
-bool ConfigScreen::show(const Config& config, std::string& error)
+bool ConfigScreen::show(const Config& config, bool inputTest, std::string& error)
 {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER) != 0)
     {
@@ -157,10 +157,11 @@ bool ConfigScreen::show(const Config& config, std::string& error)
     int width = 0;
     int height = 0;
     SDL_GetWindowSize(window, &width, &height);
-    std::string status = "SEARCHING FOR WIDEMELON";
+    std::string status = inputTest ? "INPUT TEST ACTIVE" : "SEARCHING FOR WIDEMELON";
     widemelon::WebSocketClient client;
-    auto connection = std::async(std::launch::async, [&client, &config]
+    auto connection = std::async(std::launch::async, [&client, &config, inputTest]
     {
+        if (inputTest) return std::string{};
         return client.connectAndAuthenticate(config, std::chrono::seconds(30));
     });
     render(renderer, width, height, config, status);
@@ -195,7 +196,13 @@ bool ConfigScreen::show(const Config& config, std::string& error)
                 break;
             }
         }
-        if (!connectionReported && connection.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
+        const std::string inputEvent = exitInput.pollEvent();
+        if (inputTest && !inputEvent.empty())
+        {
+            status = inputEvent;
+            render(renderer, width, height, config, status);
+        }
+        if (!inputTest && !connectionReported && connection.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
         {
             status = connection.get().empty() ? "CONNECTION OK" : "CONNECTION ERROR";
             render(renderer, width, height, config, status);

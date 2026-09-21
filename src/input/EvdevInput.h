@@ -15,6 +15,7 @@ public:
     EvdevInput& operator=(const EvdevInput&) = delete;
 
     bool open(const std::string& path, std::string& error);
+    std::string pollEvent();
     bool exitComboPressed();
 
 private:
@@ -22,6 +23,7 @@ private:
     bool startPressed = false;
     bool leftPressed = false;
     bool rightPressed = false;
+    bool exitCombo = false;
 };
 
 }
