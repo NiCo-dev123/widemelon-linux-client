@@ -1,6 +1,6 @@
 {
   "label": "WideMelon Client",
-  "icon": "icon.png",
+  "icon": "wmclient.png",
   "launch": "launch.sh",
   "description": "WideMelon controller client",
   "devices": [
