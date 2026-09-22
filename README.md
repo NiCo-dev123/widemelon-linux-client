@@ -16,8 +16,9 @@ Wide Melon Linux Client is an ARM64 Linux app that lets you play NDS games on th
 Extract the .zip file, copy the folder on your SD card in `/Apps/`
 
 > [!NOTE]
-> This project is only compatible with the Trimui Smart Pro S and SpruceOS.
-> In the future, compatibility will be extended.
+> This project is only compatible with the Trimui Smart Pro S.
+> It was only tested on SpruceOS. It should launch but some features might be broken or missing.
+> In the future, compatibility should be extended.
 
 ## Building for your machine
 
