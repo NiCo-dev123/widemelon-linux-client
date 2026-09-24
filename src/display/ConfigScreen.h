@@ -7,6 +7,8 @@
 namespace widemelon
 {
 
+inline constexpr std::chrono::milliseconds UiNavigationCooldown{100};
+
 class ConfigScreen
 {
 public:
