@@ -57,7 +57,8 @@ bool EvdevInput::open(const std::string& path, std::string& error)
 void EvdevInput::mergeDirectionalSources()
 {
     const std::uint16_t previous = mask;
-    mask = static_cast<std::uint16_t>((mask & ~DirectionMask) | dpadMask | leftStickMask);
+    const std::uint16_t activeDirections = dpadMask != 0 ? dpadMask : leftStickMask;
+    mask = static_cast<std::uint16_t>((mask & ~DirectionMask) | activeDirections);
     stateChanged = stateChanged || previous != mask;
 }
 
@@ -67,7 +68,12 @@ void EvdevInput::updateDirectionMask(std::uint16_t& sourceMask, bool horizontal,
     const std::uint16_t direction = horizontal
         ? (value < center - threshold ? ButtonLeft : value > center + threshold ? ButtonRight : 0)
         : (value < center - threshold ? ButtonUp : value > center + threshold ? ButtonDown : 0);
-    sourceMask = static_cast<std::uint16_t>((sourceMask & ~affected) | direction);
+    const std::uint16_t updatedMask = static_cast<std::uint16_t>((sourceMask & ~affected) | direction);
+    // Analog hardware can emit many position samples while held. Only a
+    // threshold crossing is an input transition, so keep the current D-pad
+    // direction latched until the stick returns to the dead zone.
+    if (updatedMask == sourceMask) return;
+    sourceMask = updatedMask;
     mergeDirectionalSources();
 }
 
@@ -153,7 +159,6 @@ std::string EvdevInput::pollEvent()
             const int center = horizontal ? leftStickXCenter : leftStickYCenter;
             const int threshold = horizontal ? leftStickXThreshold : leftStickYThreshold;
             updateDirectionMask(leftStickMask, horizontal, event.value, center, threshold);
-            setUiDirection(horizontal, event.value, center, threshold);
         }
     }
     return description;
