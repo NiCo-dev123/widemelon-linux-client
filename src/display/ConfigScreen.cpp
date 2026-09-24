@@ -345,12 +345,23 @@ bool editNumericField(SDL_Renderer* renderer, int width, int height, widemelon::
         "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ".", "DEL", "OK"};
     const std::string original = value;
     int selectedKey = 0;
+    auto nextNavigationAt = std::chrono::steady_clock::time_point{};
     while (true)
     {
         renderKeyboard(renderer, width, height, title, value, selectedKey);
         input.pollEvent();
         if (input.exitComboPressed()) return false;
-        switch (input.takeUiAction())
+        const widemelon::UiAction action = input.takeUiAction();
+        const bool navigation = action == widemelon::UiAction::Up || action == widemelon::UiAction::Down
+            || action == widemelon::UiAction::Left || action == widemelon::UiAction::Right;
+        const auto now = std::chrono::steady_clock::now();
+        if (navigation && now < nextNavigationAt)
+        {
+            SDL_Delay(10);
+            continue;
+        }
+        if (navigation) nextNavigationAt = now + std::chrono::milliseconds(250);
+        switch (action)
         {
         case widemelon::UiAction::Up:
             selectedKey = (selectedKey + keyCount - columns) % keyCount;
@@ -396,14 +407,20 @@ bool editConfiguration(SDL_Renderer* renderer, int width, int height, widemelon:
 {
     int selected = 0;
     std::string status = "EDIT A FIELD THEN CONNECT";
+    auto nextNavigationAt = std::chrono::steady_clock::time_point{};
     while (true)
     {
         renderSetup(renderer, width, height, config, selected, status);
         input.pollEvent();
         if (input.exitComboPressed()) return false;
         const widemelon::UiAction action = input.takeUiAction();
-        if (action == widemelon::UiAction::Up) selected = (selected + 3) % 4;
-        else if (action == widemelon::UiAction::Down) selected = (selected + 1) % 4;
+        const bool navigation = action == widemelon::UiAction::Up || action == widemelon::UiAction::Down
+            || action == widemelon::UiAction::Left || action == widemelon::UiAction::Right;
+        const auto now = std::chrono::steady_clock::now();
+        const bool acceptNavigation = !navigation || now >= nextNavigationAt;
+        if (navigation && acceptNavigation) nextNavigationAt = now + std::chrono::milliseconds(250);
+        if (acceptNavigation && action == widemelon::UiAction::Up) selected = (selected + 3) % 4;
+        else if (acceptNavigation && action == widemelon::UiAction::Down) selected = (selected + 1) % 4;
         else if (action == widemelon::UiAction::Confirm || action == widemelon::UiAction::Start)
         {
             if (action == widemelon::UiAction::Start) selected = 3;
