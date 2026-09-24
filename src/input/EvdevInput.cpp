@@ -4,6 +4,8 @@
 #include <cstring>
 #include <fcntl.h>
 #include <linux/input.h>
+#include <algorithm>
+#include <sys/ioctl.h>
 #include <unistd.h>
 
 namespace widemelon
@@ -23,6 +25,15 @@ constexpr std::uint16_t ButtonR = 1U << 8;
 constexpr std::uint16_t ButtonL = 1U << 9;
 constexpr std::uint16_t ButtonX = 1U << 10;
 constexpr std::uint16_t ButtonY = 1U << 11;
+constexpr std::uint16_t DirectionMask = ButtonRight | ButtonLeft | ButtonUp | ButtonDown;
+
+void configureStickAxis(int fileDescriptor, unsigned int axis, int& center, int& threshold)
+{
+    input_absinfo info{};
+    if (ioctl(fileDescriptor, EVIOCGABS(axis), &info) != 0) return;
+    center = info.minimum + (info.maximum - info.minimum) / 2;
+    threshold = std::max(info.flat, (info.maximum - info.minimum) / 4);
+}
 }
 
 EvdevInput::~EvdevInput()
@@ -38,7 +49,33 @@ bool EvdevInput::open(const std::string& path, std::string& error)
         error = std::strerror(errno);
         return false;
     }
+    configureStickAxis(fileDescriptor, ABS_X, leftStickXCenter, leftStickXThreshold);
+    configureStickAxis(fileDescriptor, ABS_Y, leftStickYCenter, leftStickYThreshold);
     return true;
+}
+
+void EvdevInput::mergeDirectionalSources()
+{
+    const std::uint16_t previous = mask;
+    mask = static_cast<std::uint16_t>((mask & ~DirectionMask) | dpadMask | leftStickMask);
+    stateChanged = stateChanged || previous != mask;
+}
+
+void EvdevInput::updateDirectionMask(std::uint16_t& sourceMask, bool horizontal, int value, int center, int threshold)
+{
+    const std::uint16_t affected = horizontal ? ButtonLeft | ButtonRight : ButtonUp | ButtonDown;
+    const std::uint16_t direction = horizontal
+        ? (value < center - threshold ? ButtonLeft : value > center + threshold ? ButtonRight : 0)
+        : (value < center - threshold ? ButtonUp : value > center + threshold ? ButtonDown : 0);
+    sourceMask = static_cast<std::uint16_t>((sourceMask & ~affected) | direction);
+    mergeDirectionalSources();
+}
+
+void EvdevInput::setUiDirection(bool horizontal, int value, int center, int threshold)
+{
+    if (uiAction != UiAction::None || (value >= center - threshold && value <= center + threshold)) return;
+    if (horizontal) uiAction = value < center ? UiAction::Left : UiAction::Right;
+    else uiAction = value < center ? UiAction::Up : UiAction::Down;
 }
 
 bool EvdevInput::exitComboPressed()
@@ -104,23 +141,19 @@ std::string EvdevInput::pollEvent()
                 else if (event.code == BTN_START) uiAction = UiAction::Start;
             }
         }
-        else if (event.type == EV_ABS && (event.code == 16 || event.code == 17))
+        else if (event.type == EV_ABS && (event.code == ABS_HAT0X || event.code == ABS_HAT0Y))
         {
-            const std::uint16_t horizontal = ButtonLeft | ButtonRight;
-            const std::uint16_t vertical = ButtonUp | ButtonDown;
-            const std::uint16_t affected = event.code == 16 ? horizontal : vertical;
-            const std::uint16_t direction = event.code == 16
-                ? (event.value < 0 ? ButtonLeft : event.value > 0 ? ButtonRight : 0)
-                : (event.value < 0 ? ButtonUp : event.value > 0 ? ButtonDown : 0);
-            const std::uint16_t previous = mask;
-            mask &= static_cast<std::uint16_t>(~affected);
-            mask |= direction;
-            stateChanged = stateChanged || previous != mask;
-            if (event.value != 0 && uiAction == UiAction::None)
-            {
-                if (event.code == 16) uiAction = event.value < 0 ? UiAction::Left : UiAction::Right;
-                else uiAction = event.value < 0 ? UiAction::Up : UiAction::Down;
-            }
+            const bool horizontal = event.code == ABS_HAT0X;
+            updateDirectionMask(dpadMask, horizontal, event.value, 0, 0);
+            setUiDirection(horizontal, event.value, 0, 0);
+        }
+        else if (event.type == EV_ABS && (event.code == ABS_X || event.code == ABS_Y))
+        {
+            const bool horizontal = event.code == ABS_X;
+            const int center = horizontal ? leftStickXCenter : leftStickYCenter;
+            const int threshold = horizontal ? leftStickXThreshold : leftStickYThreshold;
+            updateDirectionMask(leftStickMask, horizontal, event.value, center, threshold);
+            setUiDirection(horizontal, event.value, center, threshold);
         }
     }
     return description;

@@ -36,12 +36,22 @@ public:
     bool takeStateChanged();
 
 private:
+    void updateDirectionMask(std::uint16_t& sourceMask, bool horizontal, int value, int center, int threshold);
+    void mergeDirectionalSources();
+    void setUiDirection(bool horizontal, int value, int center, int threshold);
+
     int fileDescriptor = -1;
     bool startPressed = false;
     bool leftPressed = false;
     bool rightPressed = false;
     bool exitCombo = false;
     std::uint16_t mask = 0;
+    std::uint16_t dpadMask = 0;
+    std::uint16_t leftStickMask = 0;
+    int leftStickXCenter = 0;
+    int leftStickYCenter = 0;
+    int leftStickXThreshold = 8192;
+    int leftStickYThreshold = 8192;
     bool stateChanged = false;
     UiAction uiAction = UiAction::None;
 };
