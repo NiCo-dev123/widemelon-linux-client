@@ -36,7 +36,7 @@ public:
     bool takeStateChanged();
 
 private:
-    void updateDirectionMask(std::uint16_t& sourceMask, bool horizontal, int value, int center, int threshold);
+    bool updateDirectionMask(std::uint16_t& sourceMask, bool horizontal, int value, int center, int threshold);
     void mergeDirectionalSources();
     void setUiDirection(bool horizontal, int value, int center, int threshold);
 

@@ -61,7 +61,7 @@ void EvdevInput::mergeDirectionalSources()
     stateChanged = stateChanged || previous != mask;
 }
 
-void EvdevInput::updateDirectionMask(std::uint16_t& sourceMask, bool horizontal, int value, int center, int threshold)
+bool EvdevInput::updateDirectionMask(std::uint16_t& sourceMask, bool horizontal, int value, int center, int threshold)
 {
     const std::uint16_t affected = horizontal ? ButtonLeft | ButtonRight : ButtonUp | ButtonDown;
     const std::uint16_t direction = horizontal
@@ -71,9 +71,10 @@ void EvdevInput::updateDirectionMask(std::uint16_t& sourceMask, bool horizontal,
     // Analog hardware can emit many position samples while held. Only a
     // threshold crossing is an input transition, so keep the current D-pad
     // direction latched until the stick returns to the dead zone.
-    if (updatedMask == sourceMask) return;
+    if (updatedMask == sourceMask) return false;
     sourceMask = updatedMask;
     mergeDirectionalSources();
+    return true;
 }
 
 void EvdevInput::setUiDirection(bool horizontal, int value, int center, int threshold)
@@ -149,16 +150,16 @@ std::string EvdevInput::pollEvent()
         else if (event.type == EV_ABS && (event.code == ABS_HAT0X || event.code == ABS_HAT0Y))
         {
             const bool horizontal = event.code == ABS_HAT0X;
-            updateDirectionMask(dpadMask, horizontal, event.value, 0, 0);
-            setUiDirection(horizontal, event.value, 0, 0);
+            if (updateDirectionMask(dpadMask, horizontal, event.value, 0, 0))
+                setUiDirection(horizontal, event.value, 0, 0);
         }
         else if (event.type == EV_ABS && (event.code == ABS_X || event.code == ABS_Y))
         {
             const bool horizontal = event.code == ABS_X;
             const int center = horizontal ? leftStickXCenter : leftStickYCenter;
             const int threshold = horizontal ? leftStickXThreshold : leftStickYThreshold;
-            updateDirectionMask(leftStickMask, horizontal, event.value, center, threshold);
-            setUiDirection(horizontal, event.value, center, threshold);
+            if (updateDirectionMask(leftStickMask, horizontal, event.value, center, threshold))
+                setUiDirection(horizontal, event.value, center, threshold);
         }
     }
     return description;
