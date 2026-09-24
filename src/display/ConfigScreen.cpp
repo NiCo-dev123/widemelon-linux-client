@@ -225,6 +225,40 @@ namespace
         SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
     }
 
+    int textWidthAtFontSize(std::string_view text, int fontSize)
+    {
+#ifdef WIDEMELON_HAVE_SDL_TTF
+        int width = 0;
+        if (TTF_Font *font = fontForSize(fontSize))
+        {
+            TTF_SizeUTF8(font, std::string(text).c_str(), &width, nullptr);
+            return width;
+        }
+#endif
+        return textWidth(text, (fontSize + 3) / 7);
+    }
+
+    void drawTextAtFontSize(SDL_Renderer *renderer, std::string_view text, int x, int y, int fontSize, SDL_Color color)
+    {
+#ifdef WIDEMELON_HAVE_SDL_TTF
+        if (TTF_Font *font = fontForSize(fontSize))
+        {
+            const std::string rendered(text);
+            SDL_Surface *surface = TTF_RenderUTF8_Blended(font, rendered.c_str(), color);
+            if (surface)
+            {
+                SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
+                const SDL_Rect destination{x, y, surface->w, surface->h};
+                if (texture) SDL_RenderCopy(renderer, texture, nullptr, &destination);
+                SDL_DestroyTexture(texture);
+                SDL_FreeSurface(surface);
+                return;
+            }
+        }
+#endif
+        drawTextColored(renderer, text, x, y, (fontSize + 3) / 7, color);
+    }
+
     bool updateVideoTexture(SDL_Renderer *renderer, SDL_Texture *&texture, const widemelon::DecodedVideoFrame &frame)
     {
         if (frame.width == 0 || frame.height == 0 || frame.rgb.size() != static_cast<std::size_t>(frame.width) * frame.height * 3)
@@ -277,18 +311,20 @@ namespace
         SDL_SetRenderDrawColor(renderer, palette.background.r, palette.background.g, palette.background.b, 255);
         SDL_RenderClear(renderer);
         SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
+        constexpr int formTextSize = 17;
+        constexpr int titleTextSize = 34;
         const std::string title = "WideMelon Client";
-        drawText(renderer, title, (width - textWidth(title, 4)) / 2, 48, 4);
+        drawTextAtFontSize(renderer, title, (width - textWidthAtFontSize(title, titleTextSize)) / 2, 48, titleTextSize, palette.primary);
         const int centerX = width / 2;
-        const int fieldWidth = 320;
-        const int fieldHeight = 34;
+        const int fieldWidth = 384;
+        const int fieldHeight = 41;
         const int fieldX = centerX - fieldWidth / 2;
         const std::array<std::string, 3> labels{"Server Address", "Port", "Session code"};
         const std::array<std::string, 3> values{config.host, std::to_string(config.port), config.pairingCode};
-        const std::array<int, 3> positions{128, 214, 300};
+        const std::array<int, 3> positions{144, 247, 350};
         for (int index = 0; index < 3; ++index)
         {
-            drawText(renderer, labels[index], centerX - textWidth(labels[index], 2) / 2, positions[index] - 31, 2);
+            drawTextAtFontSize(renderer, labels[index], centerX - textWidthAtFontSize(labels[index], formTextSize) / 2, positions[index] - 38, formTextSize, palette.primary);
             const SDL_Rect field{fieldX, positions[index], fieldWidth, fieldHeight};
             if (selected == index)
                 SDL_RenderFillRect(renderer, &field);
@@ -296,13 +332,13 @@ namespace
                 SDL_RenderDrawRect(renderer, &field);
             if (selected == index)
             {
-                drawTextColored(renderer, values[index], centerX - textWidth(values[index], 2) / 2,
-                                positions[index] + 7, 2, palette.background);
+                drawTextAtFontSize(renderer, values[index], centerX - textWidthAtFontSize(values[index], formTextSize) / 2,
+                                   positions[index] + 10, formTextSize, palette.background);
             }
             else
-                drawText(renderer, values[index], centerX - textWidth(values[index], 2) / 2, positions[index] + 7, 2);
+                drawTextAtFontSize(renderer, values[index], centerX - textWidthAtFontSize(values[index], formTextSize) / 2, positions[index] + 10, formTextSize, palette.primary);
         }
-        const SDL_Rect connect{fieldX, 402, fieldWidth, fieldHeight};
+        const SDL_Rect connect{fieldX, 473, fieldWidth, fieldHeight};
         if (selected == 3)
             SDL_RenderFillRect(renderer, &connect);
         else
@@ -310,16 +346,16 @@ namespace
         if (selected == 3)
         {
             const std::string connectLabel = "CONNECT";
-            drawTextColored(renderer, connectLabel, centerX - textWidth(connectLabel, 2) / 2, 409, 2, palette.background);
+            drawTextAtFontSize(renderer, connectLabel, centerX - textWidthAtFontSize(connectLabel, formTextSize) / 2, 483, formTextSize, palette.background);
         }
         else
         {
             const std::string connectLabel = "CONNECT";
-            drawText(renderer, connectLabel, centerX - textWidth(connectLabel, 2) / 2, 409, 2);
+            drawTextAtFontSize(renderer, connectLabel, centerX - textWidthAtFontSize(connectLabel, formTextSize) / 2, 483, formTextSize, palette.primary);
         }
-        drawText(renderer, status, centerX - textWidth(status, 2) / 2, 470, 2);
+        drawTextAtFontSize(renderer, status, centerX - textWidthAtFontSize(status, formTextSize) / 2, 554, formTextSize, palette.primary);
         const std::string hint = "A EDIT   START CONNECT";
-        drawText(renderer, hint, centerX - textWidth(hint, 2) / 2, 510, 2);
+        drawTextAtFontSize(renderer, hint, centerX - textWidthAtFontSize(hint, formTextSize) / 2, 602, formTextSize, palette.primary);
         SDL_RenderPresent(renderer);
     }
 
