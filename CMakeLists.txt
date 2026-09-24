@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(widemelon-linux-client VERSION 0.1.0 LANGUAGES CXX)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" WIDEMELON_VERSION)
+string(STRIP "${WIDEMELON_VERSION}" WIDEMELON_VERSION)
+
+project(widemelon-linux-client VERSION ${WIDEMELON_VERSION} LANGUAGES CXX)
 
 find_package(SDL2 REQUIRED)
 find_package(Threads REQUIRED)
@@ -22,6 +25,7 @@ add_executable(widemelon-client
 
 target_include_directories(widemelon-client PRIVATE src)
 target_compile_features(widemelon-client PRIVATE cxx_std_17)
+target_compile_definitions(widemelon-client PRIVATE WIDEMELON_VERSION=\"${WIDEMELON_VERSION}\")
 target_link_libraries(widemelon-client PRIVATE SDL2::SDL2 Threads::Threads)
 
 if(JPEG_FOUND)

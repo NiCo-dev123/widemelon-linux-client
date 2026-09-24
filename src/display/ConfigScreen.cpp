@@ -307,7 +307,6 @@ namespace
     void renderSetup(SDL_Renderer *renderer, int width, int height, const widemelon::Config &config,
                      int selected, const std::string &status)
     {
-        (void)height;
         SDL_SetRenderDrawColor(renderer, palette.background.r, palette.background.g, palette.background.b, 255);
         SDL_RenderClear(renderer);
         SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
@@ -356,6 +355,8 @@ namespace
         drawTextAtFontSize(renderer, status, centerX - textWidthAtFontSize(status, formTextSize) / 2, 554, formTextSize, palette.primary);
         const std::string hint = "A EDIT   START CONNECT";
         drawTextAtFontSize(renderer, hint, centerX - textWidthAtFontSize(hint, formTextSize) / 2, 602, formTextSize, palette.primary);
+        const std::string version = "v" WIDEMELON_VERSION;
+        drawText(renderer, version, width - textWidth(version, 2) - 20, height - 34, 2);
         SDL_RenderPresent(renderer);
     }
 
