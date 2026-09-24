@@ -57,8 +57,7 @@ bool EvdevInput::open(const std::string& path, std::string& error)
 void EvdevInput::mergeDirectionalSources()
 {
     const std::uint16_t previous = mask;
-    const std::uint16_t activeDirections = dpadMask != 0 ? dpadMask : leftStickMask;
-    mask = static_cast<std::uint16_t>((mask & ~DirectionMask) | activeDirections);
+    mask = static_cast<std::uint16_t>((mask & ~DirectionMask) | dpadMask | leftStickMask);
     stateChanged = stateChanged || previous != mask;
 }
 
@@ -159,6 +158,7 @@ std::string EvdevInput::pollEvent()
             const int center = horizontal ? leftStickXCenter : leftStickYCenter;
             const int threshold = horizontal ? leftStickXThreshold : leftStickYThreshold;
             updateDirectionMask(leftStickMask, horizontal, event.value, center, threshold);
+            setUiDirection(horizontal, event.value, center, threshold);
         }
     }
     return description;
