@@ -354,6 +354,45 @@ namespace
         SDL_RenderPresent(renderer);
     }
 
+    bool isNavigation(widemelon::UiAction action)
+    {
+        return action == widemelon::UiAction::Up || action == widemelon::UiAction::Down
+            || action == widemelon::UiAction::Left || action == widemelon::UiAction::Right;
+    }
+
+    class UiNavigationRepeater
+    {
+    public:
+        widemelon::UiAction next(widemelon::UiAction action, widemelon::UiAction held)
+        {
+            const auto now = std::chrono::steady_clock::now();
+            if (isNavigation(action))
+            {
+                repeatedAction = action;
+                nextRepeatAt = now + widemelon::UiNavigationInitialDelay;
+                return action;
+            }
+            if (!isNavigation(held))
+            {
+                repeatedAction = widemelon::UiAction::None;
+                return action;
+            }
+            if (held != repeatedAction)
+            {
+                repeatedAction = held;
+                nextRepeatAt = now + widemelon::UiNavigationInitialDelay;
+                return held;
+            }
+            if (now < nextRepeatAt) return action;
+            nextRepeatAt = now + widemelon::UiNavigationRetriggerDelay;
+            return held;
+        }
+
+    private:
+        widemelon::UiAction repeatedAction = widemelon::UiAction::None;
+        std::chrono::steady_clock::time_point nextRepeatAt{};
+    };
+
     bool editNumericField(SDL_Renderer *renderer, int width, int height, widemelon::EvdevInput &input,
                           const std::string &title, std::string &value, std::size_t maximumLength, bool allowDot)
     {
@@ -364,13 +403,14 @@ namespace
         const std::string original = value;
         int selectedKey = 0;
         auto nextNavigationAt = std::chrono::steady_clock::time_point{};
+        UiNavigationRepeater navigationRepeater;
         while (true)
         {
             renderKeyboard(renderer, width, height, title, value, selectedKey);
             input.pollEvent();
             if (input.exitComboPressed())
                 return false;
-            const widemelon::UiAction action = input.takeUiAction();
+            const widemelon::UiAction action = navigationRepeater.next(input.takeUiAction(), input.heldUiDirection());
             const bool navigation = action == widemelon::UiAction::Up || action == widemelon::UiAction::Down || action == widemelon::UiAction::Left || action == widemelon::UiAction::Right;
             const auto now = std::chrono::steady_clock::now();
             if (navigation && now < nextNavigationAt)
@@ -430,13 +470,14 @@ namespace
         int selected = 0;
         std::string status = "EDIT A FIELD THEN CONNECT";
         auto nextNavigationAt = std::chrono::steady_clock::time_point{};
+        UiNavigationRepeater navigationRepeater;
         while (true)
         {
             renderSetup(renderer, width, height, config, selected, status);
             input.pollEvent();
             if (input.exitComboPressed())
                 return false;
-            const widemelon::UiAction action = input.takeUiAction();
+            const widemelon::UiAction action = navigationRepeater.next(input.takeUiAction(), input.heldUiDirection());
             const bool navigation = action == widemelon::UiAction::Up || action == widemelon::UiAction::Down || action == widemelon::UiAction::Left || action == widemelon::UiAction::Right;
             const auto now = std::chrono::steady_clock::now();
             const bool acceptNavigation = !navigation || now >= nextNavigationAt;

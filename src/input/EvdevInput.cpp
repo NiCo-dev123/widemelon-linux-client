@@ -105,6 +105,16 @@ UiAction EvdevInput::takeUiAction()
     return action;
 }
 
+UiAction EvdevInput::heldUiDirection() const
+{
+    const std::uint16_t directions = static_cast<std::uint16_t>(mask & DirectionMask);
+    if (directions & ButtonUp) return UiAction::Up;
+    if (directions & ButtonDown) return UiAction::Down;
+    if (directions & ButtonLeft) return UiAction::Left;
+    if (directions & ButtonRight) return UiAction::Right;
+    return UiAction::None;
+}
+
 std::string EvdevInput::pollEvent()
 {
     if (fileDescriptor < 0) return {};

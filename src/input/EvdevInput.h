@@ -32,6 +32,7 @@ public:
     std::string pollEvent();
     bool exitComboPressed();
     UiAction takeUiAction();
+    UiAction heldUiDirection() const;
     std::uint16_t buttonMask() const { return mask; }
     bool takeStateChanged();
 
