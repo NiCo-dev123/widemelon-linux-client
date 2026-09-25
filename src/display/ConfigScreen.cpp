@@ -129,7 +129,7 @@ namespace
 
     void drawPill(SDL_Renderer *renderer, const SDL_Rect &rect, bool selected)
     {
-        const int radius = rect.h / 2;
+        const int radius = rect.h * widemelon::UiButtonRadiusPercent / 200;
         if (selected)
         {
             SDL_SetRenderDrawColor(renderer, palette.buttonFill.r, palette.buttonFill.g, palette.buttonFill.b, 255);
@@ -141,15 +141,20 @@ namespace
             }
         }
         SDL_SetRenderDrawColor(renderer, palette.buttonOutline.r, palette.buttonOutline.g, palette.buttonOutline.b, 255);
-        for (int y = 0; y < rect.h; ++y)
+        for (int thickness = 0; thickness < widemelon::UiButtonOutlineWidth; ++thickness)
         {
-            const int distance = y - radius + 1;
-            const int inset = radius - static_cast<int>(std::sqrt(std::max(0, radius * radius - distance * distance)));
-            SDL_RenderDrawPoint(renderer, rect.x + inset, rect.y + y);
-            SDL_RenderDrawPoint(renderer, rect.x + rect.w - inset - 1, rect.y + y);
+            const SDL_Rect outline{rect.x + thickness, rect.y + thickness, rect.w - thickness * 2, rect.h - thickness * 2};
+            const int outlineRadius = outline.h * widemelon::UiButtonRadiusPercent / 200;
+            for (int y = 0; y < outline.h; ++y)
+            {
+                const int distance = y - outlineRadius + 1;
+                const int inset = outlineRadius - static_cast<int>(std::sqrt(std::max(0, outlineRadius * outlineRadius - distance * distance)));
+                SDL_RenderDrawPoint(renderer, outline.x + inset, outline.y + y);
+                SDL_RenderDrawPoint(renderer, outline.x + outline.w - inset - 1, outline.y + y);
+            }
+            SDL_RenderDrawLine(renderer, outline.x + outlineRadius, outline.y, outline.x + outline.w - outlineRadius - 1, outline.y);
+            SDL_RenderDrawLine(renderer, outline.x + outlineRadius, outline.y + outline.h - 1, outline.x + outline.w - outlineRadius - 1, outline.y + outline.h - 1);
         }
-        SDL_RenderDrawLine(renderer, rect.x + radius, rect.y, rect.x + rect.w - radius - 1, rect.y);
-        SDL_RenderDrawLine(renderer, rect.x + radius, rect.y + rect.h - 1, rect.x + rect.w - radius - 1, rect.y + rect.h - 1);
     }
 
     const Glyph &glyphFor(char character)
@@ -338,7 +343,7 @@ namespace
         drawGradientBackground(renderer, width, height);
         SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
         const std::string title = "WideMelon Client";
-        drawText(renderer, title, (width - textWidth(title, 4)) / 2, 20, 4);
+        drawText(renderer, title, (width - textWidth(title, widemelon::UiGameTitleTextScale)) / 2, 20, widemelon::UiGameTitleTextScale);
         const SDL_Rect video{(width - 768) / 2, 70, 768, 576};
         if (videoTexture)
             SDL_RenderCopy(renderer, videoTexture, nullptr, &video);
@@ -346,8 +351,8 @@ namespace
             SDL_RenderFillRect(renderer, &video);
         const std::string connection = "Connection status: " + status;
         const std::string exit = "Press START + R + L to quit";
-        drawText(renderer, connection, video.x, video.y + video.h + 16, 2);
-        drawText(renderer, exit, video.x, video.y + video.h + 38, 2);
+        drawText(renderer, connection, video.x, video.y + video.h + 16, widemelon::UiGameFooterTextScale);
+        drawText(renderer, exit, video.x, video.y + video.h + 38, widemelon::UiGameFooterTextScale);
         SDL_RenderPresent(renderer);
     }
 
@@ -356,13 +361,13 @@ namespace
     {
         drawGradientBackground(renderer, width, height);
         SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
-        constexpr int formTextSize = 17;
-        constexpr int titleTextSize = 34;
+        const int formTextSize = widemelon::UiFormTextSize;
+        const int titleTextSize = widemelon::UiFormTitleTextSize;
         const std::string title = "WideMelon Client";
         drawTextAtFontSize(renderer, title, (width - textWidthAtFontSize(title, titleTextSize)) / 2, 48, titleTextSize, palette.primary);
         const int centerX = width / 2;
-        const int fieldWidth = 384;
-        const int fieldHeight = 41;
+        const int fieldWidth = widemelon::UiFormFieldWidth;
+        const int fieldHeight = widemelon::UiFormFieldHeight;
         const int fieldX = centerX - fieldWidth / 2;
         const std::array<std::string, 3> labels{"Server Address", "Port", "Session code"};
         const std::array<std::string, 3> values{config.host, std::to_string(config.port), config.pairingCode};
@@ -396,7 +401,7 @@ namespace
         const std::string hint = "A EDIT   START CONNECT";
         drawTextAtFontSize(renderer, hint, centerX - textWidthAtFontSize(hint, formTextSize) / 2, 602, formTextSize, palette.primary);
         const std::string version = "v" WIDEMELON_VERSION;
-        drawText(renderer, version, width - textWidth(version, 2) - 20, height - 34, 2);
+        drawText(renderer, version, width - textWidth(version, widemelon::UiGameFooterTextScale) - 20, height - 34, widemelon::UiGameFooterTextScale);
         SDL_RenderPresent(renderer);
     }
 
@@ -405,27 +410,27 @@ namespace
     {
         static const std::array<const char *, 13> keys{
             "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ".", "DEL", "OK"};
-        constexpr int columns = 4;
-        constexpr int keyWidth = 170;
-        constexpr int keyHeight = 62;
-        constexpr int startX = 290;
-        constexpr int startY = 205;
+        const int columns = widemelon::UiKeyboardColumns;
+        const int keyWidth = widemelon::UiKeyboardKeyWidth;
+        const int keyHeight = widemelon::UiKeyboardKeyHeight;
+        const int startX = widemelon::UiKeyboardStartX;
+        const int startY = widemelon::UiKeyboardStartY;
 
         drawGradientBackground(renderer, width, height);
         SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
-        drawText(renderer, title, (width - textWidth(title, 5)) / 2, 65, 5);
-        drawText(renderer, value.empty() ? "_" : value, (width - textWidth(value.empty() ? "_" : value, 5)) / 2, 125, 5);
+        drawText(renderer, title, (width - textWidth(title, widemelon::UiKeyboardTitleTextScale)) / 2, 65, widemelon::UiKeyboardTitleTextScale);
+        drawText(renderer, value.empty() ? "_" : value, (width - textWidth(value.empty() ? "_" : value, widemelon::UiKeyboardValueTextScale)) / 2, 125, widemelon::UiKeyboardValueTextScale);
         for (std::size_t index = 0; index < keys.size(); ++index)
         {
             const int row = static_cast<int>(index) / columns;
             const int column = static_cast<int>(index) % columns;
             const SDL_Rect key{startX + column * keyWidth, startY + row * keyHeight, keyWidth - 10, keyHeight - 8};
             drawPill(renderer, key, static_cast<int>(index) == selectedKey);
-            const int scale = std::string_view(keys[index]).size() > 1 ? 4 : 5;
+            const int scale = std::string_view(keys[index]).size() > 1 ? widemelon::UiKeyboardActionTextScale : widemelon::UiKeyboardValueTextScale;
             drawText(renderer, keys[index], key.x + (key.w - textWidth(keys[index], scale)) / 2,
                      key.y + (key.h - 7 * scale) / 2, scale);
         }
-        drawText(renderer, "A SELECT B DELETE X BACK START OK", (width - textWidth("A SELECT B DELETE X BACK START OK", 2)) / 2, height - 60, 2);
+        drawText(renderer, "A SELECT B DELETE X BACK START OK", (width - textWidth("A SELECT B DELETE X BACK START OK", widemelon::UiKeyboardHintTextScale)) / 2, height - 60, widemelon::UiKeyboardHintTextScale);
         SDL_RenderPresent(renderer);
     }
 

@@ -12,6 +12,27 @@ inline constexpr std::chrono::milliseconds UiNavigationCooldown{100};
 inline constexpr std::chrono::milliseconds UiNavigationInitialDelay{250};
 inline constexpr std::chrono::milliseconds UiNavigationRetriggerDelay{150};
 
+inline constexpr int UiButtonOutlineWidth{3};
+inline constexpr int UiButtonRadiusPercent{100};
+
+inline constexpr int UiGameTitleTextScale{4};
+inline constexpr int UiGameFooterTextScale{2};
+
+inline constexpr int UiFormTextSize{17};
+inline constexpr int UiFormTitleTextSize{34};
+inline constexpr int UiFormFieldWidth{384};
+inline constexpr int UiFormFieldHeight{41};
+
+inline constexpr int UiKeyboardTitleTextScale{5};
+inline constexpr int UiKeyboardValueTextScale{5};
+inline constexpr int UiKeyboardActionTextScale{4};
+inline constexpr int UiKeyboardHintTextScale{2};
+inline constexpr int UiKeyboardKeyWidth{170};
+inline constexpr int UiKeyboardKeyHeight{62};
+inline constexpr int UiKeyboardColumns{4};
+inline constexpr int UiKeyboardStartX{290};
+inline constexpr int UiKeyboardStartY{205};
+
 class ConfigScreen
 {
 public:
