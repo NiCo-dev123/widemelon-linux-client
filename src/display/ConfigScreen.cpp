@@ -5,6 +5,9 @@
 #include "network/WebSocketClient.h"
 
 #include <SDL.h>
+#ifdef WIDEMELON_HAVE_SDL_IMAGE
+#include <SDL_image.h>
+#endif
 #ifdef WIDEMELON_HAVE_SDL_TTF
 #include <SDL_ttf.h>
 #endif
@@ -14,8 +17,6 @@
 #include <cctype>
 #include <charconv>
 #include <chrono>
-#include <cmath>
-#include <cmath>
 #include <cstdint>
 #include <future>
 #include <fstream>
@@ -36,11 +37,31 @@ namespace
         SDL_Color backgroundDark{204, 51, 51, 255};
         SDL_Color backgroundLight{255, 80, 80, 255};
         SDL_Color primary{51, 12, 0, 255};
+        SDL_Color hint{255, 114, 114, 255};
         SDL_Color buttonFill{255, 114, 114, 255};
         SDL_Color buttonOutline{98, 213, 93, 255};
+        int buttonOutlineWidth{6};
     };
 
     Palette palette;
+
+    struct UiTextures
+    {
+        SDL_Texture *background = nullptr;
+        SDL_Texture *gameplayBackground = nullptr;
+        SDL_Texture *fieldSelected = nullptr;
+        SDL_Texture *fieldUnselected = nullptr;
+        SDL_Texture *keyboardSelected = nullptr;
+        SDL_Texture *keyboardUnselected = nullptr;
+        SDL_Texture *hintA = nullptr;
+        SDL_Texture *hintB = nullptr;
+        SDL_Texture *hintX = nullptr;
+        SDL_Texture *hintStart = nullptr;
+        SDL_Texture *hintL = nullptr;
+        SDL_Texture *hintR = nullptr;
+    };
+
+    UiTextures uiTextures;
 
 #ifdef WIDEMELON_HAVE_SDL_TTF
     std::string fontPath;
@@ -81,7 +102,49 @@ namespace
         return true;
     }
 
-    void loadUiResources()
+    bool parseInteger(const std::string &value, int &number)
+    {
+        const auto parsed = std::from_chars(value.data(), value.data() + value.size(), number);
+        return parsed.ec == std::errc{} && parsed.ptr == value.data() + value.size();
+    }
+
+    void loadUiTexture(SDL_Renderer *renderer, SDL_Texture *&texture, const std::string &path)
+    {
+#ifdef WIDEMELON_HAVE_SDL_IMAGE
+        SDL_Surface *surface = IMG_Load(path.c_str());
+        if (!surface)
+        {
+            widemelon::Logger::error("Cannot load UI asset: " + path + "; " + IMG_GetError());
+            return;
+        }
+        texture = SDL_CreateTextureFromSurface(renderer, surface);
+        SDL_FreeSurface(surface);
+        if (!texture) widemelon::Logger::error("Cannot create UI texture: " + path + "; " + SDL_GetError());
+#else
+        (void)renderer;
+        (void)texture;
+        (void)path;
+#endif
+    }
+
+    void closeUiTextures()
+    {
+        SDL_DestroyTexture(uiTextures.background);
+        SDL_DestroyTexture(uiTextures.gameplayBackground);
+        SDL_DestroyTexture(uiTextures.fieldSelected);
+        SDL_DestroyTexture(uiTextures.fieldUnselected);
+        SDL_DestroyTexture(uiTextures.keyboardSelected);
+        SDL_DestroyTexture(uiTextures.keyboardUnselected);
+        SDL_DestroyTexture(uiTextures.hintA);
+        SDL_DestroyTexture(uiTextures.hintB);
+        SDL_DestroyTexture(uiTextures.hintX);
+        SDL_DestroyTexture(uiTextures.hintStart);
+        SDL_DestroyTexture(uiTextures.hintL);
+        SDL_DestroyTexture(uiTextures.hintR);
+        uiTextures = {};
+    }
+
+    void loadUiResources(SDL_Renderer *renderer)
     {
         std::array<char, 4096> executable{};
         const ssize_t length = readlink("/proc/self/exe", executable.data(), executable.size() - 1);
@@ -96,23 +159,51 @@ namespace
             const std::size_t separator = line.find('=');
             if (separator == std::string::npos)
                 continue;
-            SDL_Color color{};
-            if (!parseColor(line.substr(separator + 1), color))
-                continue;
             const std::string key = line.substr(0, separator);
+            const std::string value = line.substr(separator + 1);
+            if (key == "button-outline-width")
+            {
+                int width = 0;
+                if (parseInteger(value, width)) palette.buttonOutlineWidth = std::clamp(width, 1, 32);
+                continue;
+            }
+            SDL_Color color{};
+            if (!parseColor(value, color)) continue;
             if (key == "background-dark") palette.backgroundDark = color;
             else if (key == "background-light") palette.backgroundLight = color;
             else if (key == "text-color") palette.primary = color;
+            else if (key == "hint-color") palette.hint = color;
             else if (key == "button-fill") palette.buttonFill = color;
             else if (key == "button-outline") palette.buttonOutline = color;
         }
 #ifdef WIDEMELON_HAVE_SDL_TTF
         fontPath = directory + "/assets/fonts/Roboto-Regular.ttf";
 #endif
+        const std::string assets = directory + "/assets/";
+        loadUiTexture(renderer, uiTextures.background, assets + "backgrounds/background.png");
+        loadUiTexture(renderer, uiTextures.gameplayBackground, assets + "backgrounds/background-gameplay.png");
+        loadUiTexture(renderer, uiTextures.fieldSelected, assets + "icons/field-input-selected.png");
+        loadUiTexture(renderer, uiTextures.fieldUnselected, assets + "icons/field-input-unselected.png");
+        loadUiTexture(renderer, uiTextures.keyboardSelected, assets + "icons/keyboard-selected.png");
+        loadUiTexture(renderer, uiTextures.keyboardUnselected, assets + "icons/keyboard-unselected.png");
+        loadUiTexture(renderer, uiTextures.hintA, assets + "icons/hint-A.png");
+        loadUiTexture(renderer, uiTextures.hintB, assets + "icons/hint-B.png");
+        loadUiTexture(renderer, uiTextures.hintX, assets + "icons/hint-X.png");
+        loadUiTexture(renderer, uiTextures.hintStart, assets + "icons/hint-START.png");
+        loadUiTexture(renderer, uiTextures.hintL, assets + "icons/hint-L.png");
+        loadUiTexture(renderer, uiTextures.hintR, assets + "icons/hint-R.png");
     }
 
-    void drawGradientBackground(SDL_Renderer *renderer, int width, int height)
+    void drawBackground(SDL_Renderer *renderer, int width, int height, bool gameplay)
     {
+        SDL_Texture *texture = gameplay ? uiTextures.gameplayBackground : uiTextures.background;
+        if (texture)
+        {
+            const SDL_Rect destination{0, 0, width, height};
+            SDL_RenderCopy(renderer, texture, nullptr, &destination);
+            return;
+        }
+
         for (int y = 0; y < height; ++y)
         {
             const int ratio = height > 1 ? y * 255 / (height - 1) : 0;
@@ -127,33 +218,34 @@ namespace
         }
     }
 
-    void drawPill(SDL_Renderer *renderer, const SDL_Rect &rect, bool selected)
+    void drawGradientBackground(SDL_Renderer *renderer, int width, int height)
     {
-        const int radius = rect.h * widemelon::UiButtonRadiusPercent / 200;
+        drawBackground(renderer, width, height, false);
+    }
+
+    void drawPill(SDL_Renderer *renderer, const SDL_Rect &rect, bool selected, bool keyboard = false)
+    {
+#ifdef WIDEMELON_HAVE_SDL_IMAGE
+        SDL_Texture *texture = keyboard
+            ? (selected ? uiTextures.keyboardSelected : uiTextures.keyboardUnselected)
+            : (selected ? uiTextures.fieldSelected : uiTextures.fieldUnselected);
+        if (texture)
+        {
+            SDL_RenderCopy(renderer, texture, nullptr, &rect);
+            return;
+        }
+#endif
         if (selected)
         {
             SDL_SetRenderDrawColor(renderer, palette.buttonFill.r, palette.buttonFill.g, palette.buttonFill.b, 255);
-            for (int y = 0; y < rect.h; ++y)
-            {
-                const int distance = y - radius + 1;
-                const int inset = radius - static_cast<int>(std::sqrt(std::max(0, radius * radius - distance * distance)));
-                SDL_RenderDrawLine(renderer, rect.x + inset, rect.y + y, rect.x + rect.w - inset - 1, rect.y + y);
-            }
+            SDL_RenderFillRect(renderer, &rect);
         }
         SDL_SetRenderDrawColor(renderer, palette.buttonOutline.r, palette.buttonOutline.g, palette.buttonOutline.b, 255);
-        for (int thickness = 0; thickness < widemelon::UiButtonOutlineWidth; ++thickness)
+        for (int thickness = 0; thickness < palette.buttonOutlineWidth; ++thickness)
         {
             const SDL_Rect outline{rect.x + thickness, rect.y + thickness, rect.w - thickness * 2, rect.h - thickness * 2};
-            const int outlineRadius = outline.h * widemelon::UiButtonRadiusPercent / 200;
-            for (int y = 0; y < outline.h; ++y)
-            {
-                const int distance = y - outlineRadius + 1;
-                const int inset = outlineRadius - static_cast<int>(std::sqrt(std::max(0, outlineRadius * outlineRadius - distance * distance)));
-                SDL_RenderDrawPoint(renderer, outline.x + inset, outline.y + y);
-                SDL_RenderDrawPoint(renderer, outline.x + outline.w - inset - 1, outline.y + y);
-            }
-            SDL_RenderDrawLine(renderer, outline.x + outlineRadius, outline.y, outline.x + outline.w - outlineRadius - 1, outline.y);
-            SDL_RenderDrawLine(renderer, outline.x + outlineRadius, outline.y + outline.h - 1, outline.x + outline.w - outlineRadius - 1, outline.y + outline.h - 1);
+            if (outline.w <= 0 || outline.h <= 0) break;
+            SDL_RenderDrawRect(renderer, &outline);
         }
     }
 
@@ -312,6 +404,21 @@ namespace
         drawTextColored(renderer, text, x, y, (fontSize + 3) / 7, color);
     }
 
+    int drawControlHint(SDL_Renderer *renderer, SDL_Texture *icon, std::string_view fallback, std::string_view label, int x, int y, int textScale)
+    {
+        constexpr int iconSize = 28;
+        if (icon)
+        {
+            const SDL_Rect destination{x, y, iconSize, iconSize};
+            SDL_RenderCopy(renderer, icon, nullptr, &destination);
+        }
+        else
+            drawTextColored(renderer, fallback, x, y + 6, textScale, palette.hint);
+        const int labelX = x + iconSize + 5;
+        drawTextColored(renderer, label, labelX, y + 6, textScale, palette.hint);
+        return labelX + textWidth(label, textScale) + 18;
+    }
+
     bool updateVideoTexture(SDL_Renderer *renderer, SDL_Texture *&texture, const widemelon::DecodedVideoFrame &frame)
     {
         if (frame.width == 0 || frame.height == 0 || frame.rgb.size() != static_cast<std::size_t>(frame.width) * frame.height * 3)
@@ -340,7 +447,7 @@ namespace
     {
         (void)height;
         (void)config;
-        drawGradientBackground(renderer, width, height);
+        drawBackground(renderer, width, height, true);
         SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
         const std::string title = "WideMelon Client";
         drawText(renderer, title, (width - textWidth(title, widemelon::UiGameTitleTextScale)) / 2, 20, widemelon::UiGameTitleTextScale);
@@ -350,9 +457,12 @@ namespace
         else
             SDL_RenderFillRect(renderer, &video);
         const std::string connection = "Connection status: " + status;
-        const std::string exit = "Press START + R + L to quit";
         drawText(renderer, connection, video.x, video.y + video.h + 16, widemelon::UiGameFooterTextScale);
-        drawText(renderer, exit, video.x, video.y + video.h + 38, widemelon::UiGameFooterTextScale);
+        int exitX = video.x;
+        const int exitY = video.y + video.h + 31;
+        exitX = drawControlHint(renderer, uiTextures.hintStart, "START", "+", exitX, exitY, widemelon::UiGameFooterTextScale);
+        exitX = drawControlHint(renderer, uiTextures.hintR, "R", "+", exitX, exitY, widemelon::UiGameFooterTextScale);
+        drawControlHint(renderer, uiTextures.hintL, "L", "QUIT", exitX, exitY, widemelon::UiGameFooterTextScale);
         SDL_RenderPresent(renderer);
     }
 
@@ -398,8 +508,9 @@ namespace
             drawTextAtFontSize(renderer, connectLabel, centerX - textWidthAtFontSize(connectLabel, formTextSize) / 2, 483, formTextSize, palette.primary);
         }
         drawTextAtFontSize(renderer, status, centerX - textWidthAtFontSize(status, formTextSize) / 2, 554, formTextSize, palette.primary);
-        const std::string hint = "A EDIT   START CONNECT";
-        drawTextAtFontSize(renderer, hint, centerX - textWidthAtFontSize(hint, formTextSize) / 2, 602, formTextSize, palette.primary);
+        int hintX = centerX - 210;
+        hintX = drawControlHint(renderer, uiTextures.hintA, "A", "EDIT", hintX, 594, widemelon::UiGameFooterTextScale);
+        drawControlHint(renderer, uiTextures.hintStart, "START", "CONNECT", hintX, 594, widemelon::UiGameFooterTextScale);
         const std::string version = "v" WIDEMELON_VERSION;
         drawText(renderer, version, width - textWidth(version, widemelon::UiGameFooterTextScale) - 20, height - 34, widemelon::UiGameFooterTextScale);
         SDL_RenderPresent(renderer);
@@ -425,12 +536,17 @@ namespace
             const int row = static_cast<int>(index) / columns;
             const int column = static_cast<int>(index) % columns;
             const SDL_Rect key{startX + column * keyWidth, startY + row * keyHeight, keyWidth - 10, keyHeight - 8};
-            drawPill(renderer, key, static_cast<int>(index) == selectedKey);
+            drawPill(renderer, key, static_cast<int>(index) == selectedKey, true);
             const int scale = std::string_view(keys[index]).size() > 1 ? widemelon::UiKeyboardActionTextScale : widemelon::UiKeyboardValueTextScale;
             drawText(renderer, keys[index], key.x + (key.w - textWidth(keys[index], scale)) / 2,
                      key.y + (key.h - 7 * scale) / 2, scale);
         }
-        drawText(renderer, "A SELECT B DELETE X BACK START OK", (width - textWidth("A SELECT B DELETE X BACK START OK", widemelon::UiKeyboardHintTextScale)) / 2, height - 60, widemelon::UiKeyboardHintTextScale);
+        int hintX = width / 2 - 190;
+        const int hintY = height - 72;
+        hintX = drawControlHint(renderer, uiTextures.hintA, "A", "SELECT", hintX, hintY, widemelon::UiKeyboardHintTextScale);
+        hintX = drawControlHint(renderer, uiTextures.hintB, "B", "DELETE", hintX, hintY, widemelon::UiKeyboardHintTextScale);
+        hintX = drawControlHint(renderer, uiTextures.hintX, "X", "BACK", hintX, hintY, widemelon::UiKeyboardHintTextScale);
+        drawControlHint(renderer, uiTextures.hintStart, "START", "OK", hintX, hintY, widemelon::UiKeyboardHintTextScale);
         SDL_RenderPresent(renderer);
     }
 
@@ -648,11 +764,19 @@ namespace widemelon
             return false;
         }
 
-        loadUiResources();
+#ifdef WIDEMELON_HAVE_SDL_IMAGE
+        if ((IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG) == 0)
+            Logger::error(std::string("Cannot initialize PNG support: ") + IMG_GetError());
+#endif
+        loadUiResources(renderer);
 #ifdef WIDEMELON_HAVE_SDL_TTF
         if (TTF_Init() != 0)
         {
             error = TTF_GetError();
+            closeUiTextures();
+#ifdef WIDEMELON_HAVE_SDL_IMAGE
+            IMG_Quit();
+#endif
             SDL_DestroyRenderer(renderer);
             SDL_DestroyWindow(window);
             SDL_Quit();
@@ -677,6 +801,10 @@ namespace widemelon
             closeFonts();
             TTF_Quit();
 #endif
+            closeUiTextures();
+#ifdef WIDEMELON_HAVE_SDL_IMAGE
+            IMG_Quit();
+#endif
             SDL_DestroyRenderer(renderer);
             SDL_DestroyWindow(window);
             SDL_Quit();
@@ -686,6 +814,10 @@ namespace widemelon
         auto closeDisplay = [&]
         {
             SDL_DestroyTexture(videoTexture);
+            closeUiTextures();
+#ifdef WIDEMELON_HAVE_SDL_IMAGE
+            IMG_Quit();
+#endif
 #ifdef WIDEMELON_HAVE_SDL_TTF
             closeFonts();
             TTF_Quit();

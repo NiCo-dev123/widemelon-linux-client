@@ -35,6 +35,11 @@ if(JPEG_FOUND)
 endif()
 
 if(CMAKE_CROSSCOMPILING)
+    unset(SDL2_IMAGE_LIBRARY CACHE)
+    find_library(SDL2_IMAGE_LIBRARY NAMES SDL2_image REQUIRED)
+    target_link_libraries(widemelon-client PRIVATE ${SDL2_IMAGE_LIBRARY})
+    target_compile_definitions(widemelon-client PRIVATE WIDEMELON_HAVE_SDL_IMAGE=1)
+
     unset(SDL2_TTF_LIBRARY CACHE)
     find_library(SDL2_TTF_LIBRARY NAMES SDL2_ttf REQUIRED)
     target_link_libraries(widemelon-client PRIVATE ${SDL2_TTF_LIBRARY})
