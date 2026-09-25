@@ -485,7 +485,7 @@ namespace
     }
 
     void renderSetup(SDL_Renderer *renderer, int width, int height, const widemelon::Config &config,
-                     int selected, const std::string &status)
+                     int selected)
     {
         drawGradientBackground(renderer, width, height);
         SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
@@ -515,17 +515,12 @@ namespace
         }
         const SDL_Rect connect{fieldX, 473, fieldWidth, fieldHeight};
         drawPill(renderer, connect, selected == 3);
-        if (selected == 3)
-        {
-            const std::string connectLabel = "CONNECT";
-            drawTextAtFontSize(renderer, connectLabel, centerX - textWidthAtFontSize(connectLabel, formTextSize) / 2, 483, formTextSize, palette.primary);
-        }
-        else
-        {
-            const std::string connectLabel = "CONNECT";
-            drawTextAtFontSize(renderer, connectLabel, centerX - textWidthAtFontSize(connectLabel, formTextSize) / 2, 483, formTextSize, palette.primary);
-        }
-        drawTextAtFontSize(renderer, status, centerX - textWidthAtFontSize(status, formTextSize) / 2, 554, formTextSize, palette.primary);
+        const std::string connectLabel = "CONNECT";
+        drawTextAtFontSize(renderer, connectLabel, centerX - textWidthAtFontSize(connectLabel, formTextSize) / 2, 483, formTextSize, palette.primary);
+        const SDL_Rect quit{fieldX, 545, fieldWidth, fieldHeight};
+        drawPill(renderer, quit, selected == 4);
+        const std::string quitLabel = "QUIT";
+        drawTextAtFontSize(renderer, quitLabel, centerX - textWidthAtFontSize(quitLabel, formTextSize) / 2, 555, formTextSize, palette.primary);
         const int formHintScale = widemelon::UiKeyboardHintTextScale;
         const int formHintWidth = controlHintWidth(uiTextures.hintA, "A", "EDIT", formHintScale)
             + controlHintWidth(uiTextures.hintStart, "START", "CONNECT", formHintScale);
@@ -686,12 +681,11 @@ namespace
                            widemelon::EvdevInput &input)
     {
         int selected = 0;
-        std::string status = "EDIT A FIELD THEN CONNECT";
         auto nextNavigationAt = std::chrono::steady_clock::time_point{};
         UiNavigationRepeater navigationRepeater;
         while (true)
         {
-            renderSetup(renderer, width, height, config, selected, status);
+            renderSetup(renderer, width, height, config, selected);
             input.pollEvent();
             if (input.exitComboPressed())
                 return false;
@@ -702,9 +696,9 @@ namespace
             if (navigation && acceptNavigation)
                 nextNavigationAt = now + widemelon::UiNavigationCooldown;
             if (acceptNavigation && action == widemelon::UiAction::Up)
-                selected = (selected + 3) % 4;
+                selected = (selected + 4) % 5;
             else if (acceptNavigation && action == widemelon::UiAction::Down)
-                selected = (selected + 1) % 4;
+                selected = (selected + 1) % 5;
             else if (action == widemelon::UiAction::Confirm || action == widemelon::UiAction::Start)
             {
                 if (action == widemelon::UiAction::Start)
@@ -721,17 +715,16 @@ namespace
                         if (result.ec == std::errc{} && result.ptr == port.data() + port.size() && parsed <= 65535)
                             config.port = static_cast<std::uint16_t>(parsed);
                         else
-                            status = "INVALID PORT";
+                            widemelon::Logger::error("Configuration form error: invalid port");
                     }
                 }
                 else if (selected == 2)
                     editNumericField(renderer, width, height, input, "SESSION CODE", config.pairingCode, 16, false);
-                else
+                else if (selected == 3)
                 {
                     const widemelon::ConfigLoadResult checked = widemelon::ConfigLoader::validate(config);
                     if (!checked.ok)
                     {
-                        status = "INVALID CONFIG";
                         widemelon::Logger::error("Configuration form error: " + checked.error);
                     }
                     else
@@ -744,11 +737,12 @@ namespace
                         }
                         // Persistence is optional: the values entered in this
                         // session remain valid and must not prevent connecting.
-                        status = "NOT SAVED - CONTINUING";
                         widemelon::Logger::error("Configuration save warning: " + error);
                         return true;
                     }
                 }
+                else
+                    return false;
             }
             SDL_Delay(10);
         }
@@ -868,7 +862,7 @@ namespace widemelon
 
                 while (connection.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready && client->connectionState() != widemelon::ConnectionState::Connected)
                 {
-                    renderSetup(renderer, width, height, config, 3, "CHECKING CONNECTION...");
+                    renderSetup(renderer, width, height, config, 3);
                     exitInput.pollEvent();
                     if (exitInput.exitComboPressed())
                     {
