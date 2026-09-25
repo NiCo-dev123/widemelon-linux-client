@@ -406,17 +406,25 @@ namespace
 
     int drawControlHint(SDL_Renderer *renderer, SDL_Texture *icon, std::string_view fallback, std::string_view label, int x, int y, int textScale)
     {
-        constexpr int iconSize = 28;
+        constexpr int iconHeight = 48;
+        int iconWidth = iconHeight;
         if (icon)
         {
-            const SDL_Rect destination{x, y, iconSize, iconSize};
+            int sourceWidth = 0;
+            int sourceHeight = 0;
+            SDL_QueryTexture(icon, nullptr, nullptr, &sourceWidth, &sourceHeight);
+            if (sourceHeight > 0) iconWidth = sourceWidth * iconHeight / sourceHeight;
+            const SDL_Rect destination{x, y, iconWidth, iconHeight};
             SDL_RenderCopy(renderer, icon, nullptr, &destination);
         }
         else
-            drawTextColored(renderer, fallback, x, y + 6, textScale, palette.hint);
-        const int labelX = x + iconSize + 5;
-        drawTextColored(renderer, label, labelX, y + 6, textScale, palette.hint);
-        return labelX + textWidth(label, textScale) + 18;
+        {
+            iconWidth = textWidth(fallback, textScale);
+            drawTextColored(renderer, fallback, x, y + (iconHeight - textScale * 7) / 2, textScale, palette.hint);
+        }
+        const int labelX = x + iconWidth + 7;
+        drawTextColored(renderer, label, labelX, y + (iconHeight - textScale * 7) / 2, textScale, palette.hint);
+        return labelX + textWidth(label, textScale) + 20;
     }
 
     bool updateVideoTexture(SDL_Renderer *renderer, SDL_Texture *&texture, const widemelon::DecodedVideoFrame &frame)
@@ -459,7 +467,7 @@ namespace
         const std::string connection = "Connection status: " + status;
         drawText(renderer, connection, video.x, video.y + video.h + 16, widemelon::UiGameFooterTextScale);
         int exitX = video.x;
-        const int exitY = video.y + video.h + 31;
+        const int exitY = video.y + video.h + 20;
         exitX = drawControlHint(renderer, uiTextures.hintStart, "START", "+", exitX, exitY, widemelon::UiGameFooterTextScale);
         exitX = drawControlHint(renderer, uiTextures.hintR, "R", "+", exitX, exitY, widemelon::UiGameFooterTextScale);
         drawControlHint(renderer, uiTextures.hintL, "L", "QUIT", exitX, exitY, widemelon::UiGameFooterTextScale);
@@ -542,7 +550,7 @@ namespace
                      key.y + (key.h - 7 * scale) / 2, scale);
         }
         int hintX = width / 2 - 190;
-        const int hintY = height - 72;
+        const int hintY = height - 64;
         hintX = drawControlHint(renderer, uiTextures.hintA, "A", "SELECT", hintX, hintY, widemelon::UiKeyboardHintTextScale);
         hintX = drawControlHint(renderer, uiTextures.hintB, "B", "DELETE", hintX, hintY, widemelon::UiKeyboardHintTextScale);
         hintX = drawControlHint(renderer, uiTextures.hintX, "X", "BACK", hintX, hintY, widemelon::UiKeyboardHintTextScale);
