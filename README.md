@@ -38,4 +38,4 @@ Then build with:
 tools/build-tsps.sh
 ```
 
-The ready-to-copy application is generated at `dist/WideMelonClient/`. Copy this folder into `/Apps/` on the SD card. The script also creates `dist/WideMelonClient-<version>.zip`, with the same folder structure as a release archive.
+The ready-to-copy application is generated at `dist/WideMelonClient/`. Copy this folder into `/Apps/` on the SD card.

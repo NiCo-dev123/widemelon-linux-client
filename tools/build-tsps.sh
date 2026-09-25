@@ -50,12 +50,4 @@ cp "${project_dir}/config/widemelon-client.conf.example" "${app_dir}/widemelon-c
 cp -L "${sysroot_lib}/libSDL2-2.0.so.0" "${sysroot_lib}/libSDL2_ttf-2.0.so.0" "${sysroot_lib}/libSDL2_image-2.0.so.0" "${sysroot_lib}/libjpeg.so.8" "${lib_dir}/"
 chmod 755 "${app_dir}/widemelon-client" "${app_dir}/launch.sh"
 
-version="$(tr -d "\r\n" < "${project_dir}/VERSION")"
-archive="${project_dir}/${DIST_DIR}/WideMelonClient-${version}.zip"
-(
-    cd "${project_dir}/${DIST_DIR}"
-    zip -rq -FS "${archive}" WideMelonClient
-)
-
 echo "Ready to copy: ${app_dir}"
-echo "Release archive: ${archive}"
