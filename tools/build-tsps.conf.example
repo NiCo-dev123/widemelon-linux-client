@@ -1,0 +1,4 @@
+# Local paths for the Trimui Smart Pro S build.
+# This file is intentionally ignored by Git.
+TRIMUI_TSPS_SDK="/absolute/path/to/sdk_tg5050_linux_v1.0.0"
+BUILD_DIR="build-tsps"
