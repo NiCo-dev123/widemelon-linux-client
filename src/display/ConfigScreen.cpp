@@ -153,6 +153,9 @@ namespace
         executable[static_cast<std::size_t>(length)] = '\0';
         const std::string directory = std::string(executable.data()).substr(0, std::string(executable.data()).find_last_of('/'));
         std::ifstream file(directory + "/widemelon-client-ui.conf");
+#ifdef WIDEMELON_HAVE_SDL_TTF
+        std::string textFont = "assets/fonts/Roboto-Regular.ttf";
+#endif
         std::string line;
         while (std::getline(file, line))
         {
@@ -161,6 +164,13 @@ namespace
                 continue;
             const std::string key = line.substr(0, separator);
             const std::string value = line.substr(separator + 1);
+#ifdef WIDEMELON_HAVE_SDL_TTF
+            if (key == "text-font")
+            {
+                if (!value.empty()) textFont = value;
+                continue;
+            }
+#endif
             if (key == "button-outline-width")
             {
                 int width = 0;
@@ -177,7 +187,9 @@ namespace
             else if (key == "button-outline") palette.buttonOutline = color;
         }
 #ifdef WIDEMELON_HAVE_SDL_TTF
-        fontPath = directory + "/assets/fonts/Roboto-Regular.ttf";
+        fontPath = !textFont.empty() && textFont[0] == 47
+            ? textFont
+            : directory + "/" + textFont;
 #endif
         const std::string assets = directory + "/assets/";
         loadUiTexture(renderer, uiTextures.background, assets + "backgrounds/background.png");
@@ -468,7 +480,7 @@ namespace
         drawBackground(renderer, width, height, true);
         SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
         const std::string title = "WideMelon Client";
-        drawText(renderer, title, (width - textWidth(title, widemelon::UiGameTitleTextScale)) / 2, 8, widemelon::UiGameTitleTextScale);
+        drawTextColored(renderer, title, (width - textWidth(title, widemelon::UiGameTitleTextScale)) / 2, 8, widemelon::UiGameTitleTextScale, palette.hint);
         const SDL_Rect video{(width - 768) / 2, 45, 768, 576};
         if (videoTexture)
             SDL_RenderCopy(renderer, videoTexture, nullptr, &video);
