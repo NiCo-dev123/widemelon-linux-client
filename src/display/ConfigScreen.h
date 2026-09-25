@@ -14,6 +14,8 @@ namespace widemelon
 
     inline constexpr int UiGameTitleTextScale{4};
     inline constexpr int UiGameFooterTextScale{2};
+    inline constexpr int UiGameConnectionTextScale{5};
+    inline constexpr int UiHintIconTextGap{4};
 
     inline constexpr int UiFormTextSize{20};
     inline constexpr int UiFormTitleTextSize{34};

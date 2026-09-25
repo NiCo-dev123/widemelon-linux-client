@@ -416,7 +416,7 @@ namespace
 
     int controlHintWidth(SDL_Texture *icon, std::string_view fallback, std::string_view label, int textScale)
     {
-        return controlIconWidth(icon, fallback, textScale) + 7 + textWidth(label, textScale) + 20;
+        return controlIconWidth(icon, fallback, textScale) + widemelon::UiHintIconTextGap + textWidth(label, textScale) + 20;
     }
 
     int drawControlHint(SDL_Renderer *renderer, SDL_Texture *icon, std::string_view fallback, std::string_view label, int x, int y, int textScale)
@@ -433,7 +433,7 @@ namespace
             iconWidth = textWidth(fallback, textScale);
             drawTextColored(renderer, fallback, x, y + (iconHeight - textScale * 7) / 2, textScale, palette.hint);
         }
-        const int labelX = x + iconWidth + 7;
+        const int labelX = x + iconWidth + widemelon::UiHintIconTextGap;
         drawTextColored(renderer, label, labelX, y + (iconHeight - textScale * 7) / 2, textScale, palette.hint);
         return labelX + textWidth(label, textScale) + 20;
     }
@@ -475,12 +475,12 @@ namespace
         else
             SDL_RenderFillRect(renderer, &video);
         const std::string connection = "Connection status: " + status;
-        drawText(renderer, connection, video.x, video.y + video.h + 6, widemelon::UiKeyboardHintTextScale);
+        drawTextColored(renderer, connection, video.x, video.y + video.h + 6, widemelon::UiGameConnectionTextScale, palette.hint);
         int exitX = video.x;
         const int exitY = video.y + video.h + 50;
         exitX = drawControlHint(renderer, uiTextures.hintStart, "START", "+", exitX, exitY, widemelon::UiKeyboardHintTextScale);
         exitX = drawControlHint(renderer, uiTextures.hintR, "R", "+", exitX, exitY, widemelon::UiKeyboardHintTextScale);
-        drawControlHint(renderer, uiTextures.hintL, "L", "QUIT", exitX, exitY, widemelon::UiKeyboardHintTextScale);
+        drawControlHint(renderer, uiTextures.hintL, "L", ": QUIT", exitX, exitY, widemelon::UiKeyboardHintTextScale);
         SDL_RenderPresent(renderer);
     }
 
