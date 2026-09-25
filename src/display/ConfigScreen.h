@@ -12,20 +12,20 @@ namespace widemelon
     inline constexpr std::chrono::milliseconds UiNavigationInitialDelay{250};
     inline constexpr std::chrono::milliseconds UiNavigationRetriggerDelay{150};
 
-    inline constexpr int UiGameTitleTextScale{4};
-    inline constexpr int UiGameFooterTextScale{2};
-    inline constexpr int UiGameConnectionTextScale{5};
-    inline constexpr int UiHintIconTextGap{4};
+    inline constexpr int UiGameTitleFontSize{28};
+    inline constexpr int UiGameFooterFontSize{12};
+    inline constexpr int UiGameConnectionFontSize{25};
+    inline constexpr int UiHintIconTextGap{10};
 
-    inline constexpr int UiFormTextSize{20};
-    inline constexpr int UiFormTitleTextSize{34};
+    inline constexpr int UiFormFontSize{20};
+    inline constexpr int UiFormTitleFontSize{34};
     inline constexpr int UiFormFieldWidth{300};
     inline constexpr int UiFormFieldHeight{48};
 
-    inline constexpr int UiKeyboardTitleTextScale{5};
-    inline constexpr int UiKeyboardValueTextScale{5};
-    inline constexpr int UiKeyboardActionTextScale{4};
-    inline constexpr int UiKeyboardHintTextScale{6};
+    inline constexpr int UiKeyboardTitleFontSize{35};
+    inline constexpr int UiKeyboardValueFontSize{35};
+    inline constexpr int UiKeyboardActionFontSize{28};
+    inline constexpr int UiKeyboardHintFontSize{35};
     inline constexpr int UiKeyboardKeyWidth{170};
     inline constexpr int UiKeyboardKeyHeight{85};
     inline constexpr int UiKeyboardColumns{4};

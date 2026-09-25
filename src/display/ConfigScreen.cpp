@@ -309,80 +309,12 @@ namespace
         return it == glyphs.end() ? fallback : it->second;
     }
 
-    int textWidth(std::string_view text, int scale)
+    int fallbackTextScale(int fontSize)
     {
-#ifdef WIDEMELON_HAVE_SDL_TTF
-        int width = 0;
-        if (TTF_Font *font = fontForSize(scale * 7))
-        {
-            TTF_SizeUTF8(font, std::string(text).c_str(), &width, nullptr);
-            return width;
-        }
-#endif
-        return static_cast<int>(text.size()) * 6 * scale - scale;
+        return std::max(1, (fontSize + 3) / 7);
     }
 
-    void drawText(SDL_Renderer *renderer, std::string_view text, int x, int y, int scale)
-    {
-#ifdef WIDEMELON_HAVE_SDL_TTF
-        if (TTF_Font *font = fontForSize(scale * 7))
-        {
-            const std::string rendered(text);
-            SDL_Surface *surface = TTF_RenderUTF8_Blended(font, rendered.c_str(), palette.primary);
-            if (surface)
-            {
-                SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
-                const SDL_Rect destination{x, y, surface->w, surface->h};
-                if (texture)
-                    SDL_RenderCopy(renderer, texture, nullptr, &destination);
-                SDL_DestroyTexture(texture);
-                SDL_FreeSurface(surface);
-                return;
-            }
-        }
-#endif
-        for (char character : text)
-        {
-            const Glyph &glyph = glyphFor(static_cast<char>(std::toupper(static_cast<unsigned char>(character))));
-            for (int row = 0; row < 7; ++row)
-            {
-                for (int column = 0; column < 5; ++column)
-                {
-                    if ((glyph[row] & (1U << (4 - column))) == 0)
-                        continue;
-                    const SDL_Rect pixel{x + column * scale, y + row * scale, scale, scale};
-                    SDL_RenderFillRect(renderer, &pixel);
-                }
-            }
-            x += 6 * scale;
-        }
-    }
-
-    void drawTextColored(SDL_Renderer *renderer, std::string_view text, int x, int y, int scale, SDL_Color color)
-    {
-#ifdef WIDEMELON_HAVE_SDL_TTF
-        if (TTF_Font *font = fontForSize(scale * 7))
-        {
-            const std::string rendered(text);
-            SDL_Surface *surface = TTF_RenderUTF8_Blended(font, rendered.c_str(), color);
-            if (surface)
-            {
-                SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
-                const SDL_Rect destination{x, y, surface->w, surface->h};
-                if (texture)
-                    SDL_RenderCopy(renderer, texture, nullptr, &destination);
-                SDL_DestroyTexture(texture);
-                SDL_FreeSurface(surface);
-                return;
-            }
-        }
-#endif
-        SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
-        drawText(renderer, text, x, y, scale);
-        SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
-    }
-
-    int textWidthAtFontSize(std::string_view text, int fontSize)
+    int textWidth(std::string_view text, int fontSize)
     {
 #ifdef WIDEMELON_HAVE_SDL_TTF
         int width = 0;
@@ -392,10 +324,46 @@ namespace
             return width;
         }
 #endif
-        return textWidth(text, (fontSize + 3) / 7);
+        const int scale = fallbackTextScale(fontSize);
+        return static_cast<int>(text.size()) * 6 * scale - scale;
     }
 
-    void drawTextAtFontSize(SDL_Renderer *renderer, std::string_view text, int x, int y, int fontSize, SDL_Color color)
+    void drawText(SDL_Renderer *renderer, std::string_view text, int x, int y, int fontSize)
+    {
+#ifdef WIDEMELON_HAVE_SDL_TTF
+        if (TTF_Font *font = fontForSize(fontSize))
+        {
+            const std::string rendered(text);
+            SDL_Surface *surface = TTF_RenderUTF8_Blended(font, rendered.c_str(), palette.primary);
+            if (surface)
+            {
+                SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
+                const SDL_Rect destination{x, y, surface->w, surface->h};
+                if (texture) SDL_RenderCopy(renderer, texture, nullptr, &destination);
+                SDL_DestroyTexture(texture);
+                SDL_FreeSurface(surface);
+                return;
+            }
+        }
+#endif
+        const int scale = fallbackTextScale(fontSize);
+        for (char character : text)
+        {
+            const Glyph &glyph = glyphFor(static_cast<char>(std::toupper(static_cast<unsigned char>(character))));
+            for (int row = 0; row < 7; ++row)
+            {
+                for (int column = 0; column < 5; ++column)
+                {
+                    if ((glyph[row] & (1U << (4 - column))) == 0) continue;
+                    const SDL_Rect pixel{x + column * scale, y + row * scale, scale, scale};
+                    SDL_RenderFillRect(renderer, &pixel);
+                }
+            }
+            x += 6 * scale;
+        }
+    }
+
+    void drawTextColored(SDL_Renderer *renderer, std::string_view text, int x, int y, int fontSize, SDL_Color color)
     {
 #ifdef WIDEMELON_HAVE_SDL_TTF
         if (TTF_Font *font = fontForSize(fontSize))
@@ -413,28 +381,30 @@ namespace
             }
         }
 #endif
-        drawTextColored(renderer, text, x, y, (fontSize + 3) / 7, color);
+        SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, color.a);
+        drawText(renderer, text, x, y, fontSize);
+        SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
     }
 
-    int controlIconWidth(SDL_Texture *icon, std::string_view fallback, int textScale)
+    int controlIconWidth(SDL_Texture *icon, std::string_view fallback, int fontSize)
     {
         constexpr int iconHeight = 48;
-        if (!icon) return textWidth(fallback, textScale);
+        if (!icon) return textWidth(fallback, fontSize);
         int sourceWidth = 0;
         int sourceHeight = 0;
         SDL_QueryTexture(icon, nullptr, nullptr, &sourceWidth, &sourceHeight);
         return sourceHeight > 0 ? sourceWidth * iconHeight / sourceHeight : iconHeight;
     }
 
-    int controlHintWidth(SDL_Texture *icon, std::string_view fallback, std::string_view label, int textScale)
+    int controlHintWidth(SDL_Texture *icon, std::string_view fallback, std::string_view label, int fontSize)
     {
-        return controlIconWidth(icon, fallback, textScale) + widemelon::UiHintIconTextGap + textWidth(label, textScale) + 20;
+        return controlIconWidth(icon, fallback, fontSize) + widemelon::UiHintIconTextGap + textWidth(label, fontSize) + 20;
     }
 
-    int drawControlHint(SDL_Renderer *renderer, SDL_Texture *icon, std::string_view fallback, std::string_view label, int x, int y, int textScale)
+    int drawControlHint(SDL_Renderer *renderer, SDL_Texture *icon, std::string_view fallback, std::string_view label, int x, int y, int fontSize)
     {
         constexpr int iconHeight = 48;
-        int iconWidth = controlIconWidth(icon, fallback, textScale);
+        int iconWidth = controlIconWidth(icon, fallback, fontSize);
         if (icon)
         {
             const SDL_Rect destination{x, y, iconWidth, iconHeight};
@@ -442,12 +412,12 @@ namespace
         }
         else
         {
-            iconWidth = textWidth(fallback, textScale);
-            drawTextColored(renderer, fallback, x, y + (iconHeight - textScale * 7) / 2, textScale, palette.hint);
+            iconWidth = textWidth(fallback, fontSize);
+            drawTextColored(renderer, fallback, x, y + (iconHeight - fontSize) / 2, fontSize, palette.hint);
         }
         const int labelX = x + iconWidth + widemelon::UiHintIconTextGap;
-        drawTextColored(renderer, label, labelX, y + (iconHeight - textScale * 7) / 2, textScale, palette.hint);
-        return labelX + textWidth(label, textScale) + 20;
+        drawTextColored(renderer, label, labelX, y + (iconHeight - fontSize) / 2, fontSize, palette.hint);
+        return labelX + textWidth(label, fontSize) + 20;
     }
 
     bool updateVideoTexture(SDL_Renderer *renderer, SDL_Texture *&texture, const widemelon::DecodedVideoFrame &frame)
@@ -480,19 +450,19 @@ namespace
         drawBackground(renderer, width, height, true);
         SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
         const std::string title = "WideMelon Client";
-        drawTextColored(renderer, title, (width - textWidth(title, widemelon::UiGameTitleTextScale)) / 2, 8, widemelon::UiGameTitleTextScale, palette.hint);
+        drawTextColored(renderer, title, (width - textWidth(title, widemelon::UiGameTitleFontSize)) / 2, 8, widemelon::UiGameTitleFontSize, palette.hint);
         const SDL_Rect video{(width - 768) / 2, 45, 768, 576};
         if (videoTexture)
             SDL_RenderCopy(renderer, videoTexture, nullptr, &video);
         else
             SDL_RenderFillRect(renderer, &video);
         const std::string connection = "Connection status: " + status;
-        drawTextColored(renderer, connection, video.x, video.y + video.h + 6, widemelon::UiGameConnectionTextScale, palette.hint);
+        drawTextColored(renderer, connection, video.x, video.y + video.h + 6, widemelon::UiGameConnectionFontSize, palette.hint);
         int exitX = video.x;
         const int exitY = video.y + video.h + 50;
-        exitX = drawControlHint(renderer, uiTextures.hintStart, "START", "+", exitX, exitY, widemelon::UiKeyboardHintTextScale);
-        exitX = drawControlHint(renderer, uiTextures.hintR, "R", "+", exitX, exitY, widemelon::UiKeyboardHintTextScale);
-        drawControlHint(renderer, uiTextures.hintL, "L", ": QUIT", exitX, exitY, widemelon::UiKeyboardHintTextScale);
+        exitX = drawControlHint(renderer, uiTextures.hintStart, "START", "+", exitX, exitY, widemelon::UiKeyboardHintFontSize);
+        exitX = drawControlHint(renderer, uiTextures.hintR, "R", "+", exitX, exitY, widemelon::UiKeyboardHintFontSize);
+        drawControlHint(renderer, uiTextures.hintL, "L", ": QUIT", exitX, exitY, widemelon::UiKeyboardHintFontSize);
         SDL_RenderPresent(renderer);
     }
 
@@ -501,10 +471,10 @@ namespace
     {
         drawGradientBackground(renderer, width, height);
         SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
-        const int formTextSize = widemelon::UiFormTextSize;
-        const int titleTextSize = widemelon::UiFormTitleTextSize;
+        const int formFontSize = widemelon::UiFormFontSize;
+        const int titleFontSize = widemelon::UiFormTitleFontSize;
         const std::string title = "WideMelon Client";
-        drawTextAtFontSize(renderer, title, (width - textWidthAtFontSize(title, titleTextSize)) / 2, 48, titleTextSize, palette.primary);
+        drawTextColored(renderer, title, (width - textWidth(title, titleFontSize)) / 2, 48, titleFontSize, palette.primary);
         const int centerX = width / 2;
         const int fieldWidth = widemelon::UiFormFieldWidth;
         const int fieldHeight = widemelon::UiFormFieldHeight;
@@ -514,34 +484,34 @@ namespace
         const std::array<int, 3> positions{144, 247, 350};
         for (int index = 0; index < 3; ++index)
         {
-            drawTextAtFontSize(renderer, labels[index], centerX - textWidthAtFontSize(labels[index], formTextSize) / 2, positions[index] - 38, formTextSize, palette.primary);
+            drawTextColored(renderer, labels[index], centerX - textWidth(labels[index], formFontSize) / 2, positions[index] - 38, formFontSize, palette.primary);
             const SDL_Rect field{fieldX, positions[index], fieldWidth, fieldHeight};
             drawPill(renderer, field, selected == index);
             if (selected == index)
             {
-                drawTextAtFontSize(renderer, values[index], centerX - textWidthAtFontSize(values[index], formTextSize) / 2,
-                                   positions[index] + 10, formTextSize, palette.primary);
+                drawTextColored(renderer, values[index], centerX - textWidth(values[index], formFontSize) / 2,
+                                   positions[index] + 10, formFontSize, palette.primary);
             }
             else
-                drawTextAtFontSize(renderer, values[index], centerX - textWidthAtFontSize(values[index], formTextSize) / 2, positions[index] + 10, formTextSize, palette.primary);
+                drawTextColored(renderer, values[index], centerX - textWidth(values[index], formFontSize) / 2, positions[index] + 10, formFontSize, palette.primary);
         }
         const SDL_Rect connect{fieldX, 473, fieldWidth, fieldHeight};
         drawPill(renderer, connect, selected == 3);
         const std::string connectLabel = "CONNECT";
-        drawTextAtFontSize(renderer, connectLabel, centerX - textWidthAtFontSize(connectLabel, formTextSize) / 2, 483, formTextSize, palette.primary);
+        drawTextColored(renderer, connectLabel, centerX - textWidth(connectLabel, formFontSize) / 2, 483, formFontSize, palette.primary);
         const SDL_Rect quit{fieldX, 545, fieldWidth, fieldHeight};
         drawPill(renderer, quit, selected == 4);
         const std::string quitLabel = "QUIT";
-        drawTextAtFontSize(renderer, quitLabel, centerX - textWidthAtFontSize(quitLabel, formTextSize) / 2, 555, formTextSize, palette.primary);
-        const int formHintScale = widemelon::UiKeyboardHintTextScale;
-        const int formHintWidth = controlHintWidth(uiTextures.hintA, "A", "EDIT", formHintScale)
-            + controlHintWidth(uiTextures.hintStart, "START", "CONNECT", formHintScale);
+        drawTextColored(renderer, quitLabel, centerX - textWidth(quitLabel, formFontSize) / 2, 555, formFontSize, palette.primary);
+        const int formHintFontSize = widemelon::UiKeyboardHintFontSize;
+        const int formHintWidth = controlHintWidth(uiTextures.hintA, "A", "EDIT", formHintFontSize)
+            + controlHintWidth(uiTextures.hintStart, "START", "CONNECT", formHintFontSize);
         int hintX = (width - formHintWidth) / 2;
         const int hintY = height - 64;
-        hintX = drawControlHint(renderer, uiTextures.hintA, "A", "EDIT", hintX, hintY, formHintScale);
-        drawControlHint(renderer, uiTextures.hintStart, "START", "CONNECT", hintX, hintY, formHintScale);
+        hintX = drawControlHint(renderer, uiTextures.hintA, "A", "EDIT", hintX, hintY, formHintFontSize);
+        drawControlHint(renderer, uiTextures.hintStart, "START", "CONNECT", hintX, hintY, formHintFontSize);
         const std::string version = "v" WIDEMELON_VERSION;
-        drawText(renderer, version, width - textWidth(version, widemelon::UiGameFooterTextScale) - 20, height - 34, widemelon::UiGameFooterTextScale);
+        drawText(renderer, version, width - textWidth(version, widemelon::UiGameFooterFontSize) - 20, height - 34, widemelon::UiGameFooterFontSize);
         SDL_RenderPresent(renderer);
     }
 
@@ -558,24 +528,24 @@ namespace
 
         drawGradientBackground(renderer, width, height);
         SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
-        drawText(renderer, title, (width - textWidth(title, widemelon::UiKeyboardTitleTextScale)) / 2, 65, widemelon::UiKeyboardTitleTextScale);
-        drawText(renderer, value.empty() ? "_" : value, (width - textWidth(value.empty() ? "_" : value, widemelon::UiKeyboardValueTextScale)) / 2, 125, widemelon::UiKeyboardValueTextScale);
+        drawText(renderer, title, (width - textWidth(title, widemelon::UiKeyboardTitleFontSize)) / 2, 65, widemelon::UiKeyboardTitleFontSize);
+        drawText(renderer, value.empty() ? "_" : value, (width - textWidth(value.empty() ? "_" : value, widemelon::UiKeyboardValueFontSize)) / 2, 125, widemelon::UiKeyboardValueFontSize);
         for (std::size_t index = 0; index < keys.size(); ++index)
         {
             const int row = static_cast<int>(index) / columns;
             const int column = static_cast<int>(index) % columns;
             const SDL_Rect key{startX + column * keyWidth, startY + row * keyHeight, keyWidth - 10, keyHeight - 8};
             drawPill(renderer, key, static_cast<int>(index) == selectedKey, true);
-            const int scale = std::string_view(keys[index]).size() > 1 ? widemelon::UiKeyboardActionTextScale : widemelon::UiKeyboardValueTextScale;
-            drawText(renderer, keys[index], key.x + (key.w - textWidth(keys[index], scale)) / 2,
-                     key.y + (key.h - 7 * scale) / 2, scale);
+            const int fontSize = std::string_view(keys[index]).size() > 1 ? widemelon::UiKeyboardActionFontSize : widemelon::UiKeyboardValueFontSize;
+            drawText(renderer, keys[index], key.x + (key.w - textWidth(keys[index], fontSize)) / 2,
+                     key.y + (key.h - fontSize) / 2, fontSize);
         }
         int hintX = width / 2 - 190;
         const int hintY = height - 64;
-        hintX = drawControlHint(renderer, uiTextures.hintA, "A", "SELECT", hintX, hintY, widemelon::UiKeyboardHintTextScale);
-        hintX = drawControlHint(renderer, uiTextures.hintB, "B", "DELETE", hintX, hintY, widemelon::UiKeyboardHintTextScale);
-        hintX = drawControlHint(renderer, uiTextures.hintX, "X", "BACK", hintX, hintY, widemelon::UiKeyboardHintTextScale);
-        drawControlHint(renderer, uiTextures.hintStart, "START", "OK", hintX, hintY, widemelon::UiKeyboardHintTextScale);
+        hintX = drawControlHint(renderer, uiTextures.hintA, "A", "SELECT", hintX, hintY, widemelon::UiKeyboardHintFontSize);
+        hintX = drawControlHint(renderer, uiTextures.hintB, "B", "DELETE", hintX, hintY, widemelon::UiKeyboardHintFontSize);
+        hintX = drawControlHint(renderer, uiTextures.hintX, "X", "BACK", hintX, hintY, widemelon::UiKeyboardHintFontSize);
+        drawControlHint(renderer, uiTextures.hintStart, "START", "OK", hintX, hintY, widemelon::UiKeyboardHintFontSize);
         SDL_RenderPresent(renderer);
     }
 
