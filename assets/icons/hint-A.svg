@@ -43,15 +43,15 @@
      id="layer1">
     <text
        xml:space="preserve"
-       style="font-weight:600;font-size:13.2292px;line-height:1.1;font-family:Roboto;-inkscape-font-specification:'Roboto Semi-Bold';text-decoration-color:#000000;letter-spacing:0px;word-spacing:0px;fill:#ff7272;fill-opacity:1;stroke-width:1.00952;stroke-linecap:round;stroke-dashoffset:0.529134;paint-order:markers stroke fill"
-       x="9.2253437"
-       y="14.426419"
+       style="font-weight:600;font-size:10.5833px;line-height:1.1;font-family:Roboto;-inkscape-font-specification:'Roboto Semi-Bold';text-decoration-color:#000000;letter-spacing:0px;word-spacing:0px;fill:#ff7272;fill-opacity:1;stroke-width:0.2;stroke-linecap:round;stroke-dashoffset:0.529134;paint-order:markers stroke fill;stroke:none;stroke-opacity:1;stroke-dasharray:none"
+       x="9.232358"
+       y="13.393195"
        id="text1"><tspan
          sodipodi:role="line"
          id="tspan1"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:13.2292px;font-family:Comfortaa;-inkscape-font-specification:Comfortaa;text-align:center;text-anchor:middle;fill:#ff7272;fill-opacity:1;stroke-width:1.00952"
-         x="9.2253437"
-         y="14.426419">A</tspan></text>
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:10.5833px;font-family:Comfortaa;-inkscape-font-specification:Comfortaa;text-align:center;text-anchor:middle;fill:#ff7272;fill-opacity:1;stroke-width:0.2;stroke:none;stroke-opacity:1;stroke-dasharray:none"
+         x="9.232358"
+         y="13.393195">A</tspan></text>
     <circle
        style="fill:none;stroke:#ff7272;stroke-width:0.9;stroke-linecap:round;stroke-dasharray:none;stroke-dashoffset:0.529134;stroke-opacity:1;paint-order:markers stroke fill"
        id="path1"
