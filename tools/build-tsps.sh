@@ -30,6 +30,8 @@ cmake --build "${project_dir}/${BUILD_DIR}" --parallel
 app_dir="${project_dir}/${DIST_DIR}/WideMelonClient"
 lib_dir="${app_dir}/lib"
 font_dir="${app_dir}/assets/fonts"
+background_dir="${app_dir}/assets/backgrounds"
+icon_dir="${app_dir}/assets/icons"
 sysroot_lib="${TRIMUI_TSPS_SDK}/host/aarch64-buildroot-linux-gnu/sysroot/usr/lib"
 
 if [[ "${app_dir}" == "${project_dir}" || "${app_dir}" == "/" ]]; then
@@ -37,11 +39,12 @@ if [[ "${app_dir}" == "${project_dir}" || "${app_dir}" == "/" ]]; then
     exit 1
 fi
 rm -rf "${app_dir}"
-mkdir -p "${lib_dir}" "${font_dir}"
+mkdir -p "${lib_dir}" "${font_dir}" "${background_dir}" "${icon_dir}"
 cp "${project_dir}/${BUILD_DIR}/widemelon-client" "${app_dir}/widemelon-client"
 cp "${project_dir}/packaging/spruce/WideMelonClient/config.json" "${project_dir}/packaging/spruce/WideMelonClient/launch.sh" "${project_dir}/packaging/spruce/WideMelonClient/wmclient.png" "${app_dir}/"
 cp "${project_dir}/assets/fonts/Roboto-Regular.ttf" "${font_dir}/Roboto-Regular.ttf"
-cp -R "${project_dir}/assets/backgrounds" "${project_dir}/assets/icons" "${app_dir}/assets/"
+cp "${project_dir}/assets/backgrounds/"*.png "${background_dir}/"
+cp "${project_dir}/assets/icons/"*.png "${icon_dir}/"
 cp "${project_dir}/widemelon-client-ui.conf" "${app_dir}/widemelon-client-ui.conf"
 cp "${project_dir}/config/widemelon-client.conf.example" "${app_dir}/widemelon-client.conf"
 cp -L "${sysroot_lib}/libSDL2-2.0.so.0" "${sysroot_lib}/libSDL2_ttf-2.0.so.0" "${sysroot_lib}/libSDL2_image-2.0.so.0" "${sysroot_lib}/libjpeg.so.8" "${lib_dir}/"
