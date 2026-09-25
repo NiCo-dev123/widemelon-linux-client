@@ -41,20 +41,22 @@
      inkscape:label="Calque 1"
      inkscape:groupmode="layer"
      id="layer1">
-    <path
-       id="path1"
-       style="fill:#ff7272;stroke-width:0.7;stroke-linecap:round;stroke-dashoffset:0.529134;paint-order:markers stroke fill;fill-opacity:1"
-       d="M 9.2604167 0 A 9.260417 9.260417 0 0 0 0 9.2604167 A 9.260417 9.260417 0 0 0 9.2604167 18.520833 A 9.260417 9.260417 0 0 0 18.520833 9.2604167 A 9.260417 9.260417 0 0 0 9.2604167 0 z M 9.2604167 1.3229167 A 7.9375 7.9375 0 0 1 17.197917 9.2604167 A 7.9375 7.9375 0 0 1 9.2604167 17.197917 A 7.9375 7.9375 0 0 1 1.3229167 9.2604167 A 7.9375 7.9375 0 0 1 9.2604167 1.3229167 z " />
     <text
        xml:space="preserve"
-       style="font-weight:600;font-size:15.263px;line-height:1.1;font-family:Roboto;-inkscape-font-specification:'Roboto Semi-Bold';text-decoration-color:#000000;letter-spacing:0px;word-spacing:0px;fill:#ff7272;fill-opacity:1;stroke-width:1.00952;stroke-linecap:round;stroke-dashoffset:0.529134;paint-order:markers stroke fill"
-       x="4.1590872"
-       y="14.685936"
+       style="font-weight:600;font-size:13.2292px;line-height:1.1;font-family:Roboto;-inkscape-font-specification:'Roboto Semi-Bold';text-decoration-color:#000000;letter-spacing:0px;word-spacing:0px;fill:#ff7272;fill-opacity:1;stroke-width:1.00952;stroke-linecap:round;stroke-dashoffset:0.529134;paint-order:markers stroke fill"
+       x="9.2253437"
+       y="14.426419"
        id="text1"><tspan
          sodipodi:role="line"
          id="tspan1"
-         style="fill:#ff7272;fill-opacity:1;stroke-width:1.00952"
-         x="4.1590872"
-         y="14.685936">A</tspan></text>
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:13.2292px;font-family:Comfortaa;-inkscape-font-specification:Comfortaa;text-align:center;text-anchor:middle;fill:#ff7272;fill-opacity:1;stroke-width:1.00952"
+         x="9.2253437"
+         y="14.426419">A</tspan></text>
+    <circle
+       style="fill:none;stroke:#ff7272;stroke-width:0.9;stroke-linecap:round;stroke-dasharray:none;stroke-dashoffset:0.529134;stroke-opacity:1;paint-order:markers stroke fill"
+       id="path1"
+       cx="9.260417"
+       cy="9.260417"
+       r="8" />
   </g>
 </svg>
