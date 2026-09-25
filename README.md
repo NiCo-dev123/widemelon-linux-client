@@ -22,7 +22,7 @@ Extract the .zip file, copy the folder on your SD card in `/Apps/`
 
 ## Building for TSPS
 
-The project includes `tools/build-tsps.sh`, which configures CMake and builds the ARM64 executable with the Trimui Smart Pro S SDK.
+The project includes `tools/build-tsps.sh`, which configures CMake, builds the ARM64 client, and assembles a complete application folder ready to copy to the SD card.
 
 Create your local configuration file once:
 
@@ -38,4 +38,4 @@ Then build with:
 tools/build-tsps.sh
 ```
 
-The executable is generated at `build-tsps/widemelon-client`.
+The ready-to-copy application is generated at `dist/WideMelonClient/`. Copy this folder into `/Apps/` on the SD card. The script also creates `dist/WideMelonClient-<version>.zip`, with the same folder structure as a release archive.
