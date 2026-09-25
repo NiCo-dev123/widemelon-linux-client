@@ -14,6 +14,8 @@
 #include <cctype>
 #include <charconv>
 #include <chrono>
+#include <cmath>
+#include <cmath>
 #include <cstdint>
 #include <future>
 #include <fstream>
@@ -31,8 +33,11 @@ namespace
 
     struct Palette
     {
-        SDL_Color background{15, 18, 36, 255};
-        SDL_Color primary{255, 255, 255, 255};
+        SDL_Color backgroundDark{204, 51, 51, 255};
+        SDL_Color backgroundLight{255, 80, 80, 255};
+        SDL_Color primary{51, 12, 0, 255};
+        SDL_Color buttonFill{255, 114, 114, 255};
+        SDL_Color buttonOutline{98, 213, 93, 255};
     };
 
     Palette palette;
@@ -94,14 +99,57 @@ namespace
             SDL_Color color{};
             if (!parseColor(line.substr(separator + 1), color))
                 continue;
-            if (line.substr(0, separator) == "background")
-                palette.background = color;
-            else if (line.substr(0, separator) == "primary")
-                palette.primary = color;
+            const std::string key = line.substr(0, separator);
+            if (key == "background-dark") palette.backgroundDark = color;
+            else if (key == "background-light") palette.backgroundLight = color;
+            else if (key == "text-color") palette.primary = color;
+            else if (key == "button-fill") palette.buttonFill = color;
+            else if (key == "button-outline") palette.buttonOutline = color;
         }
 #ifdef WIDEMELON_HAVE_SDL_TTF
         fontPath = directory + "/assets/fonts/Roboto-Regular.ttf";
 #endif
+    }
+
+    void drawGradientBackground(SDL_Renderer *renderer, int width, int height)
+    {
+        for (int y = 0; y < height; ++y)
+        {
+            const int ratio = height > 1 ? y * 255 / (height - 1) : 0;
+            const auto blend = [ratio](Uint8 light, Uint8 dark)
+            {
+                return static_cast<Uint8>((light * (255 - ratio) + dark * ratio) / 255);
+            };
+            SDL_SetRenderDrawColor(renderer, blend(palette.backgroundLight.r, palette.backgroundDark.r),
+                blend(palette.backgroundLight.g, palette.backgroundDark.g),
+                blend(palette.backgroundLight.b, palette.backgroundDark.b), 255);
+            SDL_RenderDrawLine(renderer, 0, y, width, y);
+        }
+    }
+
+    void drawPill(SDL_Renderer *renderer, const SDL_Rect &rect, bool selected)
+    {
+        const int radius = rect.h / 2;
+        if (selected)
+        {
+            SDL_SetRenderDrawColor(renderer, palette.buttonFill.r, palette.buttonFill.g, palette.buttonFill.b, 255);
+            for (int y = 0; y < rect.h; ++y)
+            {
+                const int distance = y - radius + 1;
+                const int inset = radius - static_cast<int>(std::sqrt(std::max(0, radius * radius - distance * distance)));
+                SDL_RenderDrawLine(renderer, rect.x + inset, rect.y + y, rect.x + rect.w - inset - 1, rect.y + y);
+            }
+        }
+        SDL_SetRenderDrawColor(renderer, palette.buttonOutline.r, palette.buttonOutline.g, palette.buttonOutline.b, 255);
+        for (int y = 0; y < rect.h; ++y)
+        {
+            const int distance = y - radius + 1;
+            const int inset = radius - static_cast<int>(std::sqrt(std::max(0, radius * radius - distance * distance)));
+            SDL_RenderDrawPoint(renderer, rect.x + inset, rect.y + y);
+            SDL_RenderDrawPoint(renderer, rect.x + rect.w - inset - 1, rect.y + y);
+        }
+        SDL_RenderDrawLine(renderer, rect.x + radius, rect.y, rect.x + rect.w - radius - 1, rect.y);
+        SDL_RenderDrawLine(renderer, rect.x + radius, rect.y + rect.h - 1, rect.x + rect.w - radius - 1, rect.y + rect.h - 1);
     }
 
     const Glyph &glyphFor(char character)
@@ -287,8 +335,7 @@ namespace
     {
         (void)height;
         (void)config;
-        SDL_SetRenderDrawColor(renderer, palette.background.r, palette.background.g, palette.background.b, 255);
-        SDL_RenderClear(renderer);
+        drawGradientBackground(renderer, width, height);
         SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
         const std::string title = "WideMelon Client";
         drawText(renderer, title, (width - textWidth(title, 4)) / 2, 20, 4);
@@ -307,8 +354,7 @@ namespace
     void renderSetup(SDL_Renderer *renderer, int width, int height, const widemelon::Config &config,
                      int selected, const std::string &status)
     {
-        SDL_SetRenderDrawColor(renderer, palette.background.r, palette.background.g, palette.background.b, 255);
-        SDL_RenderClear(renderer);
+        drawGradientBackground(renderer, width, height);
         SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
         constexpr int formTextSize = 17;
         constexpr int titleTextSize = 34;
@@ -325,27 +371,21 @@ namespace
         {
             drawTextAtFontSize(renderer, labels[index], centerX - textWidthAtFontSize(labels[index], formTextSize) / 2, positions[index] - 38, formTextSize, palette.primary);
             const SDL_Rect field{fieldX, positions[index], fieldWidth, fieldHeight};
-            if (selected == index)
-                SDL_RenderFillRect(renderer, &field);
-            else
-                SDL_RenderDrawRect(renderer, &field);
+            drawPill(renderer, field, selected == index);
             if (selected == index)
             {
                 drawTextAtFontSize(renderer, values[index], centerX - textWidthAtFontSize(values[index], formTextSize) / 2,
-                                   positions[index] + 10, formTextSize, palette.background);
+                                   positions[index] + 10, formTextSize, palette.primary);
             }
             else
                 drawTextAtFontSize(renderer, values[index], centerX - textWidthAtFontSize(values[index], formTextSize) / 2, positions[index] + 10, formTextSize, palette.primary);
         }
         const SDL_Rect connect{fieldX, 473, fieldWidth, fieldHeight};
-        if (selected == 3)
-            SDL_RenderFillRect(renderer, &connect);
-        else
-            SDL_RenderDrawRect(renderer, &connect);
+        drawPill(renderer, connect, selected == 3);
         if (selected == 3)
         {
             const std::string connectLabel = "CONNECT";
-            drawTextAtFontSize(renderer, connectLabel, centerX - textWidthAtFontSize(connectLabel, formTextSize) / 2, 483, formTextSize, palette.background);
+            drawTextAtFontSize(renderer, connectLabel, centerX - textWidthAtFontSize(connectLabel, formTextSize) / 2, 483, formTextSize, palette.primary);
         }
         else
         {
@@ -371,8 +411,7 @@ namespace
         constexpr int startX = 290;
         constexpr int startY = 205;
 
-        SDL_SetRenderDrawColor(renderer, palette.background.r, palette.background.g, palette.background.b, 255);
-        SDL_RenderClear(renderer);
+        drawGradientBackground(renderer, width, height);
         SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
         drawText(renderer, title, (width - textWidth(title, 5)) / 2, 65, 5);
         drawText(renderer, value.empty() ? "_" : value, (width - textWidth(value.empty() ? "_" : value, 5)) / 2, 125, 5);
@@ -381,8 +420,7 @@ namespace
             const int row = static_cast<int>(index) / columns;
             const int column = static_cast<int>(index) % columns;
             const SDL_Rect key{startX + column * keyWidth, startY + row * keyHeight, keyWidth - 10, keyHeight - 8};
-            if (static_cast<int>(index) == selectedKey)
-                SDL_RenderDrawRect(renderer, &key);
+            drawPill(renderer, key, static_cast<int>(index) == selectedKey);
             const int scale = std::string_view(keys[index]).size() > 1 ? 4 : 5;
             drawText(renderer, keys[index], key.x + (key.w - textWidth(keys[index], scale)) / 2,
                      key.y + (key.h - 7 * scale) / 2, scale);
