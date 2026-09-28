@@ -19,7 +19,9 @@
 #include <chrono>
 #include <cstdint>
 #include <future>
+#include <iterator>
 #include <fstream>
+#include <filesystem>
 #include <map>
 #include <memory>
 #include <string_view>
@@ -108,6 +110,42 @@ namespace
         return parsed.ec == std::errc{} && parsed.ptr == value.data() + value.size();
     }
 
+    bool themeValue(const std::string &document, std::string_view key, std::string &value)
+    {
+        const std::string name = "\"" + std::string(key) + "\"";
+        const std::size_t keyPosition = document.find(name);
+        if (keyPosition == std::string::npos) return false;
+        const std::size_t colon = document.find(':', keyPosition + name.size());
+        if (colon == std::string::npos) return false;
+        const std::size_t start = document.find('"', colon + 1);
+        if (start == std::string::npos) return false;
+        const std::size_t end = document.find('"', start + 1);
+        if (end == std::string::npos) return false;
+        value = document.substr(start + 1, end - start - 1);
+        return true;
+    }
+
+    void applyThemeConfig(const std::filesystem::path &themeDirectory, Palette &themePalette, std::string &font)
+    {
+        std::ifstream file(themeDirectory / "theme-config.json");
+        if (!file) return;
+        const std::string document((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        const auto applyColor = [&document](std::string_view key, SDL_Color &target)
+        {
+            std::string value;
+            SDL_Color color{};
+            if (themeValue(document, key, value) && parseColor(value, color)) target = color;
+        };
+        applyColor("background-dark", themePalette.backgroundDark);
+        applyColor("background-light", themePalette.backgroundLight);
+        applyColor("text-color", themePalette.primary);
+        applyColor("hint-color", themePalette.hint);
+        applyColor("button-fill", themePalette.buttonFill);
+        applyColor("button-outline", themePalette.buttonOutline);
+        std::string configuredFont;
+        if (themeValue(document, "font", configuredFont) && !configuredFont.empty()) font = configuredFont;
+    }
+
     void loadUiTexture(SDL_Renderer *renderer, SDL_Texture *&texture, const std::string &path)
     {
 #ifdef WIDEMELON_HAVE_SDL_IMAGE
@@ -156,6 +194,7 @@ namespace
 #ifdef WIDEMELON_HAVE_SDL_TTF
         std::string textFont = "assets/themes/WaterMelon/comfortaa-latin-400-normal.ttf";
 #endif
+        std::string activeTheme = "WaterMelon";
         std::string line;
         while (std::getline(file, line))
         {
@@ -164,6 +203,11 @@ namespace
                 continue;
             const std::string key = line.substr(0, separator);
             const std::string value = line.substr(separator + 1);
+            if (key == "active-theme")
+            {
+                if (!value.empty()) activeTheme = value;
+                continue;
+            }
 #ifdef WIDEMELON_HAVE_SDL_TTF
             if (key == "text-font")
             {
@@ -186,12 +230,57 @@ namespace
             else if (key == "button-fill") palette.buttonFill = color;
             else if (key == "button-outline") palette.buttonOutline = color;
         }
+        const std::filesystem::path themesDirectory = std::filesystem::path(directory) / "assets" / "themes";
+        const auto validThemeName = [](const std::string &name)
+        {
+            return !name.empty() && name != "." && name != ".."
+                && name.find_first_of("/\\") == std::string::npos;
+        };
+        std::filesystem::path themeDirectory = validThemeName(activeTheme)
+            ? themesDirectory / activeTheme
+            : std::filesystem::path{};
+        std::error_code themeError;
+        if (!std::filesystem::is_directory(themeDirectory, themeError))
+        {
+            if (activeTheme != "WaterMelon")
+                widemelon::Logger::error("UI theme not found: " + activeTheme + "; using WaterMelon");
+            themeDirectory = themesDirectory / "WaterMelon";
+            themeError.clear();
+        }
+        const std::filesystem::path defaultThemeDirectory = themesDirectory / "WaterMelon";
+        if (!std::filesystem::is_directory(themeDirectory, themeError))
+        {
+            widemelon::Logger::error("Default UI theme not found; using square UI fallbacks");
+            return;
+        }
+
+        std::string defaultThemeFont;
+        applyThemeConfig(defaultThemeDirectory, palette, defaultThemeFont);
+        std::string activeThemeFont = defaultThemeFont;
+        if (themeDirectory != defaultThemeDirectory)
+            applyThemeConfig(themeDirectory, palette, activeThemeFont);
 #ifdef WIDEMELON_HAVE_SDL_TTF
-        fontPath = !textFont.empty() && textFont[0] == 47
-            ? textFont
-            : directory + "/" + textFont;
+        const auto resolveThemeFont = [](const std::filesystem::path &theme, const std::string &name)
+        {
+            if (name.empty()) return std::filesystem::path{};
+            const std::filesystem::path candidate = name[0] == 47
+                ? std::filesystem::path(name)
+                : theme / name;
+            std::error_code error;
+            return std::filesystem::is_regular_file(candidate, error) ? candidate : std::filesystem::path{};
+        };
+        std::filesystem::path selectedFont = resolveThemeFont(themeDirectory, activeThemeFont);
+        if (selectedFont.empty()) selectedFont = resolveThemeFont(defaultThemeDirectory, defaultThemeFont);
+        if (!selectedFont.empty())
+            fontPath = selectedFont.string();
+        else
+        {
+            fontPath = !textFont.empty() && textFont[0] == 47 ? textFont : directory + "/" + textFont;
+            widemelon::Logger::error("Theme font not found; using configured font fallback");
+        }
 #endif
-        const std::string assets = directory + "/assets/themes/WaterMelon/";
+
+        const std::string assets = themeDirectory.string() + "/";
         loadUiTexture(renderer, uiTextures.background, assets + "backgrounds/background.png");
         loadUiTexture(renderer, uiTextures.gameplayBackground, assets + "backgrounds/background-gameplay.png");
         loadUiTexture(renderer, uiTextures.fieldSelected, assets + "icons/field-input-selected.png");
