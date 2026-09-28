@@ -1322,7 +1322,7 @@ namespace widemelon
                 }
             }
             const std::string inputEvent = exitInput.pollEvent();
-            const bool sm64TouchChanged = sm64Stick.update(exitInput.leftStickState(), exitInput.r2Pressed());
+            const bool sm64TouchChanged = sm64Stick.update(exitInput.leftStickState());
             inputDirty = exitInput.takeStateChanged() || sm64TouchChanged || inputDirty;
             if (sm64TouchChanged && !inputTest)
                 render(renderer, width, height, config, status, videoTexture, &sm64Stick.touchState());
