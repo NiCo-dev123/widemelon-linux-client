@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/icons/wmclient-logo.png" />
+  <img src="./assets/appIcon/wmclient-logo.png" />
 </p>
 
 # Wide Melon Linux Client

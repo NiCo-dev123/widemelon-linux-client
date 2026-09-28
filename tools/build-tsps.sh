@@ -41,7 +41,8 @@ fi
 rm -rf "${app_dir}"
 mkdir -p "${lib_dir}" "${themes_dir}"
 cp "${project_dir}/${BUILD_DIR}/widemelon-client" "${app_dir}/widemelon-client"
-cp "${project_dir}/packaging/spruce/WideMelonClient/config.json" "${project_dir}/packaging/spruce/WideMelonClient/launch.sh" "${project_dir}/packaging/spruce/WideMelonClient/wmclient.png" "${app_dir}/"
+cp "${project_dir}/packaging/spruce/WideMelonClient/config.json" "${project_dir}/packaging/spruce/WideMelonClient/launch.sh" "${app_dir}/"
+cp "${project_dir}/assets/appIcon/wmclient.png" "${app_dir}/wmclient.png"
 
 for source_theme in "${themes_source_dir}"/*; do
     [[ -d "${source_theme}" ]] || continue
