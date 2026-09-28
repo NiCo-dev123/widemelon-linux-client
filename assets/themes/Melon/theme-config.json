@@ -3,9 +3,9 @@
 "author":"Nicolas C",
 "Description":"Default theme",
 "font":"comfortaa-latin-400-normal.ttf",
-"background-dark":"#cc3333",
-"background-light":"#ff5050",
-"text-color":"#330c00",
-"hint-color":"#ff7272",
-"button-fill":"#ff7272"
+"background-dark":"#db8035",
+"background-light":"#c7a96b",
+"text-color":"#1a3505",
+"hint-color":"#fac054",
+"button-fill":"#fac054"
 }
