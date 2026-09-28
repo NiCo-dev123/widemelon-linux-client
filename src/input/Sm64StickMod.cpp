@@ -10,7 +10,9 @@ void Sm64StickMod::setEnabled(bool enabled)
 {
     isEnabled = enabled;
     touchStarted = false;
+    releasePending = false;
     movementAt = {};
+    releaseAt = {};
     touch = {};
 }
 
@@ -43,6 +45,7 @@ bool Sm64StickMod::update(const LeftStickState& stick)
     const auto now = std::chrono::steady_clock::now();
     if (shouldTouch)
     {
+        releasePending = false;
         if (!touchStarted)
         {
             // Mario 64 DS creates its virtual analog circle where the touch starts.
@@ -61,12 +64,33 @@ bool Sm64StickMod::update(const LeftStickState& stick)
             next.y = static_cast<std::uint16_t>(static_cast<int>(Sm64TouchCenterY) + offsetY);
         }
     }
+    else if (touchStarted)
+    {
+        if (!releasePending)
+        {
+            releasePending = true;
+            releaseAt = now + Sm64TouchReleaseHoldDuration;
+        }
+        if (now < releaseAt)
+        {
+            // Retain the last touch point through a brief centre crossing.
+            next = touch;
+            next.active = true;
+        }
+        else
+        {
+            next.x = static_cast<std::uint16_t>(static_cast<int>(Sm64TouchCenterX) + offsetX);
+            next.y = static_cast<std::uint16_t>(static_cast<int>(Sm64TouchCenterY) + offsetY);
+            touchStarted = false;
+            releasePending = false;
+            movementAt = {};
+            releaseAt = {};
+        }
+    }
     else
     {
         next.x = static_cast<std::uint16_t>(static_cast<int>(Sm64TouchCenterX) + offsetX);
         next.y = static_cast<std::uint16_t>(static_cast<int>(Sm64TouchCenterY) + offsetY);
-        touchStarted = false;
-        movementAt = {};
     }
 
     if (next.active == touch.active && next.x == touch.x && next.y == touch.y) return false;
