@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="140"
+   height="70"
+   viewBox="0 0 37.041666 18.520834"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.3.2 (1:1.3.2+202311252150+091e20ef0f)"
+   sodipodi:docname="hint-START.svg"
+   inkscape:export-filename="hint-START.png"
+   inkscape:export-xdpi="65.828575"
+   inkscape:export-ydpi="65.828575"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#505050"
+     bordercolor="#eeeeee"
+     borderopacity="1"
+     inkscape:showpageshadow="0"
+     inkscape:pageopacity="0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#505050"
+     inkscape:document-units="mm"
+     inkscape:zoom="9.1415178"
+     inkscape:cx="82.809006"
+     inkscape:cy="33.965913"
+     inkscape:window-width="1920"
+     inkscape:window-height="1131"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs1" />
+  <g
+     inkscape:label="Calque 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <text
+       xml:space="preserve"
+       style="font-weight:600;font-size:7.9375px;line-height:1.1;font-family:Roboto;-inkscape-font-specification:'Roboto Semi-Bold';text-align:center;text-decoration-color:#000000;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#232323;fill-opacity:1;stroke-width:0.2;stroke-linecap:round;stroke-dasharray:none;stroke-dashoffset:0.529134;paint-order:markers stroke fill;stroke:#232323;stroke-opacity:1"
+       x="18.27354"
+       y="12.36001"
+       id="text1"><tspan
+         sodipodi:role="line"
+         id="tspan1"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:7.9375px;font-family:Comfortaa;-inkscape-font-specification:Comfortaa;text-align:center;text-anchor:middle;fill:#232323;fill-opacity:1;stroke:#232323;stroke-width:0.2;stroke-dasharray:none;stroke-opacity:1"
+         x="18.27354"
+         y="12.36001">START</tspan></text>
+    <path
+       style="color:#000000;fill:#232323;stroke-linecap:round;stroke-dashoffset:0.529134;-inkscape-stroke:none;paint-order:markers stroke fill;fill-opacity:1"
+       d="m 10.582031,0.87304688 c -4.6391632,0 -8.3867185,3.74755532 -8.3867185,8.38671872 0,4.6391634 3.7475553,8.3886714 8.3867185,8.3886714 h 15.876953 c 4.639164,0 8.388672,-3.749508 8.388672,-8.3886714 0,-4.6391634 -3.749508,-8.38671872 -8.388672,-8.38671872 z m 0,0.89843752 h 15.876953 c 4.156132,0 7.488282,3.3321493 7.488282,7.4882812 0,4.1561324 -3.33215,7.4882814 -7.488282,7.4882814 H 10.582031 c -4.1561317,0 -7.4863279,-3.332149 -7.4863279,-7.4882814 0,-4.1561319 3.3301962,-7.4882812 7.4863279,-7.4882812 z"
+       id="rect1" />
+  </g>
+</svg>

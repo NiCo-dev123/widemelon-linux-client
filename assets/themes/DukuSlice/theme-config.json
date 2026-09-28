@@ -1,0 +1,11 @@
+{
+"name":"DukuSlice",
+"author":"Nicolas C",
+"Description":"Light theme inspired by the DS",
+"font":"comfortaa-latin-400-normal.ttf",
+"background-dark":"#f1f1f1",
+"background-light":"#ffffff",
+"text-color":"#232323",
+"hint-color":"#232323",
+"button-fill":"#ffffff"
+}
