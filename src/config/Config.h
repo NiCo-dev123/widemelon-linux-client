@@ -27,7 +27,7 @@ namespace widemelon
         static ConfigLoadResult validate(Config config);
         static ConfigLoadResult loadFile(const std::filesystem::path &path);
         static ConfigLoadResult loadNextToExecutable();
-        static bool saveNextToExecutable(const Config &config, std::string &error);
+        static bool saveConfiguration(const Config &config, std::string &error);
     };
 
 }

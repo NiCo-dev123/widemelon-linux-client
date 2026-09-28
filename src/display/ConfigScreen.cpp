@@ -712,7 +712,7 @@ namespace
                     else
                     {
                         std::string error;
-                        if (widemelon::ConfigLoader::saveNextToExecutable(config, error))
+                        if (widemelon::ConfigLoader::saveConfiguration(config, error))
                         {
                             widemelon::Logger::info("Configuration saved from setup form");
                             return true;

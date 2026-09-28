@@ -44,9 +44,12 @@ std::filesystem::path executableConfigPath()
 
 std::vector<std::filesystem::path> persistentConfigPaths()
 {
-    // SpruceOS images have used both mount-point spellings. Try the actual
-    // mounted path first, then retain compatibility with uppercase images.
+    // NextUI stores persistent data on the SD card under .userdata. Prefer
+    // its card-wide location, then the Smart Pro S platform-specific directory.
+    // SpruceOS paths remain as compatibility fallbacks.
     return {
+        "/mnt/SDCARD/.userdata/shared/WideMelonClient/widemelon-client.conf",
+        "/mnt/SDCARD/.userdata/tg5050/WideMelonClient/widemelon-client.conf",
         "/mnt/sdcard/Saves/WideMelonClient/widemelon-client.conf",
         "/mnt/SDCARD/Saves/WideMelonClient/widemelon-client.conf"
     };
@@ -162,7 +165,7 @@ ConfigLoadResult ConfigLoader::loadNextToExecutable()
     return loadFile(bundled);
 }
 
-bool ConfigLoader::saveNextToExecutable(const Config& config, std::string& error)
+bool ConfigLoader::saveConfiguration(const Config& config, std::string& error)
 {
     const ConfigLoadResult checked = validate(config);
     if (!checked.ok)
