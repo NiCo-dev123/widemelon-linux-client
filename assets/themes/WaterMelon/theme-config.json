@@ -1,4 +1,7 @@
 {
+"name":"WaterMelon",
+"author":"Nicolas C",
+"Description":"Default theme",
 "font":"comfortaa-latin-400-normal.ttf",
 "background-dark":"#cc3333",
 "background-light":"#ff5050",

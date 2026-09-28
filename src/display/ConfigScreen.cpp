@@ -262,12 +262,17 @@ namespace
 #ifdef WIDEMELON_HAVE_SDL_TTF
         const auto resolveThemeFont = [](const std::filesystem::path &theme, const std::string &name)
         {
-            if (name.empty()) return std::filesystem::path{};
-            const std::filesystem::path candidate = name[0] == 47
-                ? std::filesystem::path(name)
-                : theme / name;
+            const std::filesystem::path configured(name);
+            if (name.empty() || configured.is_absolute()) return std::filesystem::path{};
+            const std::filesystem::path root = theme.lexically_normal();
+            const std::filesystem::path candidate = (root / configured).lexically_normal();
+            const std::filesystem::path relative = candidate.lexically_relative(root);
+            for (const auto &part : relative)
+                if (part == "..") return std::filesystem::path{};
             std::error_code error;
-            return std::filesystem::is_regular_file(candidate, error) ? candidate : std::filesystem::path{};
+            return !relative.empty() && std::filesystem::is_regular_file(candidate, error)
+                ? candidate
+                : std::filesystem::path{};
         };
         std::filesystem::path selectedFont = resolveThemeFont(themeDirectory, activeThemeFont);
         if (selectedFont.empty()) selectedFont = resolveThemeFont(defaultThemeDirectory, defaultThemeFont);
