@@ -7,10 +7,10 @@
 namespace widemelon
 {
 
-inline constexpr std::uint16_t Sm64TouchActivationRadius{6};
+inline constexpr std::uint16_t Sm64TouchActivationRadius{2};
 inline constexpr std::uint16_t Sm64TouchDeadzoneRadius{10};
 inline constexpr std::uint16_t Sm64TouchAnalogRadius{25};
-inline constexpr std::uint16_t Sm64TouchMaximumRadius{40};
+inline constexpr std::uint16_t Sm64TouchMaximumRadius{45};
 inline constexpr std::uint16_t Sm64TouchCenterX{127};
 inline constexpr std::uint16_t Sm64TouchCenterY{95};
 
@@ -33,6 +33,7 @@ private:
     static int mapRelativeAxis(int value, int center, int minimum, int maximum, std::uint16_t radius);
 
     bool isEnabled = false;
+    bool touchStarted = false;
     Sm64TouchState touch;
 };
 

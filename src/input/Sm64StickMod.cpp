@@ -9,6 +9,7 @@ namespace widemelon
 void Sm64StickMod::setEnabled(bool enabled)
 {
     isEnabled = enabled;
+    touchStarted = false;
     touch = {};
 }
 
@@ -36,9 +37,22 @@ bool Sm64StickMod::update(const LeftStickState& stick)
     }
 
     Sm64TouchState next;
-    next.x = static_cast<std::uint16_t>(static_cast<int>(Sm64TouchCenterX) + offsetX);
-    next.y = static_cast<std::uint16_t>(static_cast<int>(Sm64TouchCenterY) + offsetY);
-    next.active = distance > static_cast<float>(Sm64TouchActivationRadius);
+    const bool shouldTouch = distance > static_cast<float>(Sm64TouchActivationRadius);
+    next.active = shouldTouch;
+    if (shouldTouch && !touchStarted)
+    {
+        // Mario 64 DS creates its virtual analog circle where the touch starts.
+        // Send one centre snapshot first, then use the entire movement radius.
+        next.x = Sm64TouchCenterX;
+        next.y = Sm64TouchCenterY;
+        touchStarted = true;
+    }
+    else
+    {
+        next.x = static_cast<std::uint16_t>(static_cast<int>(Sm64TouchCenterX) + offsetX);
+        next.y = static_cast<std::uint16_t>(static_cast<int>(Sm64TouchCenterY) + offsetY);
+        if (!shouldTouch) touchStarted = false;
+    }
 
     if (next.active == touch.active && next.x == touch.x && next.y == touch.y) return false;
     touch = next;

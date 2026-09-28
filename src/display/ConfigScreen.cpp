@@ -609,7 +609,10 @@ namespace
             const SDL_Rect pointer{video.x + static_cast<int>(cursor->x) * video.w / 256,
                                    video.y + static_cast<int>(cursor->y) * video.h / 192, 48, 48};
             if (uiTextures.cursor)
+            {
+                SDL_SetTextureAlphaMod(uiTextures.cursor, cursor->active ? 255 : 128);
                 SDL_RenderCopy(renderer, uiTextures.cursor, nullptr, &pointer);
+            }
             else
             {
                 SDL_SetRenderDrawColor(renderer, palette.hint.r, palette.hint.g, palette.hint.b, 255);
