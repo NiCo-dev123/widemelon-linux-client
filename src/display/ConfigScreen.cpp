@@ -339,6 +339,17 @@ namespace
         loadUiTexture(renderer, uiTextures.hintR, assets + "icons/hint-R.png");
     }
 
+    void reloadUiResources(SDL_Renderer *renderer)
+    {
+        closeUiTextures();
+#ifdef WIDEMELON_HAVE_SDL_TTF
+        closeFonts();
+#endif
+        palette = Palette{};
+        themeText = ThemeTextSettings{};
+        loadUiResources(renderer);
+    }
+
     void drawBackground(SDL_Renderer *renderer, int width, int height, bool gameplay)
     {
         SDL_Texture *texture = gameplay ? uiTextures.gameplayBackground : uiTextures.background;
@@ -632,10 +643,10 @@ namespace
         drawPill(renderer, connect, selected == 3);
         const std::string connectLabel = "CONNECT";
         drawTextColored(renderer, connectLabel, centerX - textWidth(connectLabel, formFontSize) / 2, 483, formFontSize, palette.primary);
-        const SDL_Rect quit{fieldX, 545, fieldWidth, fieldHeight};
-        drawPill(renderer, quit, selected == 4);
-        const std::string quitLabel = "QUIT";
-        drawTextColored(renderer, quitLabel, centerX - textWidth(quitLabel, formFontSize) / 2, 555, formFontSize, palette.primary);
+        const SDL_Rect settings{fieldX, 545, fieldWidth, fieldHeight};
+        drawPill(renderer, settings, selected == 4);
+        const std::string settingsLabel = "SETTINGS";
+        drawTextColored(renderer, settingsLabel, centerX - textWidth(settingsLabel, formFontSize) / 2, 555, formFontSize, palette.primary);
         const int formHintFontSize = themeText.hintFontSize;
         const int formHintWidth = controlHintWidth(uiTextures.hintA, "A", "EDIT", formHintFontSize)
             + controlHintWidth(uiTextures.hintStart, "START", "CONNECT", formHintFontSize);
@@ -792,6 +803,163 @@ namespace
         }
     }
 
+    enum class SettingsResult { Home, Exit };
+
+    std::vector<std::string> availableThemes(const std::string &directory)
+    {
+        std::vector<std::string> themes;
+        std::error_code error;
+        for (const auto &entry : std::filesystem::directory_iterator(std::filesystem::path(directory) / "assets" / "themes", error))
+            if (entry.is_directory(error)) themes.push_back(entry.path().filename().string());
+        std::sort(themes.begin(), themes.end());
+        return themes;
+    }
+
+
+    std::string configuredTheme(const std::string &directory)
+    {
+        std::ifstream file(std::filesystem::path(directory) / "widemelon-client-ui.conf");
+        std::string line;
+        while (std::getline(file, line))
+        {
+            constexpr std::string_view key{"active-theme="};
+            if (line.compare(0, key.size(), key) == 0 && line.size() > key.size())
+                return line.substr(key.size());
+        }
+        return "WaterMelon";
+    }
+
+    bool saveConfiguredTheme(const std::string &directory, const std::string &theme)
+    {
+        const std::filesystem::path path = std::filesystem::path(directory) / "widemelon-client-ui.conf";
+        std::ifstream input(path);
+        if (!input)
+        {
+            widemelon::Logger::error("Cannot open UI configuration for theme selection: " + path.string());
+            return false;
+        }
+
+        std::vector<std::string> lines;
+        std::string line;
+        bool replaced = false;
+        while (std::getline(input, line))
+        {
+            if (line.compare(0, 13, "active-theme=") == 0)
+            {
+                lines.push_back("active-theme=" + theme);
+                replaced = true;
+            }
+            else
+                lines.push_back(line);
+        }
+        if (!replaced) lines.push_back("active-theme=" + theme);
+
+        const std::filesystem::path temporary = path.string() + ".tmp";
+        {
+            std::ofstream output(temporary, std::ios::trunc);
+            if (!output)
+            {
+                widemelon::Logger::error("Cannot save UI theme selection: " + temporary.string());
+                return false;
+            }
+            for (const std::string &entry : lines) output << entry << "\n";
+            if (!output)
+            {
+                widemelon::Logger::error("Cannot write UI theme selection: " + temporary.string());
+                return false;
+            }
+        }
+        std::error_code error;
+        std::filesystem::rename(temporary, path, error);
+        if (error)
+        {
+            std::filesystem::remove(temporary, error);
+            widemelon::Logger::error("Cannot activate UI theme: " + error.message());
+            return false;
+        }
+        widemelon::Logger::info("UI theme selected: " + theme);
+        return true;
+    }
+
+    void renderSettings(SDL_Renderer *renderer, int width, int height, const std::string &theme, int selected)
+    {
+        drawGradientBackground(renderer, width, height);
+        const int centerX = width / 2;
+        const int fieldWidth = widemelon::UiFormFieldWidth;
+        const int fieldHeight = widemelon::UiFormFieldHeight;
+        const int fieldX = centerX - fieldWidth / 2;
+        const std::string title = "Settings";
+        drawTextColored(renderer, title, centerX - textWidth(title, themeText.titleFontSize) / 2, 48, themeText.titleFontSize, palette.primary);
+        const std::string themeLabel = "Theme";
+        drawTextColored(renderer, themeLabel, centerX - textWidth(themeLabel, themeText.formFontSize) / 2, 182, themeText.formFontSize, palette.primary);
+        const SDL_Rect themeField{fieldX, 220, fieldWidth, fieldHeight};
+        drawPill(renderer, themeField, selected == 0);
+        const std::string value = "< " + theme + " >";
+        drawTextColored(renderer, value, centerX - textWidth(value, themeText.formFontSize) / 2, 230, themeText.formFontSize, palette.primary);
+        const SDL_Rect back{fieldX, 340, fieldWidth, fieldHeight};
+        drawPill(renderer, back, selected == 1);
+        const std::string backLabel = "BACK";
+        drawTextColored(renderer, backLabel, centerX - textWidth(backLabel, themeText.formFontSize) / 2, 350, themeText.formFontSize, palette.primary);
+        const SDL_Rect quit{fieldX, 412, fieldWidth, fieldHeight};
+        drawPill(renderer, quit, selected == 2);
+        const std::string quitLabel = "QUIT";
+        drawTextColored(renderer, quitLabel, centerX - textWidth(quitLabel, themeText.formFontSize) / 2, 422, themeText.formFontSize, palette.primary);
+        int hintX = width / 2 - 150;
+        const int hintY = height - 64;
+        hintX = drawControlHint(renderer, uiTextures.hintA, "A", "SELECT", hintX, hintY, themeText.hintFontSize);
+        drawControlHint(renderer, uiTextures.hintB, "B", "BACK", hintX, hintY, themeText.hintFontSize);
+        SDL_RenderPresent(renderer);
+    }
+
+    SettingsResult editSettings(SDL_Renderer *renderer, int width, int height, widemelon::EvdevInput &input)
+    {
+        std::array<char, 4096> executable{};
+        const ssize_t length = readlink("/proc/self/exe", executable.data(), executable.size() - 1);
+        if (length <= 0) return SettingsResult::Home;
+        executable[static_cast<std::size_t>(length)] = 0;
+        const std::string directory = std::filesystem::path(executable.data()).parent_path().string();
+        std::vector<std::string> themes = availableThemes(directory);
+        if (themes.empty()) return SettingsResult::Home;
+        std::size_t themeIndex = 0;
+        const std::string currentTheme = configuredTheme(directory);
+        const auto current = std::find(themes.begin(), themes.end(), currentTheme);
+        if (current != themes.end()) themeIndex = static_cast<std::size_t>(std::distance(themes.begin(), current));
+        int selected = 0;
+        UiNavigationRepeater repeater;
+        auto nextNavigationAt = std::chrono::steady_clock::time_point{};
+        while (true)
+        {
+            renderSettings(renderer, width, height, themes[themeIndex], selected);
+            input.pollEvent();
+            if (input.exitComboPressed()) return SettingsResult::Exit;
+            const auto action = repeater.next(input.takeUiAction(), input.heldUiDirection());
+            if (action == widemelon::UiAction::Back || action == widemelon::UiAction::Delete) return SettingsResult::Home;
+            const bool navigation = isNavigation(action);
+            const auto now = std::chrono::steady_clock::now();
+            if (navigation && now < nextNavigationAt)
+            {
+                SDL_Delay(10);
+                continue;
+            }
+            if (navigation) nextNavigationAt = now + widemelon::UiNavigationCooldown;
+            if (action == widemelon::UiAction::Up) selected = (selected + 2) % 3;
+            else if (action == widemelon::UiAction::Down) selected = (selected + 1) % 3;
+            else if (selected == 0 && (action == widemelon::UiAction::Left || action == widemelon::UiAction::Right))
+            {
+                const int step = action == widemelon::UiAction::Left ? -1 : 1;
+                const std::size_t nextTheme = static_cast<std::size_t>((static_cast<int>(themeIndex) + step + static_cast<int>(themes.size())) % static_cast<int>(themes.size()));
+                if (saveConfiguredTheme(directory, themes[nextTheme]))
+                {
+                    themeIndex = nextTheme;
+                    reloadUiResources(renderer);
+                }
+            }
+            else if (selected == 1 && action == widemelon::UiAction::Confirm) return SettingsResult::Home;
+            else if (selected == 2 && action == widemelon::UiAction::Confirm) return SettingsResult::Exit;
+            SDL_Delay(10);
+        }
+    }
+
     bool editConfiguration(SDL_Renderer *renderer, int width, int height, widemelon::Config &config,
                            widemelon::EvdevInput &input)
     {
@@ -856,7 +1024,7 @@ namespace
                         return true;
                     }
                 }
-                else
+                else if (editSettings(renderer, width, height, input) == SettingsResult::Exit)
                     return false;
             }
             SDL_Delay(10);
