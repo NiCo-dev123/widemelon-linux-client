@@ -881,7 +881,72 @@ namespace
         return true;
     }
 
-    void renderSettings(SDL_Renderer *renderer, int width, int height, const std::string &theme, int selected)
+    std::string configuredLeftStickMode(const std::string &directory)
+    {
+        std::ifstream file(std::filesystem::path(directory) / "widemelon-client-ui.conf");
+        std::string line;
+        while (std::getline(file, line))
+        {
+            constexpr std::string_view key{"left-stick-mod="};
+            if (line.compare(0, key.size(), key) == 0 && line.size() > key.size())
+                return line.substr(key.size());
+        }
+        return "D-pad";
+    }
+
+    bool saveConfiguredLeftStickMode(const std::string &directory, const std::string &mode)
+    {
+        const std::filesystem::path path = std::filesystem::path(directory) / "widemelon-client-ui.conf";
+        std::ifstream input(path);
+        if (!input)
+        {
+            widemelon::Logger::error("Cannot open UI configuration for left stick mode: " + path.string());
+            return false;
+        }
+
+        std::vector<std::string> lines;
+        std::string line;
+        bool replaced = false;
+        while (std::getline(input, line))
+        {
+            if (line.compare(0, 15, "left-stick-mod=") == 0)
+            {
+                lines.push_back("left-stick-mod=" + mode);
+                replaced = true;
+            }
+            else
+                lines.push_back(line);
+        }
+        if (!replaced) lines.push_back("left-stick-mod=" + mode);
+
+        const std::filesystem::path temporary = path.string() + ".tmp";
+        {
+            std::ofstream output(temporary, std::ios::trunc);
+            if (!output)
+            {
+                widemelon::Logger::error("Cannot save left stick mode: " + temporary.string());
+                return false;
+            }
+            for (const std::string &entry : lines) output << entry << "\n";
+            if (!output)
+            {
+                widemelon::Logger::error("Cannot write left stick mode: " + temporary.string());
+                return false;
+            }
+        }
+        std::error_code error;
+        std::filesystem::rename(temporary, path, error);
+        if (error)
+        {
+            std::filesystem::remove(temporary, error);
+            widemelon::Logger::error("Cannot activate left stick mode: " + error.message());
+            return false;
+        }
+        widemelon::Logger::info("Left stick mode selected: " + mode);
+        return true;
+    }
+
+    void renderSettings(SDL_Renderer *renderer, int width, int height, const std::string &theme, const std::string &leftStickMode, int selected)
     {
         drawGradientBackground(renderer, width, height);
         const int centerX = width / 2;
@@ -896,14 +961,20 @@ namespace
         drawPill(renderer, themeField, selected == 0);
         const std::string value = "< " + theme + " >";
         drawTextColored(renderer, value, centerX - textWidth(value, themeText.formFontSize) / 2, 230, themeText.formFontSize, palette.primary);
-        const SDL_Rect back{fieldX, 340, fieldWidth, fieldHeight};
-        drawPill(renderer, back, selected == 1);
+        const std::string leftStickLabel = "Left stick mod";
+        drawTextColored(renderer, leftStickLabel, centerX - textWidth(leftStickLabel, themeText.formFontSize) / 2, 278, themeText.formFontSize, palette.primary);
+        const SDL_Rect leftStick{fieldX, 316, fieldWidth, fieldHeight};
+        drawPill(renderer, leftStick, selected == 1);
+        const std::string leftStickValue = "< " + leftStickMode + " >";
+        drawTextColored(renderer, leftStickValue, centerX - textWidth(leftStickValue, themeText.formFontSize) / 2, 326, themeText.formFontSize, palette.primary);
+        const SDL_Rect back{fieldX, 412, fieldWidth, fieldHeight};
+        drawPill(renderer, back, selected == 2);
         const std::string backLabel = "BACK";
-        drawTextColored(renderer, backLabel, centerX - textWidth(backLabel, themeText.formFontSize) / 2, 350, themeText.formFontSize, palette.primary);
-        const SDL_Rect quit{fieldX, 412, fieldWidth, fieldHeight};
-        drawPill(renderer, quit, selected == 2);
+        drawTextColored(renderer, backLabel, centerX - textWidth(backLabel, themeText.formFontSize) / 2, 422, themeText.formFontSize, palette.primary);
+        const SDL_Rect quit{fieldX, 484, fieldWidth, fieldHeight};
+        drawPill(renderer, quit, selected == 3);
         const std::string quitLabel = "QUIT";
-        drawTextColored(renderer, quitLabel, centerX - textWidth(quitLabel, themeText.formFontSize) / 2, 422, themeText.formFontSize, palette.primary);
+        drawTextColored(renderer, quitLabel, centerX - textWidth(quitLabel, themeText.formFontSize) / 2, 494, themeText.formFontSize, palette.primary);
         int hintX = width / 2 - 150;
         const int hintY = height - 64;
         hintX = drawControlHint(renderer, uiTextures.hintA, "A", "SELECT", hintX, hintY, themeText.hintFontSize);
@@ -924,12 +995,14 @@ namespace
         const std::string currentTheme = configuredTheme(directory);
         const auto current = std::find(themes.begin(), themes.end(), currentTheme);
         if (current != themes.end()) themeIndex = static_cast<std::size_t>(std::distance(themes.begin(), current));
+        const std::array<std::string, 2> leftStickModes{"D-pad", "SM64"};
+        std::size_t leftStickModeIndex = configuredLeftStickMode(directory) == "SM64" ? 1 : 0;
         int selected = 0;
         UiNavigationRepeater repeater;
         auto nextNavigationAt = std::chrono::steady_clock::time_point{};
         while (true)
         {
-            renderSettings(renderer, width, height, themes[themeIndex], selected);
+            renderSettings(renderer, width, height, themes[themeIndex], leftStickModes[leftStickModeIndex], selected);
             input.pollEvent();
             if (input.exitComboPressed()) return SettingsResult::Exit;
             const auto action = repeater.next(input.takeUiAction(), input.heldUiDirection());
@@ -942,8 +1015,8 @@ namespace
                 continue;
             }
             if (navigation) nextNavigationAt = now + widemelon::UiNavigationCooldown;
-            if (action == widemelon::UiAction::Up) selected = (selected + 2) % 3;
-            else if (action == widemelon::UiAction::Down) selected = (selected + 1) % 3;
+            if (action == widemelon::UiAction::Up) selected = (selected + 3) % 4;
+            else if (action == widemelon::UiAction::Down) selected = (selected + 1) % 4;
             else if (selected == 0 && (action == widemelon::UiAction::Left || action == widemelon::UiAction::Right))
             {
                 const int step = action == widemelon::UiAction::Left ? -1 : 1;
@@ -954,8 +1027,14 @@ namespace
                     reloadUiResources(renderer);
                 }
             }
-            else if (selected == 1 && action == widemelon::UiAction::Confirm) return SettingsResult::Home;
-            else if (selected == 2 && action == widemelon::UiAction::Confirm) return SettingsResult::Exit;
+            else if (selected == 1 && (action == widemelon::UiAction::Left || action == widemelon::UiAction::Right))
+            {
+                leftStickModeIndex = 1 - leftStickModeIndex;
+                if (!saveConfiguredLeftStickMode(directory, leftStickModes[leftStickModeIndex]))
+                    leftStickModeIndex = 1 - leftStickModeIndex;
+            }
+            else if (selected == 2 && action == widemelon::UiAction::Confirm) return SettingsResult::Home;
+            else if (selected == 3 && action == widemelon::UiAction::Confirm) return SettingsResult::Exit;
             SDL_Delay(10);
         }
     }
