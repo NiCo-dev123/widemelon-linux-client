@@ -27,10 +27,12 @@ constexpr std::uint16_t ButtonX = 1U << 10;
 constexpr std::uint16_t ButtonY = 1U << 11;
 constexpr std::uint16_t DirectionMask = ButtonRight | ButtonLeft | ButtonUp | ButtonDown;
 
-void configureStickAxis(int fileDescriptor, unsigned int axis, int& center, int& threshold)
+void configureStickAxis(int fileDescriptor, unsigned int axis, int& minimum, int& maximum, int& center, int& threshold)
 {
     input_absinfo info{};
     if (ioctl(fileDescriptor, EVIOCGABS(axis), &info) != 0) return;
+    minimum = info.minimum;
+    maximum = info.maximum;
     center = info.minimum + (info.maximum - info.minimum) / 2;
     threshold = std::max(info.flat, (info.maximum - info.minimum) / 4);
 }
@@ -49,8 +51,10 @@ bool EvdevInput::open(const std::string& path, std::string& error)
         error = std::strerror(errno);
         return false;
     }
-    configureStickAxis(fileDescriptor, ABS_X, leftStickXCenter, leftStickXThreshold);
-    configureStickAxis(fileDescriptor, ABS_Y, leftStickYCenter, leftStickYThreshold);
+    configureStickAxis(fileDescriptor, ABS_X, leftStickXMinimum, leftStickXMaximum, leftStickXCenter, leftStickXThreshold);
+    configureStickAxis(fileDescriptor, ABS_Y, leftStickYMinimum, leftStickYMaximum, leftStickYCenter, leftStickYThreshold);
+    leftStickX = leftStickXCenter;
+    leftStickY = leftStickYCenter;
     return true;
 }
 
@@ -98,6 +102,26 @@ bool EvdevInput::takeStateChanged()
     return changed;
 }
 
+bool EvdevInput::takeLeftStickChanged()
+{
+    const bool changed = leftStickChanged;
+    leftStickChanged = false;
+    return changed;
+}
+
+LeftStickState EvdevInput::leftStickState() const
+{
+    return {leftStickX, leftStickY, leftStickXMinimum, leftStickXMaximum, leftStickYMinimum, leftStickYMaximum, leftStickXCenter, leftStickYCenter};
+}
+
+void EvdevInput::setLeftStickDpadEnabled(bool enabled)
+{
+    if (leftStickDpadEnabled == enabled) return;
+    leftStickDpadEnabled = enabled;
+    leftStickMask = 0;
+    mergeDirectionalSources();
+}
+
 UiAction EvdevInput::takeUiAction()
 {
     const UiAction action = uiAction;
@@ -139,6 +163,7 @@ std::string EvdevInput::pollEvent()
             case BTN_START: button = ButtonStart; startPressed = pressed; break;
             case BTN_TL: button = ButtonL; leftPressed = pressed; break;
             case BTN_TR: button = ButtonR; rightPressed = pressed; break;
+            case BTN_TR2: rightTriggerPressed = pressed; stateChanged = true; break;
             default: break;
             }
             if (button != 0)
@@ -163,12 +188,27 @@ std::string EvdevInput::pollEvent()
             if (updateDirectionMask(dpadMask, horizontal, event.value, 0, 0))
                 setUiDirection(horizontal, event.value, 0, 0);
         }
+        else if (event.type == EV_ABS && event.code == ABS_RZ)
+        {
+            const bool pressed = event.value > 0;
+            if (rightTriggerPressed != pressed)
+            {
+                rightTriggerPressed = pressed;
+                stateChanged = true;
+            }
+        }
         else if (event.type == EV_ABS && (event.code == ABS_X || event.code == ABS_Y))
         {
             const bool horizontal = event.code == ABS_X;
+            int &position = horizontal ? leftStickX : leftStickY;
+            if (position != event.value)
+            {
+                position = event.value;
+                leftStickChanged = true;
+            }
             const int center = horizontal ? leftStickXCenter : leftStickYCenter;
             const int threshold = horizontal ? leftStickXThreshold : leftStickYThreshold;
-            if (updateDirectionMask(leftStickMask, horizontal, event.value, center, threshold))
+            if (leftStickDpadEnabled && updateDirectionMask(leftStickMask, horizontal, event.value, center, threshold))
                 setUiDirection(horizontal, event.value, center, threshold);
         }
     }

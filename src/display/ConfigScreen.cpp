@@ -2,6 +2,7 @@
 
 #include "common/Logger.h"
 #include "input/EvdevInput.h"
+#include "input/Sm64StickMod.h"
 #include "network/WebSocketClient.h"
 
 #include <SDL.h>
@@ -74,6 +75,7 @@ namespace
         SDL_Texture *hintStart = nullptr;
         SDL_Texture *hintL = nullptr;
         SDL_Texture *hintR = nullptr;
+        SDL_Texture *cursor = nullptr;
     };
 
     UiTextures uiTextures;
@@ -218,6 +220,7 @@ namespace
         SDL_DestroyTexture(uiTextures.hintStart);
         SDL_DestroyTexture(uiTextures.hintL);
         SDL_DestroyTexture(uiTextures.hintR);
+        SDL_DestroyTexture(uiTextures.cursor);
         uiTextures = {};
     }
 
@@ -337,6 +340,7 @@ namespace
         loadUiTexture(renderer, uiTextures.hintStart, assets + "icons/hint-START.png");
         loadUiTexture(renderer, uiTextures.hintL, assets + "icons/hint-L.png");
         loadUiTexture(renderer, uiTextures.hintR, assets + "icons/hint-R.png");
+        loadUiTexture(renderer, uiTextures.cursor, directory + "/assets/icons/pointer.png");
     }
 
     void reloadUiResources(SDL_Renderer *renderer)
@@ -588,7 +592,7 @@ namespace
     }
 
     void render(SDL_Renderer *renderer, int width, int height, const widemelon::Config &config, const std::string &status,
-                SDL_Texture *videoTexture)
+                SDL_Texture *videoTexture, const widemelon::Sm64TouchState *cursor = nullptr)
     {
         (void)config;
         drawBackground(renderer, width, height, true);
@@ -600,6 +604,19 @@ namespace
             SDL_RenderCopy(renderer, videoTexture, nullptr, &video);
         else
             SDL_RenderFillRect(renderer, &video);
+        if (cursor)
+        {
+            const SDL_Rect pointer{video.x + static_cast<int>(cursor->x) * video.w / 256,
+                                   video.y + static_cast<int>(cursor->y) * video.h / 192, 48, 48};
+            if (uiTextures.cursor)
+                SDL_RenderCopy(renderer, uiTextures.cursor, nullptr, &pointer);
+            else
+            {
+                SDL_SetRenderDrawColor(renderer, palette.hint.r, palette.hint.g, palette.hint.b, 255);
+                const SDL_Rect fallback{pointer.x, pointer.y, 8, 8};
+                SDL_RenderFillRect(renderer, &fallback);
+            }
+        }
         const std::string connection = "Connection status: " + status;
         drawTextColored(renderer, connection, video.x, video.y + video.h + 6, themeText.gameplayStatusFontSize, palette.hint);
         int exitX = video.x;
@@ -1206,6 +1223,8 @@ namespace widemelon
         };
 
         std::unique_ptr<widemelon::WebSocketClient> client = std::make_unique<widemelon::WebSocketClient>();
+        widemelon::Sm64StickMod sm64Stick;
+        bool sm64Enabled = false;
         std::future<std::string> connection;
         if (!inputTest)
         {
@@ -1246,13 +1265,28 @@ namespace widemelon
             }
         }
 
+        if (!inputTest)
+        {
+            std::array<char, 4096> executable{};
+            const ssize_t length = readlink("/proc/self/exe", executable.data(), executable.size() - 1);
+            if (length > 0)
+            {
+                executable[static_cast<std::size_t>(length)] = 0;
+                const std::string directory = std::filesystem::path(executable.data()).parent_path().string();
+                sm64Enabled = configuredLeftStickMode(directory) == "SM64";
+                sm64Stick.setEnabled(sm64Enabled);
+                exitInput.setLeftStickDpadEnabled(!sm64Enabled);
+                if (sm64Enabled) Logger::info("SM64 stick mod enabled");
+            }
+        }
+
         std::string status = inputTest ? "INPUT TEST ACTIVE" : "CONNECTION OK";
         if (inputTest)
         {
             connection = std::async(std::launch::async, []
                                     { return std::string{}; });
         }
-        render(renderer, width, height, config, status, videoTexture);
+        render(renderer, width, height, config, status, videoTexture, sm64Enabled ? &sm64Stick.touchState() : nullptr);
 
         bool running = true;
         ConnectionState displayedConnectionState = client->connectionState();
@@ -1280,7 +1314,7 @@ namespace widemelon
                     if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
                     {
                         SDL_GetWindowSize(window, &width, &height);
-                        render(renderer, width, height, config, status, videoTexture);
+                        render(renderer, width, height, config, status, videoTexture, sm64Enabled ? &sm64Stick.touchState() : nullptr);
                     }
                     break;
                 default:
@@ -1288,11 +1322,14 @@ namespace widemelon
                 }
             }
             const std::string inputEvent = exitInput.pollEvent();
-            inputDirty = exitInput.takeStateChanged() || inputDirty;
+            const bool sm64TouchChanged = sm64Stick.update(exitInput.leftStickState(), exitInput.r2Pressed());
+            inputDirty = exitInput.takeStateChanged() || sm64TouchChanged || inputDirty;
+            if (sm64TouchChanged && !inputTest)
+                render(renderer, width, height, config, status, videoTexture, &sm64Stick.touchState());
             if (inputTest && !inputEvent.empty())
             {
                 status = inputEvent;
-                render(renderer, width, height, config, status, videoTexture);
+                render(renderer, width, height, config, status, videoTexture, sm64Enabled ? &sm64Stick.touchState() : nullptr);
             }
             const ConnectionState currentConnectionState = client->connectionState();
             if (!inputTest && currentConnectionState != displayedConnectionState)
@@ -1303,7 +1340,7 @@ namespace widemelon
                     status = "RECONNECTING";
                 else if (currentConnectionState == ConnectionState::Failed)
                     status = "CONNECTION ERROR";
-                render(renderer, width, height, config, status, videoTexture);
+                render(renderer, width, height, config, status, videoTexture, sm64Enabled ? &sm64Stick.touchState() : nullptr);
                 displayedConnectionState = currentConnectionState;
             }
             if (!inputTest && connection.valid() && connection.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
@@ -1312,7 +1349,7 @@ namespace widemelon
                 if (result != "Cancelled")
                 {
                     status = "CONNECTION ERROR";
-                    render(renderer, width, height, config, status, videoTexture);
+                    render(renderer, width, height, config, status, videoTexture, sm64Enabled ? &sm64Stick.touchState() : nullptr);
                 }
             }
             if (!inputTest && client->connectionState() == ConnectionState::Connected)
@@ -1329,16 +1366,16 @@ namespace widemelon
                     inputDirty = true;
                     sendReleasedSnapshot = true;
                     nextInputSnapshot = now;
-                    render(renderer, width, height, config, status, videoTexture);
+                    render(renderer, width, height, config, status, videoTexture, sm64Enabled ? &sm64Stick.touchState() : nullptr);
                 }
                 if (sendReleasedSnapshot)
                 {
-                    client->sendInputSnapshot(++inputSequence, 0);
+                    client->sendInputSnapshot(++inputSequence, 0, false, sm64Stick.touchState().x, sm64Stick.touchState().y);
                     sendReleasedSnapshot = false;
                 }
                 else if (inputDirty || now >= nextInputSnapshot)
                 {
-                    client->sendInputSnapshot(++inputSequence, exitInput.buttonMask());
+                    client->sendInputSnapshot(++inputSequence, exitInput.buttonMask(), sm64Enabled && sm64Stick.touchState().active, sm64Stick.touchState().x, sm64Stick.touchState().y);
                     inputDirty = false;
                     nextInputSnapshot = now + std::chrono::milliseconds(200);
                 }
@@ -1347,7 +1384,7 @@ namespace widemelon
                 if (client->latestDecodedVideoFrame(decodedFrame) && decodedFrame.sequence != displayedVideoSequence && updateVideoTexture(renderer, videoTexture, decodedFrame))
                 {
                     displayedVideoSequence = decodedFrame.sequence;
-                    render(renderer, width, height, config, status, videoTexture);
+                    render(renderer, width, height, config, status, videoTexture, sm64Enabled ? &sm64Stick.touchState() : nullptr);
                 }
             }
             if (exitInput.exitComboPressed())
@@ -1360,7 +1397,7 @@ namespace widemelon
         }
 
         if (!inputTest && client->connectionState() == ConnectionState::Connected)
-            client->sendInputSnapshot(++inputSequence, 0);
+            client->sendInputSnapshot(++inputSequence, 0, false, sm64Stick.touchState().x, sm64Stick.touchState().y);
         client->requestStop();
         if (connection.valid())
         {
