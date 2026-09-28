@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 
 #include "input/EvdevInput.h"
@@ -8,6 +9,7 @@ namespace widemelon
 {
 
 inline constexpr std::uint16_t Sm64TouchActivationRadius{2};
+inline constexpr std::chrono::milliseconds Sm64TouchCentreHoldDuration{33};
 inline constexpr std::uint16_t Sm64TouchDeadzoneRadius{10};
 inline constexpr std::uint16_t Sm64TouchAnalogRadius{25};
 inline constexpr std::uint16_t Sm64TouchMaximumRadius{45};
@@ -34,6 +36,7 @@ private:
 
     bool isEnabled = false;
     bool touchStarted = false;
+    std::chrono::steady_clock::time_point movementAt{};
     Sm64TouchState touch;
 };
 
