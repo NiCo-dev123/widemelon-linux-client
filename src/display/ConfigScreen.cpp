@@ -47,6 +47,19 @@ namespace
 
     Palette palette;
 
+    struct ThemeTextSettings
+    {
+        int titleFontSize{widemelon::UiTitleFontSize};
+        int footerFontSize{widemelon::UiGameFooterFontSize};
+        int gameplayStatusFontSize{widemelon::UiGameplayStatusFontSize};
+        int hintFontSize{widemelon::UiHintFontSize};
+        int formFontSize{widemelon::UiFormFontSize};
+        int keyboardValueFontSize{widemelon::UiKeyboardValueFontSize};
+        int keyboardActionFontSize{widemelon::UiKeyboardActionFontSize};
+    };
+
+    ThemeTextSettings themeText;
+
     struct UiTextures
     {
         SDL_Texture *background = nullptr;
@@ -125,7 +138,21 @@ namespace
         return true;
     }
 
-    void applyThemeConfig(const std::filesystem::path &themeDirectory, Palette &themePalette, std::string &font)
+    bool themeInteger(const std::string &document, std::string_view key, int &value)
+    {
+        const std::string name = "\"" + std::string(key) + "\"";
+        const std::size_t keyPosition = document.find(name);
+        if (keyPosition == std::string::npos) return false;
+        const std::size_t colon = document.find(':', keyPosition + name.size());
+        if (colon == std::string::npos) return false;
+        const std::size_t start = document.find_first_not_of(" \t\r\n", colon + 1);
+        if (start == std::string::npos) return false;
+        const std::size_t end = document.find_first_of(",} \t\r\n", start);
+        const std::string_view number(document.data() + start, (end == std::string::npos ? document.size() : end) - start);
+        return parseInteger(std::string(number), value);
+    }
+
+    void applyThemeConfig(const std::filesystem::path &themeDirectory, Palette &themePalette, std::string &font, ThemeTextSettings &textSettings)
     {
         std::ifstream file(themeDirectory / "theme-config.json");
         if (!file) return;
@@ -142,6 +169,18 @@ namespace
         applyColor("hint-color", themePalette.hint);
         applyColor("button-fill", themePalette.buttonFill);
         applyColor("button-outline", themePalette.buttonOutline);
+        const auto applyFontSize = [&document](std::string_view key, int &target)
+        {
+            int value = 0;
+            if (themeInteger(document, key, value)) target = value;
+        };
+        applyFontSize("title-font-size", textSettings.titleFontSize);
+        applyFontSize("footer-font-size", textSettings.footerFontSize);
+        applyFontSize("gameplay-status-font-size", textSettings.gameplayStatusFontSize);
+        applyFontSize("hint-font-size", textSettings.hintFontSize);
+        applyFontSize("form-font-size", textSettings.formFontSize);
+        applyFontSize("keyboard-value-font-size", textSettings.keyboardValueFontSize);
+        applyFontSize("keyboard-action-font-size", textSettings.keyboardActionFontSize);
         std::string configuredFont;
         if (themeValue(document, "font", configuredFont) && !configuredFont.empty()) font = configuredFont;
     }
@@ -255,10 +294,10 @@ namespace
         }
 
         std::string defaultThemeFont;
-        applyThemeConfig(defaultThemeDirectory, palette, defaultThemeFont);
+        applyThemeConfig(defaultThemeDirectory, palette, defaultThemeFont, themeText);
         std::string activeThemeFont = defaultThemeFont;
         if (themeDirectory != defaultThemeDirectory)
-            applyThemeConfig(themeDirectory, palette, activeThemeFont);
+            applyThemeConfig(themeDirectory, palette, activeThemeFont, themeText);
 #ifdef WIDEMELON_HAVE_SDL_TTF
         const auto resolveThemeFont = [](const std::filesystem::path &theme, const std::string &name)
         {
@@ -544,19 +583,19 @@ namespace
         drawBackground(renderer, width, height, true);
         SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
         const std::string title = "WideMelon Client";
-        drawTextColored(renderer, title, (width - textWidth(title, widemelon::UiGameTitleFontSize)) / 2, 8, widemelon::UiGameTitleFontSize, palette.hint);
+        drawTextColored(renderer, title, (width - textWidth(title, themeText.titleFontSize)) / 2, 8, themeText.titleFontSize, palette.hint);
         const SDL_Rect video{(width - 768) / 2, 45, 768, 576};
         if (videoTexture)
             SDL_RenderCopy(renderer, videoTexture, nullptr, &video);
         else
             SDL_RenderFillRect(renderer, &video);
         const std::string connection = "Connection status: " + status;
-        drawTextColored(renderer, connection, video.x, video.y + video.h + 6, widemelon::UiGameConnectionFontSize, palette.hint);
+        drawTextColored(renderer, connection, video.x, video.y + video.h + 6, themeText.gameplayStatusFontSize, palette.hint);
         int exitX = video.x;
         const int exitY = video.y + video.h + 50;
-        exitX = drawControlHint(renderer, uiTextures.hintStart, "START", "+", exitX, exitY, widemelon::UiKeyboardHintFontSize);
-        exitX = drawControlHint(renderer, uiTextures.hintR, "R", "+", exitX, exitY, widemelon::UiKeyboardHintFontSize);
-        drawControlHint(renderer, uiTextures.hintL, "L", ": QUIT", exitX, exitY, widemelon::UiKeyboardHintFontSize);
+        exitX = drawControlHint(renderer, uiTextures.hintStart, "START", "+", exitX, exitY, themeText.hintFontSize);
+        exitX = drawControlHint(renderer, uiTextures.hintR, "R", "+", exitX, exitY, themeText.hintFontSize);
+        drawControlHint(renderer, uiTextures.hintL, "L", ": QUIT", exitX, exitY, themeText.hintFontSize);
         SDL_RenderPresent(renderer);
     }
 
@@ -565,8 +604,8 @@ namespace
     {
         drawGradientBackground(renderer, width, height);
         SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
-        const int formFontSize = widemelon::UiFormFontSize;
-        const int titleFontSize = widemelon::UiFormTitleFontSize;
+        const int formFontSize = themeText.formFontSize;
+        const int titleFontSize = themeText.titleFontSize;
         const std::string title = "WideMelon Client";
         drawTextColored(renderer, title, (width - textWidth(title, titleFontSize)) / 2, 48, titleFontSize, palette.primary);
         const int centerX = width / 2;
@@ -597,7 +636,7 @@ namespace
         drawPill(renderer, quit, selected == 4);
         const std::string quitLabel = "QUIT";
         drawTextColored(renderer, quitLabel, centerX - textWidth(quitLabel, formFontSize) / 2, 555, formFontSize, palette.primary);
-        const int formHintFontSize = widemelon::UiKeyboardHintFontSize;
+        const int formHintFontSize = themeText.hintFontSize;
         const int formHintWidth = controlHintWidth(uiTextures.hintA, "A", "EDIT", formHintFontSize)
             + controlHintWidth(uiTextures.hintStart, "START", "CONNECT", formHintFontSize);
         int hintX = (width - formHintWidth) / 2;
@@ -605,7 +644,7 @@ namespace
         hintX = drawControlHint(renderer, uiTextures.hintA, "A", "EDIT", hintX, hintY, formHintFontSize);
         drawControlHint(renderer, uiTextures.hintStart, "START", "CONNECT", hintX, hintY, formHintFontSize);
         const std::string version = "v" WIDEMELON_VERSION;
-        drawText(renderer, version, width - textWidth(version, widemelon::UiGameFooterFontSize) - 20, height - 34, widemelon::UiGameFooterFontSize);
+        drawText(renderer, version, width - textWidth(version, themeText.footerFontSize) - 20, height - 34, themeText.footerFontSize);
         SDL_RenderPresent(renderer);
     }
 
@@ -622,24 +661,24 @@ namespace
 
         drawGradientBackground(renderer, width, height);
         SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
-        drawText(renderer, title, (width - textWidth(title, widemelon::UiKeyboardTitleFontSize)) / 2, 65, widemelon::UiKeyboardTitleFontSize);
-        drawText(renderer, value.empty() ? "_" : value, (width - textWidth(value.empty() ? "_" : value, widemelon::UiKeyboardValueFontSize)) / 2, 125, widemelon::UiKeyboardValueFontSize);
+        drawText(renderer, title, (width - textWidth(title, themeText.titleFontSize)) / 2, 65, themeText.titleFontSize);
+        drawText(renderer, value.empty() ? "_" : value, (width - textWidth(value.empty() ? "_" : value, themeText.keyboardValueFontSize)) / 2, 125, themeText.keyboardValueFontSize);
         for (std::size_t index = 0; index < keys.size(); ++index)
         {
             const int row = static_cast<int>(index) / columns;
             const int column = static_cast<int>(index) % columns;
             const SDL_Rect key{startX + column * keyWidth, startY + row * keyHeight, keyWidth - 10, keyHeight - 8};
             drawPill(renderer, key, static_cast<int>(index) == selectedKey, true);
-            const int fontSize = std::string_view(keys[index]).size() > 1 ? widemelon::UiKeyboardActionFontSize : widemelon::UiKeyboardValueFontSize;
+            const int fontSize = std::string_view(keys[index]).size() > 1 ? themeText.keyboardActionFontSize : themeText.keyboardValueFontSize;
             drawText(renderer, keys[index], key.x + (key.w - textWidth(keys[index], fontSize)) / 2,
                      key.y + (key.h - fontSize) / 2, fontSize);
         }
         int hintX = width / 2 - 190;
         const int hintY = height - 64;
-        hintX = drawControlHint(renderer, uiTextures.hintA, "A", "SELECT", hintX, hintY, widemelon::UiKeyboardHintFontSize);
-        hintX = drawControlHint(renderer, uiTextures.hintB, "B", "DELETE", hintX, hintY, widemelon::UiKeyboardHintFontSize);
-        hintX = drawControlHint(renderer, uiTextures.hintX, "X", "BACK", hintX, hintY, widemelon::UiKeyboardHintFontSize);
-        drawControlHint(renderer, uiTextures.hintStart, "START", "OK", hintX, hintY, widemelon::UiKeyboardHintFontSize);
+        hintX = drawControlHint(renderer, uiTextures.hintA, "A", "SELECT", hintX, hintY, themeText.hintFontSize);
+        hintX = drawControlHint(renderer, uiTextures.hintB, "B", "DELETE", hintX, hintY, themeText.hintFontSize);
+        hintX = drawControlHint(renderer, uiTextures.hintX, "X", "BACK", hintX, hintY, themeText.hintFontSize);
+        drawControlHint(renderer, uiTextures.hintStart, "START", "OK", hintX, hintY, themeText.hintFontSize);
         SDL_RenderPresent(renderer);
     }
 
