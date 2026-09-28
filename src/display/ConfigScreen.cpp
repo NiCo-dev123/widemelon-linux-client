@@ -154,7 +154,7 @@ namespace
         const std::string directory = std::string(executable.data()).substr(0, std::string(executable.data()).find_last_of('/'));
         std::ifstream file(directory + "/widemelon-client-ui.conf");
 #ifdef WIDEMELON_HAVE_SDL_TTF
-        std::string textFont = "assets/fonts/Roboto-Regular.ttf";
+        std::string textFont = "assets/themes/WaterMelon/comfortaa-latin-400-normal.ttf";
 #endif
         std::string line;
         while (std::getline(file, line))
@@ -191,7 +191,7 @@ namespace
             ? textFont
             : directory + "/" + textFont;
 #endif
-        const std::string assets = directory + "/assets/";
+        const std::string assets = directory + "/assets/themes/WaterMelon/";
         loadUiTexture(renderer, uiTextures.background, assets + "backgrounds/background.png");
         loadUiTexture(renderer, uiTextures.gameplayBackground, assets + "backgrounds/background-gameplay.png");
         loadUiTexture(renderer, uiTextures.fieldSelected, assets + "icons/field-input-selected.png");
