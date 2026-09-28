@@ -27,9 +27,9 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#505050"
      inkscape:document-units="mm"
-     inkscape:zoom="0.80800365"
-     inkscape:cx="637.37336"
-     inkscape:cy="291.45908"
+     inkscape:zoom="0.57134486"
+     inkscape:cx="551.33077"
+     inkscape:cy="300.16897"
      inkscape:window-width="1920"
      inkscape:window-height="1131"
      inkscape:window-x="0"
@@ -40,25 +40,25 @@
      id="defs1">
     <linearGradient
        inkscape:collect="always"
-       xlink:href="#linearGradient17"
-       id="linearGradient11"
+       xlink:href="#linearGradient17-5"
+       id="linearGradient11-7"
        x1="74.971924"
        y1="186.12306"
        x2="74.971924"
        y2="6.7084846"
        gradientUnits="userSpaceOnUse"
-       gradientTransform="translate(0.088233,-0.01102523)" />
+       gradientTransform="translate(0.08823241,0.08823504)" />
     <linearGradient
-       id="linearGradient17"
+       id="linearGradient17-5"
        inkscape:collect="always">
       <stop
-         style="stop-color:#cc3333;stop-opacity:1;"
+         style="stop-color:#b8142f;stop-opacity:1;"
          offset="0"
-         id="stop16" />
+         id="stop16-3" />
       <stop
-         style="stop-color:#ff5050;stop-opacity:1;"
+         style="stop-color:#cc6666;stop-opacity:1;"
          offset="1"
-         id="stop17" />
+         id="stop17-5" />
     </linearGradient>
   </defs>
   <g
@@ -66,11 +66,11 @@
      inkscape:groupmode="layer"
      id="layer1">
     <rect
-       style="fill:url(#linearGradient11);fill-opacity:1;stroke:none;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1;paint-order:fill markers stroke"
-       id="rect1"
+       style="fill:url(#linearGradient11-7);fill-opacity:1;stroke:none;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1;paint-order:fill markers stroke"
+       id="rect1-2"
        width="338.84314"
        height="190.59926"
-       x="-3.5527137e-15"
-       y="-0.099258423" />
+       x="0"
+       y="-4.4408921e-16" />
   </g>
 </svg>

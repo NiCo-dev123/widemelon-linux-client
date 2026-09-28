@@ -1,0 +1,18 @@
+{
+"name":"Dragon Fruit Light",
+"author":"Nicolas C",
+"Description":"Dragon fruit palette",
+"title-font-size":34,
+"footer-font-size":16,
+"gameplay-status-font-size":25,
+"hint-font-size":35,
+"form-font-size":24,
+"keyboard-value-font-size":35,
+"keyboard-action-font-size":28,
+"font":"comfortaa-latin-400-normal.ttf",
+"background-dark":"#a3c2c2",
+"background-light":"#e2e9e9",
+"text-color":"#000000",
+"hint-color":"#e51a6a",
+"button-fill":"#ffffff"
+}
