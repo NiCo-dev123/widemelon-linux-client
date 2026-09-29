@@ -12,11 +12,11 @@ namespace widemelon
 void Sm64StickMod::setEnabled(bool enabled)
 {
     isEnabled = enabled;
-    touchStarted = false;
-    releasePending = false;
-    movementAt = {};
-    stabilizationEndsAt = {};
-    releaseAt = {};
+    isCursorPressed = false;
+    isCursorTracking = false;
+    releaseFrames = 0;
+    cursorSpeed = 0.0F;
+    lastCursorUpdateAt = {};
     touch = {};
 }
 
@@ -29,19 +29,19 @@ int Sm64StickMod::mapRelativeAxis(int value, int center, int minimum, int maximu
 }
 
 void Sm64StickMod::moveTowards(std::uint16_t currentX, std::uint16_t currentY, std::uint16_t targetX, std::uint16_t targetY,
-                               std::uint16_t maximumStep, std::uint16_t& nextX, std::uint16_t& nextY)
+                               float maximumDistance, std::uint16_t& nextX, std::uint16_t& nextY)
 {
     const int deltaX = static_cast<int>(targetX) - static_cast<int>(currentX);
     const int deltaY = static_cast<int>(targetY) - static_cast<int>(currentY);
     const float distance = std::sqrt(static_cast<float>(deltaX * deltaX + deltaY * deltaY));
-    if (distance <= static_cast<float>(maximumStep))
+    if (distance <= maximumDistance)
     {
         nextX = targetX;
         nextY = targetY;
         return;
     }
 
-    const float scale = static_cast<float>(maximumStep) / distance;
+    const float scale = maximumDistance / distance;
     nextX = static_cast<std::uint16_t>(std::lround(static_cast<float>(currentX) + static_cast<float>(deltaX) * scale));
     nextY = static_cast<std::uint16_t>(std::lround(static_cast<float>(currentY) + static_cast<float>(deltaY) * scale));
 }
@@ -64,69 +64,56 @@ bool Sm64StickMod::update(const LeftStickState& stick)
     Sm64TouchState next = touch;
     const std::uint16_t targetX = static_cast<std::uint16_t>(static_cast<int>(Sm64TouchCenterX) + offsetX);
     const std::uint16_t targetY = static_cast<std::uint16_t>(static_cast<int>(Sm64TouchCenterY) + offsetY);
-    const auto now = std::chrono::steady_clock::now();
 
+    const auto now = std::chrono::steady_clock::now();
     if (distance > static_cast<float>(Sm64TouchPressRadius))
     {
-        releasePending = false;
-        if (!touchStarted)
+        releaseFrames = 0;
+        if (!isCursorPressed)
         {
-            // The first contact is always at the centre of the SM64 touch zone.
-            // This is one press, not a tap followed by a second press.
-            touchStarted = true;
-            movementAt = now + Sm64TouchCentreHoldDuration;
-            stabilizationEndsAt = now + Sm64TouchStabilizationDuration;
+            // Start one continuous contact from the centre, regardless of how
+            // quickly the stick first reached its current position.
+            isCursorPressed = true;
+            isCursorTracking = false;
+            cursorSpeed = 0.0F;
+            lastCursorUpdateAt = now;
             next.active = true;
             next.x = Sm64TouchCenterX;
             next.y = Sm64TouchCenterY;
-        }
-        else if (now < movementAt)
-        {
-            next.active = true;
-            next.x = Sm64TouchCenterX;
-            next.y = Sm64TouchCenterY;
-        }
-        else if (now < stabilizationEndsAt)
-        {
-            // Only the first motion is rate-limited, preventing an initial
-            // stylus teleport while preserving unfiltered movement afterwards.
-            next.active = true;
-            moveTowards(touch.x, touch.y, targetX, targetY, Sm64TouchInitialMaximumStep, next.x, next.y);
         }
         else
         {
+            // Keep every coordinate transition continuous. Unlike the previous
+            // implementation, entering tracking never teleports the stylus.
+            const float elapsedSeconds = std::chrono::duration<float>(now - lastCursorUpdateAt).count();
+            lastCursorUpdateAt = now;
+            cursorSpeed = std::min(cursorSpeed + Sm64TouchCursorAcceleration * elapsedSeconds, Sm64TouchMaximumCursorSpeed);
+            isCursorTracking = cursorSpeed >= Sm64TouchMaximumCursorSpeed;
             next.active = true;
-            next.x = targetX;
-            next.y = targetY;
+            moveTowards(touch.x, touch.y, targetX, targetY, cursorSpeed * elapsedSeconds, next.x, next.y);
         }
     }
-    else if (touchStarted && distance <= static_cast<float>(Sm64TouchReleaseRadius))
+    else if (isCursorPressed)
     {
-        if (!releasePending)
+        // Keep the exact same contact through a four-frame centre hysteresis.
+        ++releaseFrames;
+        if (releaseFrames >= Sm64TouchReleaseFrames)
         {
-            releasePending = true;
-            releaseAt = now + Sm64TouchReleaseHoldDuration;
-        }
-        if (now >= releaseAt)
-        {
+            isCursorPressed = false;
+            isCursorTracking = false;
+            releaseFrames = 0;
+            cursorSpeed = 0.0F;
+            lastCursorUpdateAt = {};
             next.active = false;
             next.x = Sm64TouchCenterX;
             next.y = Sm64TouchCenterY;
-            touchStarted = false;
-            releasePending = false;
-            movementAt = {};
-            stabilizationEndsAt = {};
-            releaseAt = {};
         }
-    }
-    else if (touchStarted)
-    {
-        // Hysteresis band: retain the held touch until the stick is decisively centred.
-        releasePending = false;
-        next.active = true;
+        else
+            next.active = true;
     }
     else
     {
+        // An inactive cursor is always shown at the centre of the touch zone.
         next.active = false;
         next.x = Sm64TouchCenterX;
         next.y = Sm64TouchCenterY;

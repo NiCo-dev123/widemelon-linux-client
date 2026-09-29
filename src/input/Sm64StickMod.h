@@ -9,12 +9,10 @@ namespace widemelon
 {
 
 inline constexpr std::uint16_t Sm64TouchPressRadius{2};
-inline constexpr std::uint16_t Sm64TouchReleaseRadius{1};
-inline constexpr std::chrono::milliseconds Sm64TouchCentreHoldDuration{33};
-inline constexpr std::chrono::milliseconds Sm64TouchStabilizationDuration{100};
-inline constexpr std::chrono::milliseconds Sm64TouchReleaseHoldDuration{33};
+inline constexpr std::uint8_t Sm64TouchReleaseFrames{4};
 inline constexpr std::uint16_t Sm64TouchMaximumRadius{35};
-inline constexpr std::uint16_t Sm64TouchInitialMaximumStep{5};
+inline constexpr float Sm64TouchCursorAcceleration{500.0F};
+inline constexpr float Sm64TouchMaximumCursorSpeed{120.0F};
 inline constexpr std::uint16_t Sm64TouchCenterX{127};
 inline constexpr std::uint16_t Sm64TouchCenterY{95};
 
@@ -32,17 +30,20 @@ public:
     bool enabled() const { return isEnabled; }
     bool update(const LeftStickState& stick);
     const Sm64TouchState& touchState() const { return touch; }
+    bool cursorPressed() const { return isCursorPressed; }
+    bool cursorTracking() const { return isCursorTracking; }
+    float currentCursorSpeed() const { return cursorSpeed; }
 
 private:
     static int mapRelativeAxis(int value, int center, int minimum, int maximum, std::uint16_t radius);
     static void moveTowards(std::uint16_t currentX, std::uint16_t currentY, std::uint16_t targetX, std::uint16_t targetY,
-                            std::uint16_t maximumStep, std::uint16_t& nextX, std::uint16_t& nextY);
+                            float maximumDistance, std::uint16_t& nextX, std::uint16_t& nextY);
     bool isEnabled = false;
-    bool touchStarted = false;
-    bool releasePending = false;
-    std::chrono::steady_clock::time_point movementAt{};
-    std::chrono::steady_clock::time_point stabilizationEndsAt{};
-    std::chrono::steady_clock::time_point releaseAt{};
+    bool isCursorPressed = false;
+    bool isCursorTracking = false;
+    std::uint8_t releaseFrames = 0;
+    float cursorSpeed = 0.0F;
+    std::chrono::steady_clock::time_point lastCursorUpdateAt{};
     Sm64TouchState touch;
 };
 

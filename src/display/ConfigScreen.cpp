@@ -3,6 +3,7 @@
 #include "common/Logger.h"
 #include "input/EvdevInput.h"
 #include "input/Sm64DpadMod.h"
+#include "input/Sm64ManualStickMod.h"
 #include "input/Sm64StickMod.h"
 #include "network/WebSocketClient.h"
 
@@ -1016,7 +1017,7 @@ namespace
         const std::string currentTheme = configuredTheme(directory);
         const auto current = std::find(themes.begin(), themes.end(), currentTheme);
         if (current != themes.end()) themeIndex = static_cast<std::size_t>(std::distance(themes.begin(), current));
-        const std::array<std::string, 4> leftStickModes{"D-pad", "SM64", "SM64 D-pad", "Disabled"};
+        const std::array<std::string, 5> leftStickModes{"D-pad", "SM64", "SM64 Manual", "SM64 D-pad", "Disabled"};
         std::size_t leftStickModeIndex = 0;
         const std::string currentLeftStickMode = configuredLeftStickMode(directory);
         const auto currentLeftStick = std::find(leftStickModes.begin(), leftStickModes.end(), currentLeftStickMode);
@@ -1233,9 +1234,17 @@ namespace widemelon
 
         std::unique_ptr<widemelon::WebSocketClient> client = std::make_unique<widemelon::WebSocketClient>();
         widemelon::Sm64StickMod sm64Stick;
+        widemelon::Sm64ManualStickMod sm64ManualStick;
         widemelon::Sm64DpadMod sm64Dpad;
         bool sm64Enabled = false;
+        bool sm64ManualEnabled = false;
         bool sm64DpadEnabled = false;
+        auto sm64ModeEnabled = [&] { return sm64Enabled || sm64ManualEnabled; };
+        auto sm64TouchState = [&]() -> const Sm64TouchState&
+        { return sm64ManualEnabled ? sm64ManualStick.touchState() : sm64Stick.touchState(); };
+        auto sm64CursorPressed = [&] { return sm64ManualEnabled ? sm64ManualStick.cursorPressed() : sm64Stick.cursorPressed(); };
+        auto sm64CursorTracking = [&] { return sm64ManualEnabled ? sm64ManualStick.cursorTracking() : sm64Stick.cursorTracking(); };
+        auto sm64CursorSpeed = [&] { return sm64ManualEnabled ? sm64ManualStick.currentCursorSpeed() : sm64Stick.currentCursorSpeed(); };
         std::future<std::string> connection;
         if (!inputTest)
         {
@@ -1286,13 +1295,16 @@ namespace widemelon
                 const std::string directory = std::filesystem::path(executable.data()).parent_path().string();
                 const std::string leftStickMode = configuredLeftStickMode(directory);
                 sm64Enabled = leftStickMode == "SM64";
+                sm64ManualEnabled = leftStickMode == "SM64 Manual";
                 sm64DpadEnabled = leftStickMode == "SM64 D-pad";
                 sm64Stick.setEnabled(sm64Enabled);
+                sm64ManualStick.setEnabled(sm64ManualEnabled);
                 sm64Dpad.setEnabled(sm64DpadEnabled);
-                exitInput.setLeftStickDpadEnabled(leftStickMode != "SM64" && leftStickMode != "Disabled");
+                exitInput.setLeftStickDpadEnabled(leftStickMode != "SM64" && leftStickMode != "SM64 Manual" && leftStickMode != "Disabled");
                 if (sm64DpadEnabled)
                     exitInput.setLeftStickDpadThresholdFraction(widemelon::Sm64DpadDirectionalThreshold);
                 if (sm64Enabled) Logger::info("SM64 stick mod enabled");
+                if (sm64ManualEnabled) Logger::info("SM64 Manual stick mod enabled");
                 if (sm64DpadEnabled) Logger::info("SM64 D-pad stick mod enabled");
                 if (leftStickMode == "Disabled") Logger::info("Left stick disabled");
             }
@@ -1304,7 +1316,7 @@ namespace widemelon
             connection = std::async(std::launch::async, []
                                     { return std::string{}; });
         }
-        render(renderer, width, height, config, status, videoTexture, sm64Enabled ? &sm64Stick.touchState() : nullptr);
+        render(renderer, width, height, config, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
 
         bool running = true;
         ConnectionState displayedConnectionState = client->connectionState();
@@ -1332,7 +1344,7 @@ namespace widemelon
                     if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
                     {
                         SDL_GetWindowSize(window, &width, &height);
-                        render(renderer, width, height, config, status, videoTexture, sm64Enabled ? &sm64Stick.touchState() : nullptr);
+                        render(renderer, width, height, config, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
                     }
                     break;
                 default:
@@ -1341,14 +1353,15 @@ namespace widemelon
             }
             const std::string inputEvent = exitInput.pollEvent();
             const bool sm64TouchChanged = sm64Stick.update(exitInput.leftStickState());
+            const bool sm64ManualTouchChanged = sm64ManualStick.update(exitInput.leftStickState(), exitInput.r2Pressed());
             const bool sm64DpadChanged = sm64Dpad.update(exitInput.leftStickState());
-            inputDirty = exitInput.takeStateChanged() || sm64TouchChanged || sm64DpadChanged || inputDirty;
-            if (sm64TouchChanged && !inputTest)
-                render(renderer, width, height, config, status, videoTexture, &sm64Stick.touchState());
+            inputDirty = exitInput.takeStateChanged() || sm64TouchChanged || sm64ManualTouchChanged || sm64DpadChanged || inputDirty;
+            if ((sm64TouchChanged || sm64ManualTouchChanged) && !inputTest)
+                render(renderer, width, height, config, status, videoTexture, &sm64TouchState());
             if (inputTest && !inputEvent.empty())
             {
                 status = inputEvent;
-                render(renderer, width, height, config, status, videoTexture, sm64Enabled ? &sm64Stick.touchState() : nullptr);
+                render(renderer, width, height, config, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
             }
             const ConnectionState currentConnectionState = client->connectionState();
             if (!inputTest && currentConnectionState != displayedConnectionState)
@@ -1359,7 +1372,7 @@ namespace widemelon
                     status = "RECONNECTING";
                 else if (currentConnectionState == ConnectionState::Failed)
                     status = "CONNECTION ERROR";
-                render(renderer, width, height, config, status, videoTexture, sm64Enabled ? &sm64Stick.touchState() : nullptr);
+                render(renderer, width, height, config, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
                 displayedConnectionState = currentConnectionState;
             }
             if (!inputTest && connection.valid() && connection.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
@@ -1368,7 +1381,7 @@ namespace widemelon
                 if (result != "Cancelled")
                 {
                     status = "CONNECTION ERROR";
-                    render(renderer, width, height, config, status, videoTexture, sm64Enabled ? &sm64Stick.touchState() : nullptr);
+                    render(renderer, width, height, config, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
                 }
             }
             if (!inputTest && client->connectionState() == ConnectionState::Connected)
@@ -1385,16 +1398,32 @@ namespace widemelon
                     inputDirty = true;
                     sendReleasedSnapshot = true;
                     nextInputSnapshot = now;
-                    render(renderer, width, height, config, status, videoTexture, sm64Enabled ? &sm64Stick.touchState() : nullptr);
+                    render(renderer, width, height, config, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
                 }
                 if (sendReleasedSnapshot)
                 {
-                    client->sendInputSnapshot(++inputSequence, 0, false, sm64Stick.touchState().x, sm64Stick.touchState().y);
+                    const std::uint32_t sequence = ++inputSequence;
+                    if (sm64ModeEnabled())
+                        Logger::info("SM64_TOUCH_TX t_ms=" + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count())
+                            + " seq=" + std::to_string(sequence) + " active=0 x=" + std::to_string(sm64TouchState().x)
+                            + " y=" + std::to_string(sm64TouchState().y) + " pressed=" + std::to_string(sm64CursorPressed())
+                            + " tracking=" + std::to_string(sm64CursorTracking()) + " speed=" + std::to_string(sm64CursorSpeed())
+                            + " forced_release=1");
+                    client->sendInputSnapshot(sequence, 0, false, sm64TouchState().x, sm64TouchState().y);
                     sendReleasedSnapshot = false;
                 }
                 else if (inputDirty || now >= nextInputSnapshot)
                 {
-                    client->sendInputSnapshot(++inputSequence, static_cast<std::uint16_t>(exitInput.buttonMask() | sm64Dpad.additionalButtons()), sm64Enabled && sm64Stick.touchState().active, sm64Stick.touchState().x, sm64Stick.touchState().y);
+                    const std::uint32_t sequence = ++inputSequence;
+                    const bool touchActive = sm64ModeEnabled() && sm64TouchState().active;
+                    if (sm64ModeEnabled())
+                        Logger::info("SM64_TOUCH_TX t_ms=" + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count())
+                            + " seq=" + std::to_string(sequence) + " active=" + std::to_string(touchActive)
+                            + " x=" + std::to_string(sm64TouchState().x) + " y=" + std::to_string(sm64TouchState().y)
+                            + " pressed=" + std::to_string(sm64CursorPressed()) + " tracking=" + std::to_string(sm64CursorTracking())
+                            + " speed=" + std::to_string(sm64CursorSpeed()));
+                    client->sendInputSnapshot(sequence, static_cast<std::uint16_t>(exitInput.buttonMask() | sm64Dpad.additionalButtons()),
+                        touchActive, sm64TouchState().x, sm64TouchState().y);
                     inputDirty = false;
                     nextInputSnapshot = now + std::chrono::milliseconds(200);
                 }
@@ -1403,7 +1432,7 @@ namespace widemelon
                 if (client->latestDecodedVideoFrame(decodedFrame) && decodedFrame.sequence != displayedVideoSequence && updateVideoTexture(renderer, videoTexture, decodedFrame))
                 {
                     displayedVideoSequence = decodedFrame.sequence;
-                    render(renderer, width, height, config, status, videoTexture, sm64Enabled ? &sm64Stick.touchState() : nullptr);
+                    render(renderer, width, height, config, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
                 }
             }
             if (exitInput.exitComboPressed())
@@ -1416,7 +1445,7 @@ namespace widemelon
         }
 
         if (!inputTest && client->connectionState() == ConnectionState::Connected)
-            client->sendInputSnapshot(++inputSequence, 0, false, sm64Stick.touchState().x, sm64Stick.touchState().y);
+            client->sendInputSnapshot(++inputSequence, 0, false, sm64TouchState().x, sm64TouchState().y);
         client->requestStop();
         if (connection.valid())
         {
