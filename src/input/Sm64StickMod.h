@@ -9,8 +9,13 @@ namespace widemelon
 {
 
 inline constexpr std::uint16_t Sm64TouchPressRadius{2};
-inline constexpr auto Sm64TouchReleaseDelay{std::chrono::milliseconds{1000}};
-inline constexpr std::uint8_t Sm64TouchCenterHoldFrames{12};
+inline constexpr std::uint16_t Sm64TouchReleaseDelayMinimumMs{0};
+inline constexpr std::uint16_t Sm64TouchReleaseDelayDefaultMs{1000};
+inline constexpr std::uint16_t Sm64TouchReleaseDelayMaximumMs{2000};
+inline constexpr std::uint16_t Sm64TouchReleaseDelayStepMs{100};
+inline constexpr std::uint8_t Sm64TouchCenterHoldFramesMinimum{2};
+inline constexpr std::uint8_t Sm64TouchCenterHoldFramesDefault{12};
+inline constexpr std::uint8_t Sm64TouchCenterHoldFramesMaximum{20};
 inline constexpr std::uint16_t Sm64TouchMaximumRadius{35};
 inline constexpr std::uint16_t Sm64TouchCenterX{127};
 inline constexpr std::uint16_t Sm64TouchCenterY{95};
@@ -26,6 +31,8 @@ class Sm64StickMod
 {
 public:
     void setEnabled(bool enabled);
+    void setCenterHoldFrames(std::uint8_t frames);
+    void setReleaseDelayMs(std::uint16_t milliseconds);
     bool enabled() const { return isEnabled; }
     bool update(const LeftStickState& stick);
     const Sm64TouchState& touchState() const { return touch; }
@@ -37,6 +44,8 @@ private:
     bool isCursorPressed = false;
     std::chrono::steady_clock::time_point releaseStartedAt{};
     std::uint8_t centerHoldFrames = 0;
+    std::uint8_t centerHoldFrameLimit = Sm64TouchCenterHoldFramesDefault;
+    std::chrono::milliseconds releaseDelay{Sm64TouchReleaseDelayDefaultMs};
     Sm64TouchState touch;
 };
 

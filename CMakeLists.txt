@@ -19,7 +19,7 @@ add_executable(widemelon-client
     src/config/Config.cpp
     src/display/ConfigScreen.cpp
     src/input/EvdevInput.cpp
-    src/input/Sm64DpadMod.cpp
+    src/input/CursorStickMod.cpp
     src/input/Sm64ManualStickMod.cpp
     src/input/Sm64StickMod.cpp
     src/network/WebSocketClient.cpp

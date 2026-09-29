@@ -1,8 +1,8 @@
 #include "display/ConfigScreen.h"
 
 #include "common/Logger.h"
+#include "input/CursorStickMod.h"
 #include "input/EvdevInput.h"
-#include "input/Sm64DpadMod.h"
 #include "input/Sm64ManualStickMod.h"
 #include "input/Sm64StickMod.h"
 #include "network/WebSocketClient.h"
@@ -968,7 +968,175 @@ namespace
         return true;
     }
 
-    void renderSettings(SDL_Renderer *renderer, int width, int height, const std::string &theme, const std::string &leftStickMode, int selected)
+    std::uint8_t configuredSm64AutoCenterHoldFrames(const std::string &directory)
+    {
+        std::ifstream file(std::filesystem::path(directory) / "widemelon-client-ui.conf");
+        std::string line;
+        while (std::getline(file, line))
+        {
+            constexpr std::string_view key{"sm64-auto-center-hold-frames="};
+            if (line.compare(0, key.size(), key) == 0)
+            {
+                unsigned int value = 0;
+                const std::string raw = line.substr(key.size());
+                const auto result = std::from_chars(raw.data(), raw.data() + raw.size(), value);
+                if (result.ec == std::errc{} && result.ptr == raw.data() + raw.size())
+                    return static_cast<std::uint8_t>(std::clamp(value, static_cast<unsigned int>(widemelon::Sm64TouchCenterHoldFramesMinimum), static_cast<unsigned int>(widemelon::Sm64TouchCenterHoldFramesMaximum)));
+            }
+        }
+        return widemelon::Sm64TouchCenterHoldFramesDefault;
+    }
+
+    bool saveConfiguredSm64AutoCenterHoldFrames(const std::string &directory, std::uint8_t frames)
+    {
+        const std::filesystem::path path = std::filesystem::path(directory) / "widemelon-client-ui.conf";
+        std::ifstream input(path);
+        if (!input) return false;
+
+        std::vector<std::string> lines;
+        std::string line;
+        bool replaced = false;
+        while (std::getline(input, line))
+        {
+            if (line.compare(0, 29, "sm64-auto-center-hold-frames=") == 0)
+            {
+                lines.push_back("sm64-auto-center-hold-frames=" + std::to_string(frames));
+                replaced = true;
+            }
+            else
+                lines.push_back(line);
+        }
+        if (!replaced) lines.push_back("sm64-auto-center-hold-frames=" + std::to_string(frames));
+
+        const std::filesystem::path temporary = path.string() + ".tmp";
+        {
+            std::ofstream output(temporary, std::ios::trunc);
+            if (!output) return false;
+            for (const std::string &entry : lines) output << entry << "\n";
+            if (!output) return false;
+        }
+        std::error_code error;
+        std::filesystem::rename(temporary, path, error);
+        if (error)
+        {
+            std::filesystem::remove(temporary, error);
+            return false;
+        }
+        return true;
+    }
+
+    std::uint16_t configuredSm64AutoReleaseDelayMs(const std::string &directory)
+    {
+        std::ifstream file(std::filesystem::path(directory) / "widemelon-client-ui.conf");
+        std::string line;
+        while (std::getline(file, line))
+        {
+            constexpr std::string_view key{"sm64-auto-release-delay-ms="};
+            if (line.compare(0, key.size(), key) == 0)
+            {
+                unsigned int value = 0;
+                const std::string raw = line.substr(key.size());
+                const auto result = std::from_chars(raw.data(), raw.data() + raw.size(), value);
+                if (result.ec == std::errc{} && result.ptr == raw.data() + raw.size())
+                    return static_cast<std::uint16_t>(std::clamp(value, static_cast<unsigned int>(widemelon::Sm64TouchReleaseDelayMinimumMs), static_cast<unsigned int>(widemelon::Sm64TouchReleaseDelayMaximumMs)));
+            }
+        }
+        return widemelon::Sm64TouchReleaseDelayDefaultMs;
+    }
+
+    bool saveConfiguredSm64AutoReleaseDelayMs(const std::string &directory, std::uint16_t milliseconds)
+    {
+        const std::filesystem::path path = std::filesystem::path(directory) / "widemelon-client-ui.conf";
+        std::ifstream input(path);
+        if (!input) return false;
+
+        std::vector<std::string> lines;
+        std::string line;
+        bool replaced = false;
+        while (std::getline(input, line))
+        {
+            if (line.compare(0, 27, "sm64-auto-release-delay-ms=") == 0)
+            {
+                lines.push_back("sm64-auto-release-delay-ms=" + std::to_string(milliseconds));
+                replaced = true;
+            }
+            else
+                lines.push_back(line);
+        }
+        if (!replaced) lines.push_back("sm64-auto-release-delay-ms=" + std::to_string(milliseconds));
+
+        const std::filesystem::path temporary = path.string() + ".tmp";
+        {
+            std::ofstream output(temporary, std::ios::trunc);
+            if (!output) return false;
+            for (const std::string &entry : lines) output << entry << "\n";
+            if (!output) return false;
+        }
+        std::error_code error;
+        std::filesystem::rename(temporary, path, error);
+        if (error)
+        {
+            std::filesystem::remove(temporary, error);
+            return false;
+        }
+        return true;
+    }
+
+    std::uint16_t configuredCursorSpeedLimit(const std::string &directory)
+    {
+        std::ifstream file(std::filesystem::path(directory) / "widemelon-client-ui.conf");
+        std::string line;
+        while (std::getline(file, line))
+        {
+            constexpr std::string_view key{"cursor-speed-limit="};
+            if (line.compare(0, key.size(), key) == 0)
+            {
+                unsigned int value = 0;
+                const std::string raw = line.substr(key.size());
+                const auto result = std::from_chars(raw.data(), raw.data() + raw.size(), value);
+                if (result.ec == std::errc{} && result.ptr == raw.data() + raw.size())
+                    return static_cast<std::uint16_t>(std::clamp(value, static_cast<unsigned int>(widemelon::CursorSpeedMinimum), static_cast<unsigned int>(widemelon::CursorSpeedMaximum)));
+            }
+        }
+        return widemelon::CursorSpeedDefault;
+    }
+
+    bool saveConfiguredCursorSpeedLimit(const std::string &directory, std::uint16_t pixelsPerSecond)
+    {
+        const std::filesystem::path path = std::filesystem::path(directory) / "widemelon-client-ui.conf";
+        std::ifstream input(path);
+        if (!input) return false;
+        std::vector<std::string> lines;
+        std::string line;
+        bool replaced = false;
+        while (std::getline(input, line))
+        {
+            if (line.compare(0, 19, "cursor-speed-limit=") == 0)
+            {
+                lines.push_back("cursor-speed-limit=" + std::to_string(pixelsPerSecond));
+                replaced = true;
+            }
+            else lines.push_back(line);
+        }
+        if (!replaced) lines.push_back("cursor-speed-limit=" + std::to_string(pixelsPerSecond));
+        const std::filesystem::path temporary = path.string() + ".tmp";
+        {
+            std::ofstream output(temporary, std::ios::trunc);
+            if (!output) return false;
+            for (const std::string &entry : lines) output << entry << "\n";
+            if (!output) return false;
+        }
+        std::error_code error;
+        std::filesystem::rename(temporary, path, error);
+        if (error)
+        {
+            std::filesystem::remove(temporary, error);
+            return false;
+        }
+        return true;
+    }
+
+    void renderSettings(SDL_Renderer *renderer, int width, int height, const std::string &theme, const std::string &leftStickMode, std::uint8_t sm64AutoFrames, std::uint16_t sm64AutoReleaseDelayMs, std::uint16_t cursorSpeedLimit, int selected)
     {
         drawGradientBackground(renderer, width, height);
         const int centerX = width / 2;
@@ -976,27 +1144,51 @@ namespace
         const int fieldHeight = widemelon::UiFormFieldHeight;
         const int fieldX = centerX - fieldWidth / 2;
         const std::string title = "Settings";
-        drawTextColored(renderer, title, centerX - textWidth(title, themeText.titleFontSize) / 2, 48, themeText.titleFontSize, palette.primary);
+        drawTextColored(renderer, title, centerX - textWidth(title, themeText.titleFontSize) / 2, 24, themeText.titleFontSize, palette.primary);
+
         const std::string themeLabel = "Theme";
-        drawTextColored(renderer, themeLabel, centerX - textWidth(themeLabel, themeText.formFontSize) / 2, 182, themeText.formFontSize, palette.primary);
-        const SDL_Rect themeField{fieldX, 220, fieldWidth, fieldHeight};
+        drawTextColored(renderer, themeLabel, centerX - textWidth(themeLabel, themeText.formFontSize) / 2, 66, themeText.formFontSize, palette.primary);
+        const SDL_Rect themeField{fieldX, 98, fieldWidth, fieldHeight};
         drawPill(renderer, themeField, selected == 0);
-        const std::string value = "< " + theme + " >";
-        drawTextColored(renderer, value, centerX - textWidth(value, themeText.formFontSize) / 2, 230, themeText.formFontSize, palette.primary);
+        const std::string themeValue = "< " + theme + " >";
+        drawTextColored(renderer, themeValue, centerX - textWidth(themeValue, themeText.formFontSize) / 2, 108, themeText.formFontSize, palette.primary);
+
         const std::string leftStickLabel = "Left stick mod";
-        drawTextColored(renderer, leftStickLabel, centerX - textWidth(leftStickLabel, themeText.formFontSize) / 2, 278, themeText.formFontSize, palette.primary);
-        const SDL_Rect leftStick{fieldX, 316, fieldWidth, fieldHeight};
+        drawTextColored(renderer, leftStickLabel, centerX - textWidth(leftStickLabel, themeText.formFontSize) / 2, 144, themeText.formFontSize, palette.primary);
+        const SDL_Rect leftStick{fieldX, 176, fieldWidth, fieldHeight};
         drawPill(renderer, leftStick, selected == 1);
         const std::string leftStickValue = "< " + leftStickMode + " >";
-        drawTextColored(renderer, leftStickValue, centerX - textWidth(leftStickValue, themeText.formFontSize) / 2, 326, themeText.formFontSize, palette.primary);
-        const SDL_Rect back{fieldX, 412, fieldWidth, fieldHeight};
-        drawPill(renderer, back, selected == 2);
+        drawTextColored(renderer, leftStickValue, centerX - textWidth(leftStickValue, themeText.formFontSize) / 2, 186, themeText.formFontSize, palette.primary);
+
+        const std::string delayLabel = "SM64 Auto delay";
+        drawTextColored(renderer, delayLabel, centerX - textWidth(delayLabel, themeText.formFontSize) / 2, 222, themeText.formFontSize, palette.primary);
+        const SDL_Rect delayField{fieldX, 254, fieldWidth, fieldHeight};
+        drawPill(renderer, delayField, selected == 2);
+        const std::string delayValue = "< " + std::to_string(sm64AutoFrames) + " frames >";
+        drawTextColored(renderer, delayValue, centerX - textWidth(delayValue, themeText.formFontSize) / 2, 264, themeText.formFontSize, palette.primary);
+
+        const std::string releaseLabel = "SM64 Auto release delay";
+        drawTextColored(renderer, releaseLabel, centerX - textWidth(releaseLabel, themeText.formFontSize) / 2, 300, themeText.formFontSize, palette.primary);
+        const SDL_Rect releaseField{fieldX, 332, fieldWidth, fieldHeight};
+        drawPill(renderer, releaseField, selected == 3);
+        const std::string releaseValue = "< " + std::to_string(sm64AutoReleaseDelayMs) + " ms >";
+        drawTextColored(renderer, releaseValue, centerX - textWidth(releaseValue, themeText.formFontSize) / 2, 342, themeText.formFontSize, palette.primary);
+
+        const std::string cursorSpeedLabel = "Cursor speed limit";
+        drawTextColored(renderer, cursorSpeedLabel, centerX - textWidth(cursorSpeedLabel, themeText.formFontSize) / 2, 386, themeText.formFontSize, palette.primary);
+        const SDL_Rect cursorSpeedField{fieldX, 420, fieldWidth, fieldHeight};
+        drawPill(renderer, cursorSpeedField, selected == 4);
+        const std::string cursorSpeedValue = "< " + std::to_string(cursorSpeedLimit) + " px/s >";
+        drawTextColored(renderer, cursorSpeedValue, centerX - textWidth(cursorSpeedValue, themeText.formFontSize) / 2, 430, themeText.formFontSize, palette.primary);
+
+        const SDL_Rect back{fieldX, 500, fieldWidth, fieldHeight};
+        drawPill(renderer, back, selected == 5);
         const std::string backLabel = "BACK";
-        drawTextColored(renderer, backLabel, centerX - textWidth(backLabel, themeText.formFontSize) / 2, 422, themeText.formFontSize, palette.primary);
-        const SDL_Rect quit{fieldX, 484, fieldWidth, fieldHeight};
-        drawPill(renderer, quit, selected == 3);
+        drawTextColored(renderer, backLabel, centerX - textWidth(backLabel, themeText.formFontSize) / 2, 510, themeText.formFontSize, palette.primary);
+        const SDL_Rect quit{fieldX, 560, fieldWidth, fieldHeight};
+        drawPill(renderer, quit, selected == 6);
         const std::string quitLabel = "QUIT";
-        drawTextColored(renderer, quitLabel, centerX - textWidth(quitLabel, themeText.formFontSize) / 2, 494, themeText.formFontSize, palette.primary);
+        drawTextColored(renderer, quitLabel, centerX - textWidth(quitLabel, themeText.formFontSize) / 2, 570, themeText.formFontSize, palette.primary);
         int hintX = width / 2 - 150;
         const int hintY = height - 64;
         hintX = drawControlHint(renderer, uiTextures.hintA, "A", "SELECT", hintX, hintY, themeText.hintFontSize);
@@ -1017,18 +1209,23 @@ namespace
         const std::string currentTheme = configuredTheme(directory);
         const auto current = std::find(themes.begin(), themes.end(), currentTheme);
         if (current != themes.end()) themeIndex = static_cast<std::size_t>(std::distance(themes.begin(), current));
-        const std::array<std::string, 5> leftStickModes{"D-pad", "SM64", "SM64 Manual", "SM64 D-pad", "Disabled"};
+        const std::array<std::string, 5> leftStickModes{"Disabled", "D-pad", "SM64 Auto", "SM64 Manual", "Cursor"};
         std::size_t leftStickModeIndex = 0;
         const std::string currentLeftStickMode = configuredLeftStickMode(directory);
         const auto currentLeftStick = std::find(leftStickModes.begin(), leftStickModes.end(), currentLeftStickMode);
         if (currentLeftStick != leftStickModes.end())
             leftStickModeIndex = static_cast<std::size_t>(std::distance(leftStickModes.begin(), currentLeftStick));
+        else if (currentLeftStickMode == "SM64")
+            leftStickModeIndex = 2; // Legacy name for SM64 Auto.
+        std::uint8_t sm64AutoFrames = configuredSm64AutoCenterHoldFrames(directory);
+        std::uint16_t sm64AutoReleaseDelayMs = configuredSm64AutoReleaseDelayMs(directory);
+        std::uint16_t cursorSpeedLimit = configuredCursorSpeedLimit(directory);
         int selected = 0;
         UiNavigationRepeater repeater;
         auto nextNavigationAt = std::chrono::steady_clock::time_point{};
         while (true)
         {
-            renderSettings(renderer, width, height, themes[themeIndex], leftStickModes[leftStickModeIndex], selected);
+            renderSettings(renderer, width, height, themes[themeIndex], leftStickModes[leftStickModeIndex], sm64AutoFrames, sm64AutoReleaseDelayMs, cursorSpeedLimit, selected);
             input.pollEvent();
             if (input.exitComboPressed()) return SettingsResult::Exit;
             const auto action = repeater.next(input.takeUiAction(), input.heldUiDirection());
@@ -1041,8 +1238,8 @@ namespace
                 continue;
             }
             if (navigation) nextNavigationAt = now + widemelon::UiNavigationCooldown;
-            if (action == widemelon::UiAction::Up) selected = (selected + 3) % 4;
-            else if (action == widemelon::UiAction::Down) selected = (selected + 1) % 4;
+            if (action == widemelon::UiAction::Up) selected = (selected + 6) % 7;
+            else if (action == widemelon::UiAction::Down) selected = (selected + 1) % 7;
             else if (selected == 0 && (action == widemelon::UiAction::Left || action == widemelon::UiAction::Right))
             {
                 const int step = action == widemelon::UiAction::Left ? -1 : 1;
@@ -1060,8 +1257,29 @@ namespace
                 if (saveConfiguredLeftStickMode(directory, leftStickModes[nextMode]))
                     leftStickModeIndex = nextMode;
             }
-            else if (selected == 2 && action == widemelon::UiAction::Confirm) return SettingsResult::Home;
-            else if (selected == 3 && action == widemelon::UiAction::Confirm) return SettingsResult::Exit;
+            else if (selected == 2 && (action == widemelon::UiAction::Left || action == widemelon::UiAction::Right))
+            {
+                const int step = action == widemelon::UiAction::Left ? -1 : 1;
+                const int next = std::clamp(static_cast<int>(sm64AutoFrames) + step, static_cast<int>(widemelon::Sm64TouchCenterHoldFramesMinimum), static_cast<int>(widemelon::Sm64TouchCenterHoldFramesMaximum));
+                if (saveConfiguredSm64AutoCenterHoldFrames(directory, static_cast<std::uint8_t>(next)))
+                    sm64AutoFrames = static_cast<std::uint8_t>(next);
+            }
+            else if (selected == 3 && (action == widemelon::UiAction::Left || action == widemelon::UiAction::Right))
+            {
+                const int step = action == widemelon::UiAction::Left ? -static_cast<int>(widemelon::Sm64TouchReleaseDelayStepMs) : static_cast<int>(widemelon::Sm64TouchReleaseDelayStepMs);
+                const int next = std::clamp(static_cast<int>(sm64AutoReleaseDelayMs) + step, static_cast<int>(widemelon::Sm64TouchReleaseDelayMinimumMs), static_cast<int>(widemelon::Sm64TouchReleaseDelayMaximumMs));
+                if (saveConfiguredSm64AutoReleaseDelayMs(directory, static_cast<std::uint16_t>(next)))
+                    sm64AutoReleaseDelayMs = static_cast<std::uint16_t>(next);
+            }
+            else if (selected == 4 && (action == widemelon::UiAction::Left || action == widemelon::UiAction::Right))
+            {
+                const int step = action == widemelon::UiAction::Left ? -static_cast<int>(widemelon::CursorSpeedStep) : static_cast<int>(widemelon::CursorSpeedStep);
+                const int next = std::clamp(static_cast<int>(cursorSpeedLimit) + step, static_cast<int>(widemelon::CursorSpeedMinimum), static_cast<int>(widemelon::CursorSpeedMaximum));
+                if (saveConfiguredCursorSpeedLimit(directory, static_cast<std::uint16_t>(next)))
+                    cursorSpeedLimit = static_cast<std::uint16_t>(next);
+            }
+            else if (selected == 5 && action == widemelon::UiAction::Confirm) return SettingsResult::Home;
+            else if (selected == 6 && action == widemelon::UiAction::Confirm) return SettingsResult::Exit;
             SDL_Delay(10);
         }
     }
@@ -1235,13 +1453,13 @@ namespace widemelon
         std::unique_ptr<widemelon::WebSocketClient> client = std::make_unique<widemelon::WebSocketClient>();
         widemelon::Sm64StickMod sm64Stick;
         widemelon::Sm64ManualStickMod sm64ManualStick;
-        widemelon::Sm64DpadMod sm64Dpad;
+        widemelon::CursorStickMod cursorStick;
         bool sm64Enabled = false;
         bool sm64ManualEnabled = false;
-        bool sm64DpadEnabled = false;
-        auto sm64ModeEnabled = [&] { return sm64Enabled || sm64ManualEnabled; };
+        bool cursorEnabled = false;
+        auto sm64ModeEnabled = [&] { return sm64Enabled || sm64ManualEnabled || cursorEnabled; };
         auto sm64TouchState = [&]() -> const Sm64TouchState&
-        { return sm64ManualEnabled ? sm64ManualStick.touchState() : sm64Stick.touchState(); };
+        { return cursorEnabled ? cursorStick.touchState() : (sm64ManualEnabled ? sm64ManualStick.touchState() : sm64Stick.touchState()); };
         std::future<std::string> connection;
         if (!inputTest)
         {
@@ -1291,18 +1509,19 @@ namespace widemelon
                 executable[static_cast<std::size_t>(length)] = 0;
                 const std::string directory = std::filesystem::path(executable.data()).parent_path().string();
                 const std::string leftStickMode = configuredLeftStickMode(directory);
-                sm64Enabled = leftStickMode == "SM64";
+                sm64Enabled = leftStickMode == "SM64 Auto" || leftStickMode == "SM64";
                 sm64ManualEnabled = leftStickMode == "SM64 Manual";
-                sm64DpadEnabled = leftStickMode == "SM64 D-pad";
+                cursorEnabled = leftStickMode == "Cursor";
+                sm64Stick.setCenterHoldFrames(configuredSm64AutoCenterHoldFrames(directory));
+                sm64Stick.setReleaseDelayMs(configuredSm64AutoReleaseDelayMs(directory));
                 sm64Stick.setEnabled(sm64Enabled);
                 sm64ManualStick.setEnabled(sm64ManualEnabled);
-                sm64Dpad.setEnabled(sm64DpadEnabled);
-                exitInput.setLeftStickDpadEnabled(leftStickMode != "SM64" && leftStickMode != "SM64 Manual" && leftStickMode != "Disabled");
-                if (sm64DpadEnabled)
-                    exitInput.setLeftStickDpadThresholdFraction(widemelon::Sm64DpadDirectionalThreshold);
-                if (sm64Enabled) Logger::info("SM64 stick mod enabled");
+                cursorStick.setSpeedLimit(configuredCursorSpeedLimit(directory));
+                cursorStick.setEnabled(cursorEnabled);
+                exitInput.setLeftStickDpadEnabled(leftStickMode == "D-pad");
+                if (sm64Enabled) Logger::info("SM64 Auto stick mod enabled");
                 if (sm64ManualEnabled) Logger::info("SM64 Manual stick mod enabled");
-                if (sm64DpadEnabled) Logger::info("SM64 D-pad stick mod enabled");
+                if (cursorEnabled) Logger::info("Cursor stick mod enabled");
                 if (leftStickMode == "Disabled") Logger::info("Left stick disabled");
             }
         }
@@ -1351,9 +1570,9 @@ namespace widemelon
             const std::string inputEvent = exitInput.pollEvent();
             const bool sm64TouchChanged = sm64Stick.update(exitInput.leftStickState());
             const bool sm64ManualTouchChanged = sm64ManualStick.update(exitInput.leftStickState(), exitInput.r2Pressed());
-            const bool sm64DpadChanged = sm64Dpad.update(exitInput.leftStickState());
-            inputDirty = exitInput.takeStateChanged() || sm64TouchChanged || sm64ManualTouchChanged || sm64DpadChanged || inputDirty;
-            if ((sm64TouchChanged || sm64ManualTouchChanged) && !inputTest)
+            const bool cursorTouchChanged = cursorStick.update(exitInput.leftStickState(), exitInput.r2Pressed());
+            inputDirty = exitInput.takeStateChanged() || sm64TouchChanged || sm64ManualTouchChanged || cursorTouchChanged || inputDirty;
+            if ((sm64TouchChanged || sm64ManualTouchChanged || cursorTouchChanged) && !inputTest)
                 render(renderer, width, height, config, status, videoTexture, &sm64TouchState());
             if (inputTest && !inputEvent.empty())
             {
@@ -1407,7 +1626,7 @@ namespace widemelon
                 {
                     const std::uint32_t sequence = ++inputSequence;
                     const bool touchActive = sm64ModeEnabled() && sm64TouchState().active;
-                    client->sendInputSnapshot(sequence, static_cast<std::uint16_t>(exitInput.buttonMask() | sm64Dpad.additionalButtons()),
+                    client->sendInputSnapshot(sequence, exitInput.buttonMask(),
                         touchActive, sm64TouchState().x, sm64TouchState().y);
                     inputDirty = false;
                     nextInputSnapshot = now + std::chrono::milliseconds(200);

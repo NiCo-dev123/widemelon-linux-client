@@ -9,6 +9,16 @@
 namespace widemelon
 {
 
+void Sm64StickMod::setCenterHoldFrames(std::uint8_t frames)
+{
+    centerHoldFrameLimit = std::clamp(frames, Sm64TouchCenterHoldFramesMinimum, Sm64TouchCenterHoldFramesMaximum);
+}
+
+void Sm64StickMod::setReleaseDelayMs(std::uint16_t milliseconds)
+{
+    releaseDelay = std::chrono::milliseconds(std::clamp(milliseconds, Sm64TouchReleaseDelayMinimumMs, Sm64TouchReleaseDelayMaximumMs));
+}
+
 void Sm64StickMod::setEnabled(bool enabled)
 {
     isEnabled = enabled;
@@ -62,7 +72,7 @@ bool Sm64StickMod::update(const LeftStickState& stick)
         else
         {
             next.active = true;
-            if (centerHoldFrames < Sm64TouchCenterHoldFrames)
+            if (centerHoldFrames < centerHoldFrameLimit)
             {
                 ++centerHoldFrames;
                 next.x = Sm64TouchCenterX;
@@ -80,7 +90,7 @@ bool Sm64StickMod::update(const LeftStickState& stick)
         // Keep the exact same contact through a time-based release hysteresis.
         if (releaseStartedAt == std::chrono::steady_clock::time_point{})
             releaseStartedAt = now;
-        if (now - releaseStartedAt >= Sm64TouchReleaseDelay)
+        if (now - releaseStartedAt >= releaseDelay)
         {
             isCursorPressed = false;
             releaseStartedAt = {};
