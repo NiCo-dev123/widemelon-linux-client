@@ -330,10 +330,7 @@ bool WebSocketClient::sendInputSnapshot(std::uint32_t sequence, std::uint16_t bu
         + ",\"x\":" + std::to_string(touchX) + ",\"y\":" + std::to_string(touchY) + "}}";
     std::lock_guard<std::mutex> lock(socketMutex);
     if (activeSocket < 0 || state.load() != ConnectionState::Connected) return false;
-    const bool sent = sendAll(activeSocket, clientFrame(0x1, message), stopRequested);
-    if (sent) Logger::info("Sent WebSocket input message: " + message);
-    else Logger::error("Failed to send WebSocket input message: " + message);
-    return sent;
+    return sendAll(activeSocket, clientFrame(0x1, message), stopRequested);
 }
 
 bool WebSocketClient::registerSocket(int fileDescriptor)

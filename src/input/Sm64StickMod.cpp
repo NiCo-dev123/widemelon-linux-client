@@ -13,10 +13,8 @@ void Sm64StickMod::setEnabled(bool enabled)
 {
     isEnabled = enabled;
     isCursorPressed = false;
-    isCursorTracking = false;
     releaseStartedAt = {};
-    cursorSpeed = 0.0F;
-    lastCursorUpdateAt = {};
+    centerHoldFrames = 0;
     touch = {};
 }
 
@@ -26,24 +24,6 @@ int Sm64StickMod::mapRelativeAxis(int value, int center, int minimum, int maximu
     if (distance <= 0) return 0;
     const float normalized = std::clamp(static_cast<float>(value - center) / static_cast<float>(distance), -1.0F, 1.0F);
     return static_cast<int>(std::lround(normalized * static_cast<float>(radius)));
-}
-
-void Sm64StickMod::moveTowards(std::uint16_t currentX, std::uint16_t currentY, std::uint16_t targetX, std::uint16_t targetY,
-                               float maximumDistance, std::uint16_t& nextX, std::uint16_t& nextY)
-{
-    const int deltaX = static_cast<int>(targetX) - static_cast<int>(currentX);
-    const int deltaY = static_cast<int>(targetY) - static_cast<int>(currentY);
-    const float distance = std::sqrt(static_cast<float>(deltaX * deltaX + deltaY * deltaY));
-    if (distance <= maximumDistance)
-    {
-        nextX = targetX;
-        nextY = targetY;
-        return;
-    }
-
-    const float scale = maximumDistance / distance;
-    nextX = static_cast<std::uint16_t>(std::lround(static_cast<float>(currentX) + static_cast<float>(deltaX) * scale));
-    nextY = static_cast<std::uint16_t>(std::lround(static_cast<float>(currentY) + static_cast<float>(deltaY) * scale));
 }
 
 bool Sm64StickMod::update(const LeftStickState& stick)
@@ -74,23 +54,25 @@ bool Sm64StickMod::update(const LeftStickState& stick)
             // Start one continuous contact from the centre, regardless of how
             // quickly the stick first reached its current position.
             isCursorPressed = true;
-            isCursorTracking = false;
-            cursorSpeed = 0.0F;
-            lastCursorUpdateAt = now;
+            centerHoldFrames = 1;
             next.active = true;
             next.x = Sm64TouchCenterX;
             next.y = Sm64TouchCenterY;
         }
         else
         {
-            // Keep every coordinate transition continuous. Unlike the previous
-            // implementation, entering tracking never teleports the stylus.
-            const float elapsedSeconds = std::chrono::duration<float>(now - lastCursorUpdateAt).count();
-            lastCursorUpdateAt = now;
-            cursorSpeed = std::min(cursorSpeed + Sm64TouchCursorAcceleration * elapsedSeconds, Sm64TouchMaximumCursorSpeed);
-            isCursorTracking = cursorSpeed >= Sm64TouchMaximumCursorSpeed;
             next.active = true;
-            moveTowards(touch.x, touch.y, targetX, targetY, cursorSpeed * elapsedSeconds, next.x, next.y);
+            if (centerHoldFrames < Sm64TouchCenterHoldFrames)
+            {
+                ++centerHoldFrames;
+                next.x = Sm64TouchCenterX;
+                next.y = Sm64TouchCenterY;
+            }
+            else
+            {
+                next.x = targetX;
+                next.y = targetY;
+            }
         }
     }
     else if (isCursorPressed)
@@ -101,10 +83,8 @@ bool Sm64StickMod::update(const LeftStickState& stick)
         if (now - releaseStartedAt >= Sm64TouchReleaseDelay)
         {
             isCursorPressed = false;
-            isCursorTracking = false;
             releaseStartedAt = {};
-            cursorSpeed = 0.0F;
-            lastCursorUpdateAt = {};
+            centerHoldFrames = 0;
             next.active = false;
             next.x = Sm64TouchCenterX;
             next.y = Sm64TouchCenterY;

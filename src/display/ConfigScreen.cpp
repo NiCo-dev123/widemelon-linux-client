@@ -1242,9 +1242,6 @@ namespace widemelon
         auto sm64ModeEnabled = [&] { return sm64Enabled || sm64ManualEnabled; };
         auto sm64TouchState = [&]() -> const Sm64TouchState&
         { return sm64ManualEnabled ? sm64ManualStick.touchState() : sm64Stick.touchState(); };
-        auto sm64CursorPressed = [&] { return sm64ManualEnabled ? sm64ManualStick.cursorPressed() : sm64Stick.cursorPressed(); };
-        auto sm64CursorTracking = [&] { return sm64ManualEnabled ? sm64ManualStick.cursorTracking() : sm64Stick.cursorTracking(); };
-        auto sm64CursorSpeed = [&] { return sm64ManualEnabled ? sm64ManualStick.currentCursorSpeed() : sm64Stick.currentCursorSpeed(); };
         std::future<std::string> connection;
         if (!inputTest)
         {
@@ -1403,12 +1400,6 @@ namespace widemelon
                 if (sendReleasedSnapshot)
                 {
                     const std::uint32_t sequence = ++inputSequence;
-                    if (sm64ModeEnabled())
-                        Logger::info("SM64_TOUCH_TX t_ms=" + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count())
-                            + " seq=" + std::to_string(sequence) + " active=0 x=" + std::to_string(sm64TouchState().x)
-                            + " y=" + std::to_string(sm64TouchState().y) + " pressed=" + std::to_string(sm64CursorPressed())
-                            + " tracking=" + std::to_string(sm64CursorTracking()) + " speed=" + std::to_string(sm64CursorSpeed())
-                            + " forced_release=1");
                     client->sendInputSnapshot(sequence, 0, false, sm64TouchState().x, sm64TouchState().y);
                     sendReleasedSnapshot = false;
                 }
@@ -1416,12 +1407,6 @@ namespace widemelon
                 {
                     const std::uint32_t sequence = ++inputSequence;
                     const bool touchActive = sm64ModeEnabled() && sm64TouchState().active;
-                    if (sm64ModeEnabled())
-                        Logger::info("SM64_TOUCH_TX t_ms=" + std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count())
-                            + " seq=" + std::to_string(sequence) + " active=" + std::to_string(touchActive)
-                            + " x=" + std::to_string(sm64TouchState().x) + " y=" + std::to_string(sm64TouchState().y)
-                            + " pressed=" + std::to_string(sm64CursorPressed()) + " tracking=" + std::to_string(sm64CursorTracking())
-                            + " speed=" + std::to_string(sm64CursorSpeed()));
                     client->sendInputSnapshot(sequence, static_cast<std::uint16_t>(exitInput.buttonMask() | sm64Dpad.additionalButtons()),
                         touchActive, sm64TouchState().x, sm64TouchState().y);
                     inputDirty = false;
