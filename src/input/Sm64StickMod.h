@@ -10,7 +10,7 @@ namespace widemelon
 
 inline constexpr std::uint16_t Sm64TouchPressRadius{2};
 inline constexpr auto Sm64TouchReleaseDelay{std::chrono::milliseconds{1000}};
-inline constexpr std::uint8_t Sm64TouchCenterHoldFrames{10};
+inline constexpr std::uint8_t Sm64TouchCenterHoldFrames{12};
 inline constexpr std::uint16_t Sm64TouchMaximumRadius{35};
 inline constexpr std::uint16_t Sm64TouchCenterX{127};
 inline constexpr std::uint16_t Sm64TouchCenterY{95};
