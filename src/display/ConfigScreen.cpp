@@ -1136,7 +1136,26 @@ namespace
         return true;
     }
 
-    void renderSettings(SDL_Renderer *renderer, int width, int height, const std::string &theme, const std::string &leftStickMode, std::uint8_t sm64AutoFrames, std::uint16_t sm64AutoReleaseDelayMs, std::uint16_t cursorSpeedLimit, int selected)
+    enum class SettingsItem { Theme, LeftStickMode, Sm64AutoFrames, Sm64AutoReleaseDelay, CursorSpeed, Back, Quit };
+
+    std::vector<SettingsItem> settingsItems(const std::string &leftStickMode)
+    {
+        std::vector<SettingsItem> items{SettingsItem::Theme, SettingsItem::LeftStickMode};
+        if (leftStickMode == "SM64 Auto")
+        {
+            items.push_back(SettingsItem::Sm64AutoFrames);
+            items.push_back(SettingsItem::Sm64AutoReleaseDelay);
+        }
+        else if (leftStickMode == "Cursor")
+            items.push_back(SettingsItem::CursorSpeed);
+        items.push_back(SettingsItem::Back);
+        items.push_back(SettingsItem::Quit);
+        return items;
+    }
+
+    void renderSettings(SDL_Renderer *renderer, int width, int height, const std::string &theme, const std::string &leftStickMode,
+                        std::uint8_t sm64AutoFrames, std::uint16_t sm64AutoReleaseDelayMs, std::uint16_t cursorSpeedLimit,
+                        const std::vector<SettingsItem> &items, int selected, int scrollOffset)
     {
         drawGradientBackground(renderer, width, height);
         const int centerX = width / 2;
@@ -1144,51 +1163,37 @@ namespace
         const int fieldHeight = widemelon::UiFormFieldHeight;
         const int fieldX = centerX - fieldWidth / 2;
         const std::string title = "Settings";
-        drawTextColored(renderer, title, centerX - textWidth(title, themeText.titleFontSize) / 2, 24, themeText.titleFontSize, palette.primary);
+        drawTextColored(renderer, title, centerX - textWidth(title, themeText.titleFontSize) / 2, 36, themeText.titleFontSize, palette.primary);
 
-        const std::string themeLabel = "Theme";
-        drawTextColored(renderer, themeLabel, centerX - textWidth(themeLabel, themeText.formFontSize) / 2, 66, themeText.formFontSize, palette.primary);
-        const SDL_Rect themeField{fieldX, 98, fieldWidth, fieldHeight};
-        drawPill(renderer, themeField, selected == 0);
-        const std::string themeValue = "< " + theme + " >";
-        drawTextColored(renderer, themeValue, centerX - textWidth(themeValue, themeText.formFontSize) / 2, 108, themeText.formFontSize, palette.primary);
+        constexpr int listTop = 112;
+        constexpr int listBottomPadding = 80;
+        constexpr int rowHeight = 82;
+        const int listBottom = height - listBottomPadding;
+        for (std::size_t index = 0; index < items.size(); ++index)
+        {
+            const int rowY = listTop + static_cast<int>(index) * rowHeight - scrollOffset;
+            if (rowY + rowHeight < listTop || rowY > listBottom) continue;
 
-        const std::string leftStickLabel = "Left stick mod";
-        drawTextColored(renderer, leftStickLabel, centerX - textWidth(leftStickLabel, themeText.formFontSize) / 2, 144, themeText.formFontSize, palette.primary);
-        const SDL_Rect leftStick{fieldX, 176, fieldWidth, fieldHeight};
-        drawPill(renderer, leftStick, selected == 1);
-        const std::string leftStickValue = "< " + leftStickMode + " >";
-        drawTextColored(renderer, leftStickValue, centerX - textWidth(leftStickValue, themeText.formFontSize) / 2, 186, themeText.formFontSize, palette.primary);
+            std::string label;
+            std::string value;
+            switch (items[index])
+            {
+            case SettingsItem::Theme: label = "Theme"; value = "< " + theme + " >"; break;
+            case SettingsItem::LeftStickMode: label = "Left stick mod"; value = "< " + leftStickMode + " >"; break;
+            case SettingsItem::Sm64AutoFrames: label = "SM64 Auto delay"; value = "< " + std::to_string(sm64AutoFrames) + " frames >"; break;
+            case SettingsItem::Sm64AutoReleaseDelay: label = "SM64 Auto release delay"; value = "< " + std::to_string(sm64AutoReleaseDelayMs) + " ms >"; break;
+            case SettingsItem::CursorSpeed: label = "Cursor speed limit"; value = "< " + std::to_string(cursorSpeedLimit) + " px/s >"; break;
+            case SettingsItem::Back: value = "BACK"; break;
+            case SettingsItem::Quit: value = "QUIT"; break;
+            }
 
-        const std::string delayLabel = "SM64 Auto delay";
-        drawTextColored(renderer, delayLabel, centerX - textWidth(delayLabel, themeText.formFontSize) / 2, 222, themeText.formFontSize, palette.primary);
-        const SDL_Rect delayField{fieldX, 254, fieldWidth, fieldHeight};
-        drawPill(renderer, delayField, selected == 2);
-        const std::string delayValue = "< " + std::to_string(sm64AutoFrames) + " frames >";
-        drawTextColored(renderer, delayValue, centerX - textWidth(delayValue, themeText.formFontSize) / 2, 264, themeText.formFontSize, palette.primary);
+            if (!label.empty())
+                drawTextColored(renderer, label, centerX - textWidth(label, themeText.formFontSize) / 2, rowY, themeText.formFontSize, palette.primary);
+            const SDL_Rect field{fieldX, rowY + (label.empty() ? 0 : 30), fieldWidth, fieldHeight};
+            drawPill(renderer, field, static_cast<int>(index) == selected);
+            drawTextColored(renderer, value, centerX - textWidth(value, themeText.formFontSize) / 2, field.y + 10, themeText.formFontSize, palette.primary);
+        }
 
-        const std::string releaseLabel = "SM64 Auto release delay";
-        drawTextColored(renderer, releaseLabel, centerX - textWidth(releaseLabel, themeText.formFontSize) / 2, 300, themeText.formFontSize, palette.primary);
-        const SDL_Rect releaseField{fieldX, 332, fieldWidth, fieldHeight};
-        drawPill(renderer, releaseField, selected == 3);
-        const std::string releaseValue = "< " + std::to_string(sm64AutoReleaseDelayMs) + " ms >";
-        drawTextColored(renderer, releaseValue, centerX - textWidth(releaseValue, themeText.formFontSize) / 2, 342, themeText.formFontSize, palette.primary);
-
-        const std::string cursorSpeedLabel = "Cursor speed limit";
-        drawTextColored(renderer, cursorSpeedLabel, centerX - textWidth(cursorSpeedLabel, themeText.formFontSize) / 2, 386, themeText.formFontSize, palette.primary);
-        const SDL_Rect cursorSpeedField{fieldX, 420, fieldWidth, fieldHeight};
-        drawPill(renderer, cursorSpeedField, selected == 4);
-        const std::string cursorSpeedValue = "< " + std::to_string(cursorSpeedLimit) + " px/s >";
-        drawTextColored(renderer, cursorSpeedValue, centerX - textWidth(cursorSpeedValue, themeText.formFontSize) / 2, 430, themeText.formFontSize, palette.primary);
-
-        const SDL_Rect back{fieldX, 500, fieldWidth, fieldHeight};
-        drawPill(renderer, back, selected == 5);
-        const std::string backLabel = "BACK";
-        drawTextColored(renderer, backLabel, centerX - textWidth(backLabel, themeText.formFontSize) / 2, 510, themeText.formFontSize, palette.primary);
-        const SDL_Rect quit{fieldX, 560, fieldWidth, fieldHeight};
-        drawPill(renderer, quit, selected == 6);
-        const std::string quitLabel = "QUIT";
-        drawTextColored(renderer, quitLabel, centerX - textWidth(quitLabel, themeText.formFontSize) / 2, 570, themeText.formFontSize, palette.primary);
         int hintX = width / 2 - 150;
         const int hintY = height - 64;
         hintX = drawControlHint(renderer, uiTextures.hintA, "A", "SELECT", hintX, hintY, themeText.hintFontSize);
@@ -1209,6 +1214,7 @@ namespace
         const std::string currentTheme = configuredTheme(directory);
         const auto current = std::find(themes.begin(), themes.end(), currentTheme);
         if (current != themes.end()) themeIndex = static_cast<std::size_t>(std::distance(themes.begin(), current));
+
         const std::array<std::string, 5> leftStickModes{"Disabled", "D-pad", "SM64 Auto", "SM64 Manual", "Cursor"};
         std::size_t leftStickModeIndex = 0;
         const std::string currentLeftStickMode = configuredLeftStickMode(directory);
@@ -1216,16 +1222,30 @@ namespace
         if (currentLeftStick != leftStickModes.end())
             leftStickModeIndex = static_cast<std::size_t>(std::distance(leftStickModes.begin(), currentLeftStick));
         else if (currentLeftStickMode == "SM64")
-            leftStickModeIndex = 2; // Legacy name for SM64 Auto.
+            leftStickModeIndex = 2;
+
         std::uint8_t sm64AutoFrames = configuredSm64AutoCenterHoldFrames(directory);
         std::uint16_t sm64AutoReleaseDelayMs = configuredSm64AutoReleaseDelayMs(directory);
         std::uint16_t cursorSpeedLimit = configuredCursorSpeedLimit(directory);
         int selected = 0;
+        int scrollOffset = 0;
         UiNavigationRepeater repeater;
         auto nextNavigationAt = std::chrono::steady_clock::time_point{};
         while (true)
         {
-            renderSettings(renderer, width, height, themes[themeIndex], leftStickModes[leftStickModeIndex], sm64AutoFrames, sm64AutoReleaseDelayMs, cursorSpeedLimit, selected);
+            const std::string &leftStickMode = leftStickModes[leftStickModeIndex];
+            const std::vector<SettingsItem> items = settingsItems(leftStickMode);
+            selected = std::min(selected, static_cast<int>(items.size()) - 1);
+            constexpr int listTop = 112;
+            constexpr int listBottomPadding = 80;
+            constexpr int rowHeight = 82;
+            const int viewportHeight = height - listBottomPadding - listTop;
+            const int selectedTop = selected * rowHeight;
+            if (selectedTop < scrollOffset) scrollOffset = selectedTop;
+            else if (selectedTop + rowHeight > scrollOffset + viewportHeight) scrollOffset = selectedTop + rowHeight - viewportHeight;
+            scrollOffset = std::clamp(scrollOffset, 0, std::max(0, static_cast<int>(items.size()) * rowHeight - viewportHeight));
+            renderSettings(renderer, width, height, themes[themeIndex], leftStickMode, sm64AutoFrames, sm64AutoReleaseDelayMs, cursorSpeedLimit, items, selected, scrollOffset);
+
             input.pollEvent();
             if (input.exitComboPressed()) return SettingsResult::Exit;
             const auto action = repeater.next(input.takeUiAction(), input.heldUiDirection());
@@ -1238,48 +1258,52 @@ namespace
                 continue;
             }
             if (navigation) nextNavigationAt = now + widemelon::UiNavigationCooldown;
-            if (action == widemelon::UiAction::Up) selected = (selected + 6) % 7;
-            else if (action == widemelon::UiAction::Down) selected = (selected + 1) % 7;
-            else if (selected == 0 && (action == widemelon::UiAction::Left || action == widemelon::UiAction::Right))
+            if (action == widemelon::UiAction::Up) selected = (selected + static_cast<int>(items.size()) - 1) % static_cast<int>(items.size());
+            else if (action == widemelon::UiAction::Down) selected = (selected + 1) % static_cast<int>(items.size());
+            else if (action == widemelon::UiAction::Left || action == widemelon::UiAction::Right)
             {
-                const int step = action == widemelon::UiAction::Left ? -1 : 1;
-                const std::size_t nextTheme = static_cast<std::size_t>((static_cast<int>(themeIndex) + step + static_cast<int>(themes.size())) % static_cast<int>(themes.size()));
-                if (saveConfiguredTheme(directory, themes[nextTheme]))
+                const int direction = action == widemelon::UiAction::Left ? -1 : 1;
+                switch (items[static_cast<std::size_t>(selected)])
                 {
-                    themeIndex = nextTheme;
-                    reloadUiResources(renderer);
+                case SettingsItem::Theme:
+                {
+                    const std::size_t nextTheme = static_cast<std::size_t>((static_cast<int>(themeIndex) + direction + static_cast<int>(themes.size())) % static_cast<int>(themes.size()));
+                    if (saveConfiguredTheme(directory, themes[nextTheme]))
+                    {
+                        themeIndex = nextTheme;
+                        reloadUiResources(renderer);
+                    }
+                    break;
+                }
+                case SettingsItem::LeftStickMode:
+                {
+                    const std::size_t nextMode = static_cast<std::size_t>((static_cast<int>(leftStickModeIndex) + direction + static_cast<int>(leftStickModes.size())) % static_cast<int>(leftStickModes.size()));
+                    if (saveConfiguredLeftStickMode(directory, leftStickModes[nextMode])) leftStickModeIndex = nextMode;
+                    break;
+                }
+                case SettingsItem::Sm64AutoFrames:
+                {
+                    const int next = std::clamp(static_cast<int>(sm64AutoFrames) + direction, static_cast<int>(widemelon::Sm64TouchCenterHoldFramesMinimum), static_cast<int>(widemelon::Sm64TouchCenterHoldFramesMaximum));
+                    if (saveConfiguredSm64AutoCenterHoldFrames(directory, static_cast<std::uint8_t>(next))) sm64AutoFrames = static_cast<std::uint8_t>(next);
+                    break;
+                }
+                case SettingsItem::Sm64AutoReleaseDelay:
+                {
+                    const int next = std::clamp(static_cast<int>(sm64AutoReleaseDelayMs) + direction * static_cast<int>(widemelon::Sm64TouchReleaseDelayStepMs), static_cast<int>(widemelon::Sm64TouchReleaseDelayMinimumMs), static_cast<int>(widemelon::Sm64TouchReleaseDelayMaximumMs));
+                    if (saveConfiguredSm64AutoReleaseDelayMs(directory, static_cast<std::uint16_t>(next))) sm64AutoReleaseDelayMs = static_cast<std::uint16_t>(next);
+                    break;
+                }
+                case SettingsItem::CursorSpeed:
+                {
+                    const int next = std::clamp(static_cast<int>(cursorSpeedLimit) + direction * static_cast<int>(widemelon::CursorSpeedStep), static_cast<int>(widemelon::CursorSpeedMinimum), static_cast<int>(widemelon::CursorSpeedMaximum));
+                    if (saveConfiguredCursorSpeedLimit(directory, static_cast<std::uint16_t>(next))) cursorSpeedLimit = static_cast<std::uint16_t>(next);
+                    break;
+                }
+                default: break;
                 }
             }
-            else if (selected == 1 && (action == widemelon::UiAction::Left || action == widemelon::UiAction::Right))
-            {
-                const int step = action == widemelon::UiAction::Left ? -1 : 1;
-                const std::size_t nextMode = static_cast<std::size_t>((static_cast<int>(leftStickModeIndex) + step + static_cast<int>(leftStickModes.size())) % static_cast<int>(leftStickModes.size()));
-                if (saveConfiguredLeftStickMode(directory, leftStickModes[nextMode]))
-                    leftStickModeIndex = nextMode;
-            }
-            else if (selected == 2 && (action == widemelon::UiAction::Left || action == widemelon::UiAction::Right))
-            {
-                const int step = action == widemelon::UiAction::Left ? -1 : 1;
-                const int next = std::clamp(static_cast<int>(sm64AutoFrames) + step, static_cast<int>(widemelon::Sm64TouchCenterHoldFramesMinimum), static_cast<int>(widemelon::Sm64TouchCenterHoldFramesMaximum));
-                if (saveConfiguredSm64AutoCenterHoldFrames(directory, static_cast<std::uint8_t>(next)))
-                    sm64AutoFrames = static_cast<std::uint8_t>(next);
-            }
-            else if (selected == 3 && (action == widemelon::UiAction::Left || action == widemelon::UiAction::Right))
-            {
-                const int step = action == widemelon::UiAction::Left ? -static_cast<int>(widemelon::Sm64TouchReleaseDelayStepMs) : static_cast<int>(widemelon::Sm64TouchReleaseDelayStepMs);
-                const int next = std::clamp(static_cast<int>(sm64AutoReleaseDelayMs) + step, static_cast<int>(widemelon::Sm64TouchReleaseDelayMinimumMs), static_cast<int>(widemelon::Sm64TouchReleaseDelayMaximumMs));
-                if (saveConfiguredSm64AutoReleaseDelayMs(directory, static_cast<std::uint16_t>(next)))
-                    sm64AutoReleaseDelayMs = static_cast<std::uint16_t>(next);
-            }
-            else if (selected == 4 && (action == widemelon::UiAction::Left || action == widemelon::UiAction::Right))
-            {
-                const int step = action == widemelon::UiAction::Left ? -static_cast<int>(widemelon::CursorSpeedStep) : static_cast<int>(widemelon::CursorSpeedStep);
-                const int next = std::clamp(static_cast<int>(cursorSpeedLimit) + step, static_cast<int>(widemelon::CursorSpeedMinimum), static_cast<int>(widemelon::CursorSpeedMaximum));
-                if (saveConfiguredCursorSpeedLimit(directory, static_cast<std::uint16_t>(next)))
-                    cursorSpeedLimit = static_cast<std::uint16_t>(next);
-            }
-            else if (selected == 5 && action == widemelon::UiAction::Confirm) return SettingsResult::Home;
-            else if (selected == 6 && action == widemelon::UiAction::Confirm) return SettingsResult::Exit;
+            else if (action == widemelon::UiAction::Confirm && items[static_cast<std::size_t>(selected)] == SettingsItem::Back) return SettingsResult::Home;
+            else if (action == widemelon::UiAction::Confirm && items[static_cast<std::size_t>(selected)] == SettingsItem::Quit) return SettingsResult::Exit;
             SDL_Delay(10);
         }
     }
