@@ -2,6 +2,7 @@
 
 #include "common/Logger.h"
 #include "input/CursorStickMod.h"
+#include "input/Sm64DpadMod.h"
 #include "input/EvdevInput.h"
 #include "input/Sm64ManualStickMod.h"
 #include "input/Sm64StickMod.h"
@@ -1136,7 +1137,61 @@ namespace
         return true;
     }
 
-    enum class SettingsItem { Theme, LeftStickMode, Sm64AutoFrames, Sm64AutoReleaseDelay, CursorSpeed, Back, Quit };
+    std::uint8_t configuredSm64DpadDeadzonePercent(const std::string &directory)
+    {
+        std::ifstream file(std::filesystem::path(directory) / "widemelon-client-ui.conf");
+        std::string line;
+        while (std::getline(file, line))
+        {
+            constexpr std::string_view key{"sm64-dpad-deadzone-percent="};
+            if (line.compare(0, key.size(), key) == 0)
+            {
+                unsigned int value = 0;
+                const std::string raw = line.substr(key.size());
+                const auto result = std::from_chars(raw.data(), raw.data() + raw.size(), value);
+                if (result.ec == std::errc{} && result.ptr == raw.data() + raw.size())
+                    return static_cast<std::uint8_t>(std::clamp(value, static_cast<unsigned int>(widemelon::Sm64DpadDeadzoneMinimumPercent), static_cast<unsigned int>(widemelon::Sm64DpadDeadzoneMaximumPercent)));
+            }
+        }
+        return widemelon::Sm64DpadDeadzoneDefaultPercent;
+    }
+
+    bool saveConfiguredSm64DpadDeadzonePercent(const std::string &directory, std::uint8_t percent)
+    {
+        const std::filesystem::path path = std::filesystem::path(directory) / "widemelon-client-ui.conf";
+        std::ifstream input(path);
+        if (!input) return false;
+        std::vector<std::string> lines;
+        std::string line;
+        bool replaced = false;
+        while (std::getline(input, line))
+        {
+            if (line.compare(0, 27, "sm64-dpad-deadzone-percent=") == 0)
+            {
+                lines.push_back("sm64-dpad-deadzone-percent=" + std::to_string(percent));
+                replaced = true;
+            }
+            else lines.push_back(line);
+        }
+        if (!replaced) lines.push_back("sm64-dpad-deadzone-percent=" + std::to_string(percent));
+        const std::filesystem::path temporary = path.string() + ".tmp";
+        {
+            std::ofstream output(temporary, std::ios::trunc);
+            if (!output) return false;
+            for (const std::string &entry : lines) output << entry << "\n";
+            if (!output) return false;
+        }
+        std::error_code error;
+        std::filesystem::rename(temporary, path, error);
+        if (error)
+        {
+            std::filesystem::remove(temporary, error);
+            return false;
+        }
+        return true;
+    }
+
+    enum class SettingsItem { Theme, LeftStickMode, Sm64AutoFrames, Sm64AutoReleaseDelay, Sm64DpadDeadzone, CursorSpeed, Back, Quit };
 
     std::vector<SettingsItem> settingsItems(const std::string &leftStickMode)
     {
@@ -1146,6 +1201,8 @@ namespace
             items.push_back(SettingsItem::Sm64AutoFrames);
             items.push_back(SettingsItem::Sm64AutoReleaseDelay);
         }
+        else if (leftStickMode == "SM64 D-pad")
+            items.push_back(SettingsItem::Sm64DpadDeadzone);
         else if (leftStickMode == "Cursor")
             items.push_back(SettingsItem::CursorSpeed);
         items.push_back(SettingsItem::Back);
@@ -1154,7 +1211,7 @@ namespace
     }
 
     void renderSettings(SDL_Renderer *renderer, int width, int height, const std::string &theme, const std::string &leftStickMode,
-                        std::uint8_t sm64AutoFrames, std::uint16_t sm64AutoReleaseDelayMs, std::uint16_t cursorSpeedLimit,
+                        std::uint8_t sm64AutoFrames, std::uint16_t sm64AutoReleaseDelayMs, std::uint8_t sm64DpadDeadzone, std::uint16_t cursorSpeedLimit,
                         const std::vector<SettingsItem> &items, int selected, int scrollOffset)
     {
         drawGradientBackground(renderer, width, height);
@@ -1182,6 +1239,7 @@ namespace
             case SettingsItem::LeftStickMode: label = "Left stick mod"; value = "< " + leftStickMode + " >"; break;
             case SettingsItem::Sm64AutoFrames: label = "SM64 Auto delay"; value = "< " + std::to_string(sm64AutoFrames) + " frames >"; break;
             case SettingsItem::Sm64AutoReleaseDelay: label = "SM64 Auto release delay"; value = "< " + std::to_string(sm64AutoReleaseDelayMs) + " ms >"; break;
+            case SettingsItem::Sm64DpadDeadzone: label = "SM64 D-pad deadzone"; value = "< " + std::to_string(sm64DpadDeadzone) + " % >"; break;
             case SettingsItem::CursorSpeed: label = "Cursor speed limit"; value = "< " + std::to_string(cursorSpeedLimit) + " px/s >"; break;
             case SettingsItem::Back: value = "BACK"; break;
             case SettingsItem::Quit: value = "QUIT"; break;
@@ -1215,7 +1273,7 @@ namespace
         const auto current = std::find(themes.begin(), themes.end(), currentTheme);
         if (current != themes.end()) themeIndex = static_cast<std::size_t>(std::distance(themes.begin(), current));
 
-        const std::array<std::string, 5> leftStickModes{"Disabled", "D-pad", "SM64 Auto", "SM64 Manual", "Cursor"};
+        const std::array<std::string, 6> leftStickModes{"Disabled", "D-pad", "SM64 Auto", "SM64 Manual", "SM64 D-pad", "Cursor"};
         std::size_t leftStickModeIndex = 0;
         const std::string currentLeftStickMode = configuredLeftStickMode(directory);
         const auto currentLeftStick = std::find(leftStickModes.begin(), leftStickModes.end(), currentLeftStickMode);
@@ -1227,6 +1285,7 @@ namespace
         std::uint8_t sm64AutoFrames = configuredSm64AutoCenterHoldFrames(directory);
         std::uint16_t sm64AutoReleaseDelayMs = configuredSm64AutoReleaseDelayMs(directory);
         std::uint16_t cursorSpeedLimit = configuredCursorSpeedLimit(directory);
+        std::uint8_t sm64DpadDeadzone = configuredSm64DpadDeadzonePercent(directory);
         int selected = 0;
         int scrollOffset = 0;
         UiNavigationRepeater repeater;
@@ -1244,7 +1303,7 @@ namespace
             if (selectedTop < scrollOffset) scrollOffset = selectedTop;
             else if (selectedTop + rowHeight > scrollOffset + viewportHeight) scrollOffset = selectedTop + rowHeight - viewportHeight;
             scrollOffset = std::clamp(scrollOffset, 0, std::max(0, static_cast<int>(items.size()) * rowHeight - viewportHeight));
-            renderSettings(renderer, width, height, themes[themeIndex], leftStickMode, sm64AutoFrames, sm64AutoReleaseDelayMs, cursorSpeedLimit, items, selected, scrollOffset);
+            renderSettings(renderer, width, height, themes[themeIndex], leftStickMode, sm64AutoFrames, sm64AutoReleaseDelayMs, sm64DpadDeadzone, cursorSpeedLimit, items, selected, scrollOffset);
 
             input.pollEvent();
             if (input.exitComboPressed()) return SettingsResult::Exit;
@@ -1291,6 +1350,12 @@ namespace
                 {
                     const int next = std::clamp(static_cast<int>(sm64AutoReleaseDelayMs) + direction * static_cast<int>(widemelon::Sm64TouchReleaseDelayStepMs), static_cast<int>(widemelon::Sm64TouchReleaseDelayMinimumMs), static_cast<int>(widemelon::Sm64TouchReleaseDelayMaximumMs));
                     if (saveConfiguredSm64AutoReleaseDelayMs(directory, static_cast<std::uint16_t>(next))) sm64AutoReleaseDelayMs = static_cast<std::uint16_t>(next);
+                    break;
+                }
+                case SettingsItem::Sm64DpadDeadzone:
+                {
+                    const int next = std::clamp(static_cast<int>(sm64DpadDeadzone) + direction, static_cast<int>(widemelon::Sm64DpadDeadzoneMinimumPercent), static_cast<int>(widemelon::Sm64DpadDeadzoneMaximumPercent));
+                    if (saveConfiguredSm64DpadDeadzonePercent(directory, static_cast<std::uint8_t>(next))) sm64DpadDeadzone = static_cast<std::uint8_t>(next);
                     break;
                 }
                 case SettingsItem::CursorSpeed:
@@ -1478,9 +1543,11 @@ namespace widemelon
         widemelon::Sm64StickMod sm64Stick;
         widemelon::Sm64ManualStickMod sm64ManualStick;
         widemelon::CursorStickMod cursorStick;
+        widemelon::Sm64DpadMod sm64Dpad;
         bool sm64Enabled = false;
         bool sm64ManualEnabled = false;
         bool cursorEnabled = false;
+        bool sm64DpadEnabled = false;
         auto sm64ModeEnabled = [&] { return sm64Enabled || sm64ManualEnabled || cursorEnabled; };
         auto sm64TouchState = [&]() -> const Sm64TouchState&
         { return cursorEnabled ? cursorStick.touchState() : (sm64ManualEnabled ? sm64ManualStick.touchState() : sm64Stick.touchState()); };
@@ -1536,16 +1603,21 @@ namespace widemelon
                 sm64Enabled = leftStickMode == "SM64 Auto" || leftStickMode == "SM64";
                 sm64ManualEnabled = leftStickMode == "SM64 Manual";
                 cursorEnabled = leftStickMode == "Cursor";
+                sm64DpadEnabled = leftStickMode == "SM64 D-pad";
                 sm64Stick.setCenterHoldFrames(configuredSm64AutoCenterHoldFrames(directory));
                 sm64Stick.setReleaseDelayMs(configuredSm64AutoReleaseDelayMs(directory));
                 sm64Stick.setEnabled(sm64Enabled);
                 sm64ManualStick.setEnabled(sm64ManualEnabled);
                 cursorStick.setSpeedLimit(configuredCursorSpeedLimit(directory));
                 cursorStick.setEnabled(cursorEnabled);
-                exitInput.setLeftStickDpadEnabled(leftStickMode == "D-pad");
+                sm64Dpad.setDeadzonePercent(configuredSm64DpadDeadzonePercent(directory));
+                sm64Dpad.setEnabled(sm64DpadEnabled);
+                exitInput.setLeftStickDpadEnabled(leftStickMode == "D-pad" || sm64DpadEnabled);
+                if (sm64DpadEnabled) exitInput.setLeftStickDpadThresholdFraction(widemelon::Sm64DpadDirectionalThreshold);
                 if (sm64Enabled) Logger::info("SM64 Auto stick mod enabled");
                 if (sm64ManualEnabled) Logger::info("SM64 Manual stick mod enabled");
                 if (cursorEnabled) Logger::info("Cursor stick mod enabled");
+                if (sm64DpadEnabled) Logger::info("SM64 D-pad stick mod enabled");
                 if (leftStickMode == "Disabled") Logger::info("Left stick disabled");
             }
         }
@@ -1595,7 +1667,8 @@ namespace widemelon
             const bool sm64TouchChanged = sm64Stick.update(exitInput.leftStickState());
             const bool sm64ManualTouchChanged = sm64ManualStick.update(exitInput.leftStickState(), exitInput.r2Pressed());
             const bool cursorTouchChanged = cursorStick.update(exitInput.leftStickState(), exitInput.r2Pressed());
-            inputDirty = exitInput.takeStateChanged() || sm64TouchChanged || sm64ManualTouchChanged || cursorTouchChanged || inputDirty;
+            const bool sm64DpadChanged = sm64Dpad.update(exitInput.leftStickState());
+            inputDirty = exitInput.takeStateChanged() || sm64TouchChanged || sm64ManualTouchChanged || cursorTouchChanged || sm64DpadChanged || inputDirty;
             if ((sm64TouchChanged || sm64ManualTouchChanged || cursorTouchChanged) && !inputTest)
                 render(renderer, width, height, config, status, videoTexture, &sm64TouchState());
             if (inputTest && !inputEvent.empty())
@@ -1650,7 +1723,7 @@ namespace widemelon
                 {
                     const std::uint32_t sequence = ++inputSequence;
                     const bool touchActive = sm64ModeEnabled() && sm64TouchState().active;
-                    client->sendInputSnapshot(sequence, exitInput.buttonMask(),
+                    client->sendInputSnapshot(sequence, static_cast<std::uint16_t>(exitInput.buttonMask() | sm64Dpad.additionalButtons()),
                         touchActive, sm64TouchState().x, sm64TouchState().y);
                     inputDirty = false;
                     nextInputSnapshot = now + std::chrono::milliseconds(200);

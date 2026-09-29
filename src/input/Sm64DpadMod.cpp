@@ -19,6 +19,12 @@ void Sm64DpadMod::setEnabled(bool enabled)
     releaseAt = {};
 }
 
+void Sm64DpadMod::setDeadzonePercent(std::uint8_t percent)
+{
+    const std::uint8_t clamped = std::clamp(percent, Sm64DpadDeadzoneMinimumPercent, Sm64DpadDeadzoneMaximumPercent);
+    yActivationThreshold = static_cast<float>(clamped) / 100.0F;
+}
+
 float Sm64DpadMod::normalizedAxis(int value, int minimum, int maximum, int center)
 {
     const int distance = value < center ? center - minimum : maximum - center;
@@ -41,7 +47,7 @@ bool Sm64DpadMod::update(const LeftStickState& stick)
     const float magnitude = std::sqrt(horizontal * horizontal + vertical * vertical);
     const auto now = std::chrono::steady_clock::now();
 
-    if (magnitude >= Sm64DpadBActivationThreshold)
+    if (magnitude >= yActivationThreshold)
     {
         bHeld = true;
         releasePending = false;
