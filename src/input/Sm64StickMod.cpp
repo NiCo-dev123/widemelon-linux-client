@@ -14,7 +14,7 @@ void Sm64StickMod::setEnabled(bool enabled)
     isEnabled = enabled;
     isCursorPressed = false;
     isCursorTracking = false;
-    releaseFrames = 0;
+    releaseStartedAt = {};
     cursorSpeed = 0.0F;
     lastCursorUpdateAt = {};
     touch = {};
@@ -68,7 +68,7 @@ bool Sm64StickMod::update(const LeftStickState& stick)
     const auto now = std::chrono::steady_clock::now();
     if (distance > static_cast<float>(Sm64TouchPressRadius))
     {
-        releaseFrames = 0;
+        releaseStartedAt = {};
         if (!isCursorPressed)
         {
             // Start one continuous contact from the centre, regardless of how
@@ -95,13 +95,14 @@ bool Sm64StickMod::update(const LeftStickState& stick)
     }
     else if (isCursorPressed)
     {
-        // Keep the exact same contact through a four-frame centre hysteresis.
-        ++releaseFrames;
-        if (releaseFrames >= Sm64TouchReleaseFrames)
+        // Keep the exact same contact through a time-based release hysteresis.
+        if (releaseStartedAt == std::chrono::steady_clock::time_point{})
+            releaseStartedAt = now;
+        if (now - releaseStartedAt >= Sm64TouchReleaseDelay)
         {
             isCursorPressed = false;
             isCursorTracking = false;
-            releaseFrames = 0;
+            releaseStartedAt = {};
             cursorSpeed = 0.0F;
             lastCursorUpdateAt = {};
             next.active = false;

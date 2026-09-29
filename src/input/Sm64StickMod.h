@@ -9,10 +9,10 @@ namespace widemelon
 {
 
 inline constexpr std::uint16_t Sm64TouchPressRadius{2};
-inline constexpr std::uint8_t Sm64TouchReleaseFrames{4};
+inline constexpr auto Sm64TouchReleaseDelay{std::chrono::milliseconds{500}};
 inline constexpr std::uint16_t Sm64TouchMaximumRadius{35};
-inline constexpr float Sm64TouchCursorAcceleration{500.0F};
-inline constexpr float Sm64TouchMaximumCursorSpeed{120.0F};
+inline constexpr float Sm64TouchCursorAcceleration{300.0F};
+inline constexpr float Sm64TouchMaximumCursorSpeed{240.0F};
 inline constexpr std::uint16_t Sm64TouchCenterX{127};
 inline constexpr std::uint16_t Sm64TouchCenterY{95};
 
@@ -41,7 +41,7 @@ private:
     bool isEnabled = false;
     bool isCursorPressed = false;
     bool isCursorTracking = false;
-    std::uint8_t releaseFrames = 0;
+    std::chrono::steady_clock::time_point releaseStartedAt{};
     float cursorSpeed = 0.0F;
     std::chrono::steady_clock::time_point lastCursorUpdateAt{};
     Sm64TouchState touch;
