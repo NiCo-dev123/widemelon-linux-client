@@ -122,6 +122,13 @@ void EvdevInput::setLeftStickDpadEnabled(bool enabled)
     mergeDirectionalSources();
 }
 
+void EvdevInput::setLeftStickDpadThresholdFraction(float fraction)
+{
+    const float clamped = std::clamp(fraction, 0.01F, 1.0F);
+    leftStickXThreshold = std::max(1, static_cast<int>(static_cast<float>(leftStickXMaximum - leftStickXMinimum) * clamped / 2.0F));
+    leftStickYThreshold = std::max(1, static_cast<int>(static_cast<float>(leftStickYMaximum - leftStickYMinimum) * clamped / 2.0F));
+}
+
 UiAction EvdevInput::takeUiAction()
 {
     const UiAction action = uiAction;

@@ -8,6 +8,7 @@
 namespace widemelon
 {
 
+inline constexpr float Sm64DpadDirectionalThreshold{0.10F};
 inline constexpr float Sm64DpadBActivationThreshold{0.5F};
 inline constexpr std::chrono::milliseconds Sm64DpadBReleaseDelay{33};
 

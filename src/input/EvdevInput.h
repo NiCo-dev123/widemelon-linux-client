@@ -51,6 +51,7 @@ public:
     LeftStickState leftStickState() const;
     bool r2Pressed() const { return rightTriggerPressed; }
     void setLeftStickDpadEnabled(bool enabled);
+    void setLeftStickDpadThresholdFraction(float fraction);
 
 private:
     bool updateDirectionMask(std::uint16_t& sourceMask, bool horizontal, int value, int center, int threshold);

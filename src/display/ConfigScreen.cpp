@@ -1290,6 +1290,8 @@ namespace widemelon
                 sm64Stick.setEnabled(sm64Enabled);
                 sm64Dpad.setEnabled(sm64DpadEnabled);
                 exitInput.setLeftStickDpadEnabled(leftStickMode != "SM64" && leftStickMode != "Disabled");
+                if (sm64DpadEnabled)
+                    exitInput.setLeftStickDpadThresholdFraction(widemelon::Sm64DpadDirectionalThreshold);
                 if (sm64Enabled) Logger::info("SM64 stick mod enabled");
                 if (sm64DpadEnabled) Logger::info("SM64 D-pad stick mod enabled");
                 if (leftStickMode == "Disabled") Logger::info("Left stick disabled");

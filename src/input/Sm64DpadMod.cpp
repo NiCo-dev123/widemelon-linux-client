@@ -8,7 +8,7 @@ namespace widemelon
 
 namespace
 {
-constexpr std::uint16_t ButtonB = 1U << 1;
+constexpr std::uint16_t ButtonY = 1U << 11;
 }
 
 void Sm64DpadMod::setEnabled(bool enabled)
@@ -41,7 +41,7 @@ bool Sm64DpadMod::update(const LeftStickState& stick)
     const float magnitude = std::sqrt(horizontal * horizontal + vertical * vertical);
     const auto now = std::chrono::steady_clock::now();
 
-    if (magnitude > Sm64DpadBActivationThreshold)
+    if (magnitude >= Sm64DpadBActivationThreshold)
     {
         bHeld = true;
         releasePending = false;
@@ -64,7 +64,7 @@ bool Sm64DpadMod::update(const LeftStickState& stick)
 
 std::uint16_t Sm64DpadMod::additionalButtons() const
 {
-    return bHeld ? ButtonB : 0;
+    return bHeld ? ButtonY : 0;
 }
 
 }
