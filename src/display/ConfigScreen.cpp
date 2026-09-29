@@ -2,6 +2,7 @@
 
 #include "common/Logger.h"
 #include "input/EvdevInput.h"
+#include "input/Sm64DpadMod.h"
 #include "input/Sm64StickMod.h"
 #include "network/WebSocketClient.h"
 
@@ -1015,8 +1016,12 @@ namespace
         const std::string currentTheme = configuredTheme(directory);
         const auto current = std::find(themes.begin(), themes.end(), currentTheme);
         if (current != themes.end()) themeIndex = static_cast<std::size_t>(std::distance(themes.begin(), current));
-        const std::array<std::string, 2> leftStickModes{"D-pad", "SM64"};
-        std::size_t leftStickModeIndex = configuredLeftStickMode(directory) == "SM64" ? 1 : 0;
+        const std::array<std::string, 4> leftStickModes{"D-pad", "SM64", "SM64 D-pad", "Disabled"};
+        std::size_t leftStickModeIndex = 0;
+        const std::string currentLeftStickMode = configuredLeftStickMode(directory);
+        const auto currentLeftStick = std::find(leftStickModes.begin(), leftStickModes.end(), currentLeftStickMode);
+        if (currentLeftStick != leftStickModes.end())
+            leftStickModeIndex = static_cast<std::size_t>(std::distance(leftStickModes.begin(), currentLeftStick));
         int selected = 0;
         UiNavigationRepeater repeater;
         auto nextNavigationAt = std::chrono::steady_clock::time_point{};
@@ -1049,9 +1054,10 @@ namespace
             }
             else if (selected == 1 && (action == widemelon::UiAction::Left || action == widemelon::UiAction::Right))
             {
-                leftStickModeIndex = 1 - leftStickModeIndex;
-                if (!saveConfiguredLeftStickMode(directory, leftStickModes[leftStickModeIndex]))
-                    leftStickModeIndex = 1 - leftStickModeIndex;
+                const int step = action == widemelon::UiAction::Left ? -1 : 1;
+                const std::size_t nextMode = static_cast<std::size_t>((static_cast<int>(leftStickModeIndex) + step + static_cast<int>(leftStickModes.size())) % static_cast<int>(leftStickModes.size()));
+                if (saveConfiguredLeftStickMode(directory, leftStickModes[nextMode]))
+                    leftStickModeIndex = nextMode;
             }
             else if (selected == 2 && action == widemelon::UiAction::Confirm) return SettingsResult::Home;
             else if (selected == 3 && action == widemelon::UiAction::Confirm) return SettingsResult::Exit;
@@ -1227,7 +1233,9 @@ namespace widemelon
 
         std::unique_ptr<widemelon::WebSocketClient> client = std::make_unique<widemelon::WebSocketClient>();
         widemelon::Sm64StickMod sm64Stick;
+        widemelon::Sm64DpadMod sm64Dpad;
         bool sm64Enabled = false;
+        bool sm64DpadEnabled = false;
         std::future<std::string> connection;
         if (!inputTest)
         {
@@ -1276,10 +1284,15 @@ namespace widemelon
             {
                 executable[static_cast<std::size_t>(length)] = 0;
                 const std::string directory = std::filesystem::path(executable.data()).parent_path().string();
-                sm64Enabled = configuredLeftStickMode(directory) == "SM64";
+                const std::string leftStickMode = configuredLeftStickMode(directory);
+                sm64Enabled = leftStickMode == "SM64";
+                sm64DpadEnabled = leftStickMode == "SM64 D-pad";
                 sm64Stick.setEnabled(sm64Enabled);
-                exitInput.setLeftStickDpadEnabled(!sm64Enabled);
+                sm64Dpad.setEnabled(sm64DpadEnabled);
+                exitInput.setLeftStickDpadEnabled(leftStickMode != "SM64" && leftStickMode != "Disabled");
                 if (sm64Enabled) Logger::info("SM64 stick mod enabled");
+                if (sm64DpadEnabled) Logger::info("SM64 D-pad stick mod enabled");
+                if (leftStickMode == "Disabled") Logger::info("Left stick disabled");
             }
         }
 
@@ -1326,7 +1339,8 @@ namespace widemelon
             }
             const std::string inputEvent = exitInput.pollEvent();
             const bool sm64TouchChanged = sm64Stick.update(exitInput.leftStickState());
-            inputDirty = exitInput.takeStateChanged() || sm64TouchChanged || inputDirty;
+            const bool sm64DpadChanged = sm64Dpad.update(exitInput.leftStickState());
+            inputDirty = exitInput.takeStateChanged() || sm64TouchChanged || sm64DpadChanged || inputDirty;
             if (sm64TouchChanged && !inputTest)
                 render(renderer, width, height, config, status, videoTexture, &sm64Stick.touchState());
             if (inputTest && !inputEvent.empty())
@@ -1378,7 +1392,7 @@ namespace widemelon
                 }
                 else if (inputDirty || now >= nextInputSnapshot)
                 {
-                    client->sendInputSnapshot(++inputSequence, exitInput.buttonMask(), sm64Enabled && sm64Stick.touchState().active, sm64Stick.touchState().x, sm64Stick.touchState().y);
+                    client->sendInputSnapshot(++inputSequence, static_cast<std::uint16_t>(exitInput.buttonMask() | sm64Dpad.additionalButtons()), sm64Enabled && sm64Stick.touchState().active, sm64Stick.touchState().x, sm64Stick.touchState().y);
                     inputDirty = false;
                     nextInputSnapshot = now + std::chrono::milliseconds(200);
                 }
