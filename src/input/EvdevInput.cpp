@@ -4,6 +4,8 @@
 #include <cstring>
 #include <fcntl.h>
 #include <linux/input.h>
+#include <algorithm>
+#include <sys/ioctl.h>
 #include <unistd.h>
 
 namespace widemelon
@@ -23,6 +25,17 @@ constexpr std::uint16_t ButtonR = 1U << 8;
 constexpr std::uint16_t ButtonL = 1U << 9;
 constexpr std::uint16_t ButtonX = 1U << 10;
 constexpr std::uint16_t ButtonY = 1U << 11;
+constexpr std::uint16_t DirectionMask = ButtonRight | ButtonLeft | ButtonUp | ButtonDown;
+
+void configureStickAxis(int fileDescriptor, unsigned int axis, int& minimum, int& maximum, int& center, int& threshold)
+{
+    input_absinfo info{};
+    if (ioctl(fileDescriptor, EVIOCGABS(axis), &info) != 0) return;
+    minimum = info.minimum;
+    maximum = info.maximum;
+    center = info.minimum + (info.maximum - info.minimum) / 2;
+    threshold = std::max(info.flat, (info.maximum - info.minimum) / 4);
+}
 }
 
 EvdevInput::~EvdevInput()
@@ -38,7 +51,41 @@ bool EvdevInput::open(const std::string& path, std::string& error)
         error = std::strerror(errno);
         return false;
     }
+    configureStickAxis(fileDescriptor, ABS_X, leftStickXMinimum, leftStickXMaximum, leftStickXCenter, leftStickXThreshold);
+    configureStickAxis(fileDescriptor, ABS_Y, leftStickYMinimum, leftStickYMaximum, leftStickYCenter, leftStickYThreshold);
+    leftStickX = leftStickXCenter;
+    leftStickY = leftStickYCenter;
     return true;
+}
+
+void EvdevInput::mergeDirectionalSources()
+{
+    const std::uint16_t previous = mask;
+    mask = static_cast<std::uint16_t>((mask & ~DirectionMask) | dpadMask | leftStickMask);
+    stateChanged = stateChanged || previous != mask;
+}
+
+bool EvdevInput::updateDirectionMask(std::uint16_t& sourceMask, bool horizontal, int value, int center, int threshold)
+{
+    const std::uint16_t affected = horizontal ? ButtonLeft | ButtonRight : ButtonUp | ButtonDown;
+    const std::uint16_t direction = horizontal
+        ? (value < center - threshold ? ButtonLeft : value > center + threshold ? ButtonRight : 0)
+        : (value < center - threshold ? ButtonUp : value > center + threshold ? ButtonDown : 0);
+    const std::uint16_t updatedMask = static_cast<std::uint16_t>((sourceMask & ~affected) | direction);
+    // Analog hardware can emit many position samples while held. Only a
+    // threshold crossing is an input transition, so keep the current D-pad
+    // direction latched until the stick returns to the dead zone.
+    if (updatedMask == sourceMask) return false;
+    sourceMask = updatedMask;
+    mergeDirectionalSources();
+    return true;
+}
+
+void EvdevInput::setUiDirection(bool horizontal, int value, int center, int threshold)
+{
+    if (uiAction != UiAction::None || (value >= center - threshold && value <= center + threshold)) return;
+    if (horizontal) uiAction = value < center ? UiAction::Left : UiAction::Right;
+    else uiAction = value < center ? UiAction::Up : UiAction::Down;
 }
 
 bool EvdevInput::exitComboPressed()
@@ -55,11 +102,48 @@ bool EvdevInput::takeStateChanged()
     return changed;
 }
 
+bool EvdevInput::takeLeftStickChanged()
+{
+    const bool changed = leftStickChanged;
+    leftStickChanged = false;
+    return changed;
+}
+
+LeftStickState EvdevInput::leftStickState() const
+{
+    return {leftStickX, leftStickY, leftStickXMinimum, leftStickXMaximum, leftStickYMinimum, leftStickYMaximum, leftStickXCenter, leftStickYCenter};
+}
+
+void EvdevInput::setLeftStickDpadEnabled(bool enabled)
+{
+    if (leftStickDpadEnabled == enabled) return;
+    leftStickDpadEnabled = enabled;
+    leftStickMask = 0;
+    mergeDirectionalSources();
+}
+
+void EvdevInput::setLeftStickDpadThresholdFraction(float fraction)
+{
+    const float clamped = std::clamp(fraction, 0.01F, 1.0F);
+    leftStickXThreshold = std::max(1, static_cast<int>(static_cast<float>(leftStickXMaximum - leftStickXMinimum) * clamped / 2.0F));
+    leftStickYThreshold = std::max(1, static_cast<int>(static_cast<float>(leftStickYMaximum - leftStickYMinimum) * clamped / 2.0F));
+}
+
 UiAction EvdevInput::takeUiAction()
 {
     const UiAction action = uiAction;
     uiAction = UiAction::None;
     return action;
+}
+
+UiAction EvdevInput::heldUiDirection() const
+{
+    const std::uint16_t directions = static_cast<std::uint16_t>(mask & DirectionMask);
+    if (directions & ButtonUp) return UiAction::Up;
+    if (directions & ButtonDown) return UiAction::Down;
+    if (directions & ButtonLeft) return UiAction::Left;
+    if (directions & ButtonRight) return UiAction::Right;
+    return UiAction::None;
 }
 
 std::string EvdevInput::pollEvent()
@@ -86,6 +170,7 @@ std::string EvdevInput::pollEvent()
             case BTN_START: button = ButtonStart; startPressed = pressed; break;
             case BTN_TL: button = ButtonL; leftPressed = pressed; break;
             case BTN_TR: button = ButtonR; rightPressed = pressed; break;
+            case BTN_TR2: rightTriggerPressed = pressed; stateChanged = true; break;
             default: break;
             }
             if (button != 0)
@@ -104,23 +189,34 @@ std::string EvdevInput::pollEvent()
                 else if (event.code == BTN_START) uiAction = UiAction::Start;
             }
         }
-        else if (event.type == EV_ABS && (event.code == 16 || event.code == 17))
+        else if (event.type == EV_ABS && (event.code == ABS_HAT0X || event.code == ABS_HAT0Y))
         {
-            const std::uint16_t horizontal = ButtonLeft | ButtonRight;
-            const std::uint16_t vertical = ButtonUp | ButtonDown;
-            const std::uint16_t affected = event.code == 16 ? horizontal : vertical;
-            const std::uint16_t direction = event.code == 16
-                ? (event.value < 0 ? ButtonLeft : event.value > 0 ? ButtonRight : 0)
-                : (event.value < 0 ? ButtonUp : event.value > 0 ? ButtonDown : 0);
-            const std::uint16_t previous = mask;
-            mask &= static_cast<std::uint16_t>(~affected);
-            mask |= direction;
-            stateChanged = stateChanged || previous != mask;
-            if (event.value != 0 && uiAction == UiAction::None)
+            const bool horizontal = event.code == ABS_HAT0X;
+            if (updateDirectionMask(dpadMask, horizontal, event.value, 0, 0))
+                setUiDirection(horizontal, event.value, 0, 0);
+        }
+        else if (event.type == EV_ABS && event.code == ABS_RZ)
+        {
+            const bool pressed = event.value > 0;
+            if (rightTriggerPressed != pressed)
             {
-                if (event.code == 16) uiAction = event.value < 0 ? UiAction::Left : UiAction::Right;
-                else uiAction = event.value < 0 ? UiAction::Up : UiAction::Down;
+                rightTriggerPressed = pressed;
+                stateChanged = true;
             }
+        }
+        else if (event.type == EV_ABS && (event.code == ABS_X || event.code == ABS_Y))
+        {
+            const bool horizontal = event.code == ABS_X;
+            int &position = horizontal ? leftStickX : leftStickY;
+            if (position != event.value)
+            {
+                position = event.value;
+                leftStickChanged = true;
+            }
+            const int center = horizontal ? leftStickXCenter : leftStickYCenter;
+            const int threshold = horizontal ? leftStickXThreshold : leftStickYThreshold;
+            if (leftStickDpadEnabled && updateDirectionMask(leftStickMask, horizontal, event.value, center, threshold))
+                setUiDirection(horizontal, event.value, center, threshold);
         }
     }
     return description;

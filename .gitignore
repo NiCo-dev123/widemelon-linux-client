@@ -5,3 +5,4 @@ build*/
 CMakeUserPresets.json
 widemelon-client.conf
 widemelon-client.log
+tools/build-tsps.conf

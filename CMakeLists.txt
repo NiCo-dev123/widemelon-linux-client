@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(widemelon-linux-client VERSION 0.1.0 LANGUAGES CXX)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" WIDEMELON_VERSION)
+string(STRIP "${WIDEMELON_VERSION}" WIDEMELON_VERSION)
+
+project(widemelon-linux-client VERSION ${WIDEMELON_VERSION} LANGUAGES CXX)
 
 find_package(SDL2 REQUIRED)
 find_package(Threads REQUIRED)
@@ -16,12 +19,17 @@ add_executable(widemelon-client
     src/config/Config.cpp
     src/display/ConfigScreen.cpp
     src/input/EvdevInput.cpp
+    src/input/CursorStickMod.cpp
+    src/input/Sm64DpadMod.cpp
+    src/input/Sm64ManualStickMod.cpp
+    src/input/Sm64StickMod.cpp
     src/network/WebSocketClient.cpp
     src/protocol/WideMelonProtocol.cpp
 )
 
 target_include_directories(widemelon-client PRIVATE src)
 target_compile_features(widemelon-client PRIVATE cxx_std_17)
+target_compile_definitions(widemelon-client PRIVATE WIDEMELON_VERSION=\"${WIDEMELON_VERSION}\")
 target_link_libraries(widemelon-client PRIVATE SDL2::SDL2 Threads::Threads)
 
 if(JPEG_FOUND)
@@ -31,6 +39,11 @@ if(JPEG_FOUND)
 endif()
 
 if(CMAKE_CROSSCOMPILING)
+    unset(SDL2_IMAGE_LIBRARY CACHE)
+    find_library(SDL2_IMAGE_LIBRARY NAMES SDL2_image REQUIRED)
+    target_link_libraries(widemelon-client PRIVATE ${SDL2_IMAGE_LIBRARY})
+    target_compile_definitions(widemelon-client PRIVATE WIDEMELON_HAVE_SDL_IMAGE=1)
+
     unset(SDL2_TTF_LIBRARY CACHE)
     find_library(SDL2_TTF_LIBRARY NAMES SDL2_ttf REQUIRED)
     target_link_libraries(widemelon-client PRIVATE ${SDL2_TTF_LIBRARY})

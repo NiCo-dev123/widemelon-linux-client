@@ -1,0 +1,18 @@
+{
+"name":"Lime",
+"author":"Nicolas C",
+"Description":"Green lime palette",
+"title-font-size":34,
+"footer-font-size":16,
+"gameplay-status-font-size":25,
+"hint-font-size":35,
+"form-font-size":24,
+"keyboard-value-font-size":35,
+"keyboard-action-font-size":28,
+"font":"comfortaa-latin-400-normal.ttf",
+"background-dark":"#547907",
+"background-light":"#7dad1f",
+"text-color":"#000000",
+"hint-color":"#7cc600",
+"button-fill":"#7cc600"
+}

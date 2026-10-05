@@ -322,11 +322,12 @@ bool WebSocketClient::sendOnSocket(int fileDescriptor, const std::string& frame)
     return sendAll(fileDescriptor, frame, stopRequested);
 }
 
-bool WebSocketClient::sendInputSnapshot(std::uint32_t sequence, std::uint16_t buttons)
+bool WebSocketClient::sendInputSnapshot(std::uint32_t sequence, std::uint16_t buttons, bool touchActive, std::uint16_t touchX, std::uint16_t touchY)
 {
     const std::string message = "{\"v\":2,\"type\":\"input\",\"seq\":" + std::to_string(sequence)
         + ",\"buttons\":" + std::to_string(buttons)
-        + ",\"hotkeys\":0,\"touch\":{\"active\":false,\"x\":0,\"y\":0}}";
+        + ",\"hotkeys\":0,\"touch\":{\"active\":" + (touchActive ? "true" : "false")
+        + ",\"x\":" + std::to_string(touchX) + ",\"y\":" + std::to_string(touchY) + "}}";
     std::lock_guard<std::mutex> lock(socketMutex);
     if (activeSocket < 0 || state.load() != ConnectionState::Connected) return false;
     return sendAll(activeSocket, clientFrame(0x1, message), stopRequested);

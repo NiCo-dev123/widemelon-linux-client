@@ -45,7 +45,7 @@ public:
     void requestStop();
     ConnectionState connectionState() const;
     std::uint64_t connectionGeneration() const;
-    bool sendInputSnapshot(std::uint32_t sequence, std::uint16_t buttons);
+    bool sendInputSnapshot(std::uint32_t sequence, std::uint16_t buttons, bool touchActive = false, std::uint16_t touchX = 0, std::uint16_t touchY = 0);
     bool latestJpegFrame(VideoJpegFrame& frame) const;
     bool latestDecodedVideoFrame(DecodedVideoFrame& frame) const;
 

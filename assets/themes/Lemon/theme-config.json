@@ -1,0 +1,18 @@
+{
+"name":"Lemon",
+"author":"Nicolas C",
+"Description":"Lemon palette",
+"title-font-size":34,
+"footer-font-size":16,
+"gameplay-status-font-size":25,
+"hint-font-size":35,
+"form-font-size":24,
+"keyboard-value-font-size":35,
+"keyboard-action-font-size":28,
+"font":"comfortaa-latin-400-normal.ttf",
+"background-dark":"#40a0bf",
+"background-light":"#93c4d2",
+"text-color":"#ab6d22",
+"hint-color":"#fff5cc",
+"button-fill":"#fff5cc"
+}

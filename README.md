@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/icons/wmclient-logo.png" />
+  <img src="./assets/appIcon/wmclient-logo.png" />
 </p>
 
 # Wide Melon Linux Client
@@ -20,18 +20,22 @@ Extract the .zip file, copy the folder on your SD card in `/Apps/`
 > It was only tested on SpruceOS. It should launch but some features might be broken or missing.
 > In the future, compatibility should be extended.
 
-## Building for your machine
+## Building for TSPS
 
-To produce the TSPS executable, configure CMake with an ARM64 Linux toolchain
-and a sysroot matching the console firmware. The build machine must provide the
-ARM64 SDL2 headers and library.
+The project includes `tools/build-tsps.sh`, which configures CMake, builds the ARM64 client, and assembles a complete application folder ready to copy to the SD card.
 
-With the official SDK extracted under `.toolchains/trimui-smartpro-s/`, run:
+Create your local configuration file once:
 
 ```sh
-export TRIMUI_TSPS_SDK=/PATH_TO_PROJECT/.toolchains/trimui-smartpro-s/sdk_tg5050_linux_v1.0.0
-cmake -S . -B build-tsps -G "Unix Makefiles" \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_TOOLCHAIN_FILE=cmake/TrimuiSmartProS.cmake
-cmake --build build-tsps
+cp tools/build-tsps.conf.example tools/build-tsps.conf
 ```
+
+Edit `tools/build-tsps.conf` and set `TRIMUI_TSPS_SDK` to the absolute path of your extracted SDK. This file is ignored by Git, so local paths are never committed.
+
+Then build with:
+
+```sh
+tools/build-tsps.sh
+```
+
+The ready-to-copy application is generated at `dist/WideMelonClient/`. Copy this folder into `/Apps/` on the SD card.
