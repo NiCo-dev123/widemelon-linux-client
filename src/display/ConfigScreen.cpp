@@ -1,4 +1,5 @@
 #include "display/ConfigScreen.h"
+#include "display/LeftStickModeDescriptions.h"
 
 #include "common/Logger.h"
 #include "input/CursorStickMod.h"
@@ -1191,11 +1192,44 @@ namespace
         return true;
     }
 
-    enum class SettingsItem { Theme, LeftStickMode, Sm64AutoFrames, Sm64AutoReleaseDelay, Sm64DpadDeadzone, CursorSpeed, Back, Quit };
+    enum class SettingsItem { Theme, LeftStickMode, LeftStickDescription, Sm64AutoFrames, Sm64AutoReleaseDelay, Sm64DpadDeadzone, CursorSpeed, Back, Quit };
+
+    constexpr int settingsRowHeight(SettingsItem item)
+    {
+        return item == SettingsItem::LeftStickDescription ? 102 : 82;
+    }
+
+    int settingsItemTop(const std::vector<SettingsItem> &items, std::size_t index)
+    {
+        int top = 0;
+        for (std::size_t itemIndex = 0; itemIndex < index; ++itemIndex)
+            top += settingsRowHeight(items[itemIndex]);
+        return top;
+    }
+
+    int settingsContentHeight(const std::vector<SettingsItem> &items)
+    {
+        return settingsItemTop(items, items.size());
+    }
+
+    bool settingsItemSelectable(SettingsItem item)
+    {
+        return item != SettingsItem::LeftStickDescription;
+    }
+
+    int advanceSettingsSelection(const std::vector<SettingsItem> &items, int selected, int direction)
+    {
+        const int count = static_cast<int>(items.size());
+        do
+        {
+            selected = (selected + direction + count) % count;
+        } while (!settingsItemSelectable(items[static_cast<std::size_t>(selected)]));
+        return selected;
+    }
 
     std::vector<SettingsItem> settingsItems(const std::string &leftStickMode)
     {
-        std::vector<SettingsItem> items{SettingsItem::Theme, SettingsItem::LeftStickMode};
+        std::vector<SettingsItem> items{SettingsItem::Theme, SettingsItem::LeftStickMode, SettingsItem::LeftStickDescription};
         if (leftStickMode == "SM64 Auto")
         {
             items.push_back(SettingsItem::Sm64AutoFrames);
@@ -1224,12 +1258,29 @@ namespace
 
         constexpr int listTop = 112;
         constexpr int listBottomPadding = 80;
-        constexpr int rowHeight = 82;
         const int listBottom = height - listBottomPadding;
         for (std::size_t index = 0; index < items.size(); ++index)
         {
-            const int rowY = listTop + static_cast<int>(index) * rowHeight - scrollOffset;
+            const int rowHeight = settingsRowHeight(items[index]);
+            const int rowY = listTop + settingsItemTop(items, index) - scrollOffset;
             if (rowY + rowHeight < listTop || rowY > listBottom) continue;
+
+            if (items[index] == SettingsItem::LeftStickDescription)
+            {
+                const SDL_Rect descriptionBox{fieldX, rowY, fieldWidth, rowHeight - 8};
+                drawPill(renderer, descriptionBox, false);
+                const auto description = widemelon::leftStickModeDescription(leftStickMode);
+                constexpr int lineSpacing = 23;
+                const int firstLineY = descriptionBox.y + 11;
+                for (std::size_t line = 0; line < description.lines.size(); ++line)
+                {
+                    const std::string text(description.lines[line]);
+                    if (!text.empty())
+                        drawTextColored(renderer, text, centerX - textWidth(text, themeText.gameplayStatusFontSize) / 2,
+                                        firstLineY + static_cast<int>(line) * lineSpacing, themeText.gameplayStatusFontSize, palette.primary);
+                }
+                continue;
+            }
 
             std::string label;
             std::string value;
@@ -1237,6 +1288,7 @@ namespace
             {
             case SettingsItem::Theme: label = "Theme"; value = "< " + theme + " >"; break;
             case SettingsItem::LeftStickMode: label = "Left stick mod"; value = "< " + leftStickMode + " >"; break;
+            case SettingsItem::LeftStickDescription: break;
             case SettingsItem::Sm64AutoFrames: label = "SM64 Auto delay"; value = "< " + std::to_string(sm64AutoFrames) + " frames >"; break;
             case SettingsItem::Sm64AutoReleaseDelay: label = "SM64 Auto release delay"; value = "< " + std::to_string(sm64AutoReleaseDelayMs) + " ms >"; break;
             case SettingsItem::Sm64DpadDeadzone: label = "SM64 D-pad deadzone"; value = "< " + std::to_string(sm64DpadDeadzone) + " % >"; break;
@@ -1297,12 +1349,12 @@ namespace
             selected = std::min(selected, static_cast<int>(items.size()) - 1);
             constexpr int listTop = 112;
             constexpr int listBottomPadding = 80;
-            constexpr int rowHeight = 82;
             const int viewportHeight = height - listBottomPadding - listTop;
-            const int selectedTop = selected * rowHeight;
+            const int selectedTop = settingsItemTop(items, static_cast<std::size_t>(selected));
+            const int selectedHeight = settingsRowHeight(items[static_cast<std::size_t>(selected)]);
             if (selectedTop < scrollOffset) scrollOffset = selectedTop;
-            else if (selectedTop + rowHeight > scrollOffset + viewportHeight) scrollOffset = selectedTop + rowHeight - viewportHeight;
-            scrollOffset = std::clamp(scrollOffset, 0, std::max(0, static_cast<int>(items.size()) * rowHeight - viewportHeight));
+            else if (selectedTop + selectedHeight > scrollOffset + viewportHeight) scrollOffset = selectedTop + selectedHeight - viewportHeight;
+            scrollOffset = std::clamp(scrollOffset, 0, std::max(0, settingsContentHeight(items) - viewportHeight));
             renderSettings(renderer, width, height, themes[themeIndex], leftStickMode, sm64AutoFrames, sm64AutoReleaseDelayMs, sm64DpadDeadzone, cursorSpeedLimit, items, selected, scrollOffset);
 
             input.pollEvent();
@@ -1317,8 +1369,8 @@ namespace
                 continue;
             }
             if (navigation) nextNavigationAt = now + widemelon::UiNavigationCooldown;
-            if (action == widemelon::UiAction::Up) selected = (selected + static_cast<int>(items.size()) - 1) % static_cast<int>(items.size());
-            else if (action == widemelon::UiAction::Down) selected = (selected + 1) % static_cast<int>(items.size());
+            if (action == widemelon::UiAction::Up) selected = advanceSettingsSelection(items, selected, -1);
+            else if (action == widemelon::UiAction::Down) selected = advanceSettingsSelection(items, selected, 1);
             else if (action == widemelon::UiAction::Left || action == widemelon::UiAction::Right)
             {
                 const int direction = action == widemelon::UiAction::Left ? -1 : 1;
