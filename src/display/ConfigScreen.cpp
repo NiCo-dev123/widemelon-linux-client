@@ -1192,11 +1192,12 @@ namespace
         return true;
     }
 
-    enum class SettingsItem { Theme, LeftStickMode, LeftStickDescription, Sm64AutoFrames, Sm64AutoReleaseDelay, Sm64DpadDeadzone, CursorSpeed, Back, Quit };
+    enum class SettingsPage { Main, LeftStickMod, LeftStickCalibration };
+    enum class SettingsItem { Theme, LeftStickMod, LeftStickCalibration, LeftStickMode, LeftStickDescription, Sm64AutoFrames, Sm64AutoReleaseDelay, Sm64DpadDeadzone, CursorSpeed, Back, Quit };
 
     constexpr int settingsRowHeight(SettingsItem item)
     {
-        return item == SettingsItem::LeftStickDescription ? 102 : 82;
+        return item == SettingsItem::LeftStickDescription ? 78 : 82;
     }
 
     int settingsItemTop(const std::vector<SettingsItem> &items, std::size_t index)
@@ -1227,9 +1228,14 @@ namespace
         return selected;
     }
 
-    std::vector<SettingsItem> settingsItems(const std::string &leftStickMode)
+    std::vector<SettingsItem> settingsItems(SettingsPage page, const std::string &leftStickMode)
     {
-        std::vector<SettingsItem> items{SettingsItem::Theme, SettingsItem::LeftStickMode, SettingsItem::LeftStickDescription};
+        if (page == SettingsPage::Main)
+            return {SettingsItem::Theme, SettingsItem::LeftStickMod, SettingsItem::LeftStickCalibration, SettingsItem::Back, SettingsItem::Quit};
+        if (page == SettingsPage::LeftStickCalibration)
+            return {};
+
+        std::vector<SettingsItem> items{SettingsItem::LeftStickMode, SettingsItem::LeftStickDescription};
         if (leftStickMode == "SM64 Auto")
         {
             items.push_back(SettingsItem::Sm64AutoFrames);
@@ -1239,12 +1245,21 @@ namespace
             items.push_back(SettingsItem::Sm64DpadDeadzone);
         else if (leftStickMode == "Cursor")
             items.push_back(SettingsItem::CursorSpeed);
-        items.push_back(SettingsItem::Back);
-        items.push_back(SettingsItem::Quit);
         return items;
     }
 
-    void renderSettings(SDL_Renderer *renderer, int width, int height, const std::string &theme, const std::string &leftStickMode,
+    const char *settingsTitle(SettingsPage page)
+    {
+        switch (page)
+        {
+        case SettingsPage::Main: return "Settings";
+        case SettingsPage::LeftStickMod: return "Left stick mod";
+        case SettingsPage::LeftStickCalibration: return "Left stick calibration";
+        }
+        return "Settings";
+    }
+
+    void renderSettings(SDL_Renderer *renderer, int width, int height, SettingsPage page, const std::string &theme, const std::string &leftStickMode,
                         std::uint8_t sm64AutoFrames, std::uint16_t sm64AutoReleaseDelayMs, std::uint8_t sm64DpadDeadzone, std::uint16_t cursorSpeedLimit,
                         const std::vector<SettingsItem> &items, int selected, int scrollOffset)
     {
@@ -1253,7 +1268,7 @@ namespace
         const int fieldWidth = widemelon::UiFormFieldWidth;
         const int fieldHeight = widemelon::UiFormFieldHeight;
         const int fieldX = centerX - fieldWidth / 2;
-        const std::string title = "Settings";
+        const std::string title = settingsTitle(page);
         drawTextColored(renderer, title, centerX - textWidth(title, themeText.titleFontSize) / 2, 36, themeText.titleFontSize, palette.primary);
 
         constexpr int listTop = 112;
@@ -1267,17 +1282,14 @@ namespace
 
             if (items[index] == SettingsItem::LeftStickDescription)
             {
-                const SDL_Rect descriptionBox{fieldX, rowY, fieldWidth, rowHeight - 8};
-                drawPill(renderer, descriptionBox, false);
                 const auto description = widemelon::leftStickModeDescription(leftStickMode);
-                constexpr int lineSpacing = 23;
-                const int firstLineY = descriptionBox.y + 11;
+                constexpr int lineSpacing = 22;
                 for (std::size_t line = 0; line < description.lines.size(); ++line)
                 {
                     const std::string text(description.lines[line]);
                     if (!text.empty())
                         drawTextColored(renderer, text, centerX - textWidth(text, themeText.gameplayStatusFontSize) / 2,
-                                        firstLineY + static_cast<int>(line) * lineSpacing, themeText.gameplayStatusFontSize, palette.primary);
+                                        rowY + static_cast<int>(line) * lineSpacing, themeText.gameplayStatusFontSize, palette.hint);
                 }
                 continue;
             }
@@ -1287,14 +1299,16 @@ namespace
             switch (items[index])
             {
             case SettingsItem::Theme: label = "Theme"; value = "< " + theme + " >"; break;
-            case SettingsItem::LeftStickMode: label = "Left stick mod"; value = "< " + leftStickMode + " >"; break;
-            case SettingsItem::LeftStickDescription: break;
+            case SettingsItem::LeftStickMod: value = "LEFT STICK MOD"; break;
+            case SettingsItem::LeftStickCalibration: value = "LEFT STICK CALIBRATION"; break;
+            case SettingsItem::LeftStickMode: label = "Mode"; value = "< " + leftStickMode + " >"; break;
             case SettingsItem::Sm64AutoFrames: label = "SM64 Auto delay"; value = "< " + std::to_string(sm64AutoFrames) + " frames >"; break;
             case SettingsItem::Sm64AutoReleaseDelay: label = "SM64 Auto release delay"; value = "< " + std::to_string(sm64AutoReleaseDelayMs) + " ms >"; break;
             case SettingsItem::Sm64DpadDeadzone: label = "SM64 D-pad deadzone"; value = "< " + std::to_string(sm64DpadDeadzone) + " % >"; break;
             case SettingsItem::CursorSpeed: label = "Cursor speed limit"; value = "< " + std::to_string(cursorSpeedLimit) + " px/s >"; break;
             case SettingsItem::Back: value = "BACK"; break;
             case SettingsItem::Quit: value = "QUIT"; break;
+            case SettingsItem::LeftStickDescription: break;
             }
 
             if (!label.empty())
@@ -1304,10 +1318,20 @@ namespace
             drawTextColored(renderer, value, centerX - textWidth(value, themeText.formFontSize) / 2, field.y + 10, themeText.formFontSize, palette.primary);
         }
 
-        int hintX = width / 2 - 150;
         const int hintY = height - 64;
-        hintX = drawControlHint(renderer, uiTextures.hintA, "A", "SELECT", hintX, hintY, themeText.hintFontSize);
-        drawControlHint(renderer, uiTextures.hintB, "B", "BACK", hintX, hintY, themeText.hintFontSize);
+        if (page == SettingsPage::Main)
+        {
+            int hintX = width / 2 - 150;
+            hintX = drawControlHint(renderer, uiTextures.hintA, "A", "SELECT", hintX, hintY, themeText.hintFontSize);
+            drawControlHint(renderer, uiTextures.hintB, "B", "BACK", hintX, hintY, themeText.hintFontSize);
+        }
+        else
+        {
+            int hintX = width / 2 - 185;
+            if (page == SettingsPage::LeftStickMod)
+                hintX = drawControlHint(renderer, uiTextures.hintA, "A", "SELECT", hintX, hintY, themeText.hintFontSize);
+            drawControlHint(renderer, uiTextures.hintB, "B", "BACK", hintX, hintY, themeText.hintFontSize);
+        }
         SDL_RenderPresent(renderer);
     }
 
@@ -1338,6 +1362,7 @@ namespace
         std::uint16_t sm64AutoReleaseDelayMs = configuredSm64AutoReleaseDelayMs(directory);
         std::uint16_t cursorSpeedLimit = configuredCursorSpeedLimit(directory);
         std::uint8_t sm64DpadDeadzone = configuredSm64DpadDeadzonePercent(directory);
+        SettingsPage page = SettingsPage::Main;
         int selected = 0;
         int scrollOffset = 0;
         UiNavigationRepeater repeater;
@@ -1345,22 +1370,39 @@ namespace
         while (true)
         {
             const std::string &leftStickMode = leftStickModes[leftStickModeIndex];
-            const std::vector<SettingsItem> items = settingsItems(leftStickMode);
-            selected = std::min(selected, static_cast<int>(items.size()) - 1);
-            constexpr int listTop = 112;
-            constexpr int listBottomPadding = 80;
-            const int viewportHeight = height - listBottomPadding - listTop;
-            const int selectedTop = settingsItemTop(items, static_cast<std::size_t>(selected));
-            const int selectedHeight = settingsRowHeight(items[static_cast<std::size_t>(selected)]);
-            if (selectedTop < scrollOffset) scrollOffset = selectedTop;
-            else if (selectedTop + selectedHeight > scrollOffset + viewportHeight) scrollOffset = selectedTop + selectedHeight - viewportHeight;
-            scrollOffset = std::clamp(scrollOffset, 0, std::max(0, settingsContentHeight(items) - viewportHeight));
-            renderSettings(renderer, width, height, themes[themeIndex], leftStickMode, sm64AutoFrames, sm64AutoReleaseDelayMs, sm64DpadDeadzone, cursorSpeedLimit, items, selected, scrollOffset);
+            const std::vector<SettingsItem> items = settingsItems(page, leftStickMode);
+            if (!items.empty())
+            {
+                selected = std::min(selected, static_cast<int>(items.size()) - 1);
+                constexpr int listTop = 112;
+                constexpr int listBottomPadding = 80;
+                const int viewportHeight = height - listBottomPadding - listTop;
+                const int selectedTop = settingsItemTop(items, static_cast<std::size_t>(selected));
+                const int selectedHeight = settingsRowHeight(items[static_cast<std::size_t>(selected)]);
+                if (selectedTop < scrollOffset) scrollOffset = selectedTop;
+                else if (selectedTop + selectedHeight > scrollOffset + viewportHeight) scrollOffset = selectedTop + selectedHeight - viewportHeight;
+                scrollOffset = std::clamp(scrollOffset, 0, std::max(0, settingsContentHeight(items) - viewportHeight));
+            }
+            renderSettings(renderer, width, height, page, themes[themeIndex], leftStickMode, sm64AutoFrames, sm64AutoReleaseDelayMs,
+                           sm64DpadDeadzone, cursorSpeedLimit, items, selected, scrollOffset);
 
             input.pollEvent();
             if (input.exitComboPressed()) return SettingsResult::Exit;
             const auto action = repeater.next(input.takeUiAction(), input.heldUiDirection());
-            if (action == widemelon::UiAction::Back || action == widemelon::UiAction::Delete) return SettingsResult::Home;
+            if (action == widemelon::UiAction::Back || action == widemelon::UiAction::Delete)
+            {
+                if (page == SettingsPage::Main) return SettingsResult::Home;
+                page = SettingsPage::Main;
+                selected = 0;
+                scrollOffset = 0;
+                continue;
+            }
+            if (items.empty())
+            {
+                SDL_Delay(10);
+                continue;
+            }
+
             const bool navigation = isNavigation(action);
             const auto now = std::chrono::steady_clock::now();
             if (navigation && now < nextNavigationAt)
@@ -1419,8 +1461,25 @@ namespace
                 default: break;
                 }
             }
-            else if (action == widemelon::UiAction::Confirm && items[static_cast<std::size_t>(selected)] == SettingsItem::Back) return SettingsResult::Home;
-            else if (action == widemelon::UiAction::Confirm && items[static_cast<std::size_t>(selected)] == SettingsItem::Quit) return SettingsResult::Exit;
+            else if (action == widemelon::UiAction::Confirm)
+            {
+                switch (items[static_cast<std::size_t>(selected)])
+                {
+                case SettingsItem::LeftStickMod:
+                    page = SettingsPage::LeftStickMod;
+                    selected = 0;
+                    scrollOffset = 0;
+                    break;
+                case SettingsItem::LeftStickCalibration:
+                    page = SettingsPage::LeftStickCalibration;
+                    selected = 0;
+                    scrollOffset = 0;
+                    break;
+                case SettingsItem::Back: return SettingsResult::Home;
+                case SettingsItem::Quit: return SettingsResult::Exit;
+                default: break;
+                }
+            }
             SDL_Delay(10);
         }
     }
