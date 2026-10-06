@@ -21,7 +21,7 @@ namespace widemelon
     inline constexpr int UiFormFontSize{24};
     inline constexpr int UiFormFieldWidth{300};
     inline constexpr int UiFormFieldHeight{48};
-    inline constexpr int UiMenuItemGap{24};
+    inline constexpr int UiMenuItemGap{18};
 
     inline constexpr int UiKeyboardValueFontSize{35};
     inline constexpr int UiKeyboardActionFontSize{28};
