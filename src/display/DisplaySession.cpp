@@ -10,6 +10,7 @@
 
 #include "common/Logger.h"
 #include "input/CursorStickMod.h"
+#include "input/LeftStickCalibration.h"
 #include "input/Sm64DpadMod.h"
 #include "input/EvdevInput.h"
 #include "input/Sm64ManualStickMod.h"
@@ -1113,6 +1114,63 @@ namespace
         return true;
     }
 
+    std::uint8_t configuredLeftStickScalePercent(const std::string &directory, std::string_view key)
+    {
+        std::ifstream file(std::filesystem::path(directory) / "widemelon-client-ui.conf");
+        std::string line;
+        const std::string prefix = std::string(key) + "=";
+        while (std::getline(file, line))
+        {
+            if (line.compare(0, prefix.size(), prefix) != 0) continue;
+            unsigned int value = 0;
+            const std::string raw = line.substr(prefix.size());
+            const auto result = std::from_chars(raw.data(), raw.data() + raw.size(), value);
+            if (result.ec == std::errc{} && result.ptr == raw.data() + raw.size())
+                return static_cast<std::uint8_t>(std::clamp(value, static_cast<unsigned int>(widemelon::LeftStickScaleMinimumPercent),
+                                                           static_cast<unsigned int>(widemelon::LeftStickScaleMaximumPercent)));
+        }
+        return widemelon::LeftStickScaleDefaultPercent;
+    }
+
+    [[maybe_unused]] bool saveConfiguredLeftStickScalePercent(const std::string &directory, std::string_view key, std::uint8_t percent)
+    {
+        const std::filesystem::path path = std::filesystem::path(directory) / "widemelon-client-ui.conf";
+        std::ifstream input(path);
+        if (!input) return false;
+        const std::string prefix = std::string(key) + "=";
+        const std::string replacement = prefix + std::to_string(std::clamp(percent, widemelon::LeftStickScaleMinimumPercent,
+                                                                            widemelon::LeftStickScaleMaximumPercent));
+        std::vector<std::string> lines;
+        std::string line;
+        bool replaced = false;
+        while (std::getline(input, line))
+        {
+            if (line.compare(0, prefix.size(), prefix) == 0)
+            {
+                lines.push_back(replacement);
+                replaced = true;
+            }
+            else lines.push_back(line);
+        }
+        if (!replaced) lines.push_back(replacement);
+
+        const std::filesystem::path temporary = path.string() + ".tmp";
+        {
+            std::ofstream output(temporary, std::ios::trunc);
+            if (!output) return false;
+            for (const std::string &entry : lines) output << entry << "\n";
+            if (!output) return false;
+        }
+        std::error_code error;
+        std::filesystem::rename(temporary, path, error);
+        if (error)
+        {
+            std::filesystem::remove(temporary, error);
+            return false;
+        }
+        return true;
+    }
+
     int menuItemHeight(MenuItem item, std::string_view leftStickMode = {})
     {
         switch (item)
@@ -1801,6 +1859,7 @@ namespace widemelon
         bool sm64ManualEnabled = false;
         bool cursorEnabled = false;
         bool sm64DpadEnabled = false;
+        widemelon::LeftStickCalibration leftStickCalibration;
         auto sm64ModeEnabled = [&] { return sm64Enabled || sm64ManualEnabled || cursorEnabled; };
         auto sm64TouchState = [&]() -> const Sm64TouchState&
         { return cursorEnabled ? cursorStick.touchState() : (sm64ManualEnabled ? sm64ManualStick.touchState() : sm64Stick.touchState()); };
@@ -1854,6 +1913,10 @@ namespace widemelon
                 executable[static_cast<std::size_t>(length)] = 0;
                 const std::string directory = std::filesystem::path(executable.data()).parent_path().string();
                 const std::string leftStickMode = configuredLeftStickMode(directory);
+                leftStickCalibration.left = configuredLeftStickScalePercent(directory, "left-stick-scale-left-percent");
+                leftStickCalibration.right = configuredLeftStickScalePercent(directory, "left-stick-scale-right-percent");
+                leftStickCalibration.up = configuredLeftStickScalePercent(directory, "left-stick-scale-up-percent");
+                leftStickCalibration.down = configuredLeftStickScalePercent(directory, "left-stick-scale-down-percent");
                 sm64Enabled = leftStickMode == "SM64 Auto" || leftStickMode == "SM64";
                 sm64ManualEnabled = leftStickMode == "SM64 Manual";
                 cursorEnabled = leftStickMode == "Cursor";
@@ -1918,10 +1981,11 @@ namespace widemelon
                 }
             }
             const std::string inputEvent = exitInput.pollEvent();
-            const bool sm64TouchChanged = sm64Stick.update(exitInput.leftStickState());
-            const bool sm64ManualTouchChanged = sm64ManualStick.update(exitInput.leftStickState(), exitInput.r2Pressed());
-            const bool cursorTouchChanged = cursorStick.update(exitInput.leftStickState(), exitInput.r2Pressed());
-            const bool sm64DpadChanged = sm64Dpad.update(exitInput.leftStickState());
+            const widemelon::LeftStickState calibratedStick = widemelon::applyLeftStickCalibration(exitInput.leftStickState(), leftStickCalibration);
+            const bool sm64TouchChanged = sm64Stick.update(calibratedStick);
+            const bool sm64ManualTouchChanged = sm64ManualStick.update(calibratedStick, exitInput.r2Pressed());
+            const bool cursorTouchChanged = cursorStick.update(calibratedStick, exitInput.r2Pressed());
+            const bool sm64DpadChanged = sm64Dpad.update(calibratedStick);
             inputDirty = exitInput.takeStateChanged() || sm64TouchChanged || sm64ManualTouchChanged || cursorTouchChanged || sm64DpadChanged || inputDirty;
             if ((sm64TouchChanged || sm64ManualTouchChanged || cursorTouchChanged) && !inputTest)
                 render(renderer, width, height, config, status, videoTexture, &sm64TouchState());
