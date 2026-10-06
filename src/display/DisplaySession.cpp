@@ -650,6 +650,9 @@ namespace
         LeftStickModeHint, LeftStickMode, LeftStickDescription,
         Sm64AutoFramesLabel, Sm64AutoFrames, Sm64AutoReleaseDelayLabel, Sm64AutoReleaseDelay,
         Sm64DpadDeadzoneLabel, Sm64DpadDeadzone, CursorSpeedLabel, CursorSpeed,
+        LeftStickCalibrationHint, LeftStickScaleUpLabel, LeftStickScaleUp,
+        LeftStickScaleDownLabel, LeftStickScaleDown, LeftStickScaleLeftLabel, LeftStickScaleLeft,
+        LeftStickScaleRightLabel, LeftStickScaleRight,
         SectionNavigation, Back, Quit
     };
 
@@ -1132,7 +1135,7 @@ namespace
         return widemelon::LeftStickScaleDefaultPercent;
     }
 
-    [[maybe_unused]] bool saveConfiguredLeftStickScalePercent(const std::string &directory, std::string_view key, std::uint8_t percent)
+    bool saveConfiguredLeftStickScalePercent(const std::string &directory, std::string_view key, std::uint8_t percent)
     {
         const std::filesystem::path path = std::filesystem::path(directory) / "widemelon-client-ui.conf";
         std::ifstream input(path);
@@ -1187,9 +1190,15 @@ namespace
         case MenuItem::Sm64AutoReleaseDelayLabel:
         case MenuItem::Sm64DpadDeadzoneLabel:
         case MenuItem::CursorSpeedLabel:
+        case MenuItem::LeftStickScaleUpLabel:
+        case MenuItem::LeftStickScaleDownLabel:
+        case MenuItem::LeftStickScaleLeftLabel:
+        case MenuItem::LeftStickScaleRightLabel:
             return themeText.formFontSize;
         case MenuItem::LeftStickModeHint:
             return themeText.gameplayStatusFontSize * 2 + 8;
+        case MenuItem::LeftStickCalibrationHint:
+            return themeText.gameplayStatusFontSize * 3 + 16;
         case MenuItem::LeftStickDescription:
         {
             const std::string_view description = widemelon::display::pages::leftStickModeDescription(leftStickMode);
@@ -1242,10 +1251,15 @@ namespace
         case MenuItem::SectionAnalogSticks:
         case MenuItem::LeftStickModeHint:
         case MenuItem::LeftStickDescription:
+        case MenuItem::LeftStickCalibrationHint:
         case MenuItem::Sm64AutoFramesLabel:
         case MenuItem::Sm64AutoReleaseDelayLabel:
         case MenuItem::Sm64DpadDeadzoneLabel:
         case MenuItem::CursorSpeedLabel:
+        case MenuItem::LeftStickScaleUpLabel:
+        case MenuItem::LeftStickScaleDownLabel:
+        case MenuItem::LeftStickScaleLeftLabel:
+        case MenuItem::LeftStickScaleRightLabel:
         case MenuItem::SectionNavigation:
             return false;
         default:
@@ -1340,7 +1354,40 @@ namespace
             return items;
         }
         if (page == MenuPage::LeftStickCalibration)
-            return {};
+        {
+            std::vector<MenuItem> items;
+            for (const widemelon::display::SectionDefinition &section : widemelon::display::pages::leftStickCalibrationPage().sections)
+            {
+                if (section.title == "Navigation") items.push_back(MenuItem::SectionNavigation);
+                if (!section.hintLines.empty()) items.push_back(MenuItem::LeftStickCalibrationHint);
+                for (const widemelon::display::FieldDefinition &field : section.fields)
+                {
+                    switch (field.value)
+                    {
+                    case widemelon::display::ValueId::LeftStickScaleUpPercent:
+                        items.push_back(MenuItem::LeftStickScaleUpLabel);
+                        items.push_back(MenuItem::LeftStickScaleUp);
+                        break;
+                    case widemelon::display::ValueId::LeftStickScaleDownPercent:
+                        items.push_back(MenuItem::LeftStickScaleDownLabel);
+                        items.push_back(MenuItem::LeftStickScaleDown);
+                        break;
+                    case widemelon::display::ValueId::LeftStickScaleLeftPercent:
+                        items.push_back(MenuItem::LeftStickScaleLeftLabel);
+                        items.push_back(MenuItem::LeftStickScaleLeft);
+                        break;
+                    case widemelon::display::ValueId::LeftStickScaleRightPercent:
+                        items.push_back(MenuItem::LeftStickScaleRightLabel);
+                        items.push_back(MenuItem::LeftStickScaleRight);
+                        break;
+                    default:
+                        if (field.destination == widemelon::display::PageId::Settings) items.push_back(MenuItem::Back);
+                        break;
+                    }
+                }
+            }
+            return items;
+        }
 
         const widemelon::display::PageDefinition definition = widemelon::display::pages::leftStickModPage(leftStickMode);
         std::vector<MenuItem> items;
@@ -1428,6 +1475,7 @@ namespace
 
     void renderMenu(SDL_Renderer *renderer, int width, int height, MenuPage page, const widemelon::Config &config, const std::string &theme, const std::string &leftStickMode,
                     std::uint8_t sm64AutoFrames, std::uint16_t sm64AutoReleaseDelayMs, std::uint8_t sm64DpadDeadzone, std::uint16_t cursorSpeedLimit,
+                    const widemelon::LeftStickCalibration &leftStickCalibration,
                     const std::vector<MenuItem> &items, int selected, int scrollOffset)
     {
         const int centerX = width / 2;
@@ -1475,6 +1523,13 @@ namespace
             case MenuItem::Sm64AutoReleaseDelayLabel: drawMenuText(renderer, centerX, rowY, "SM64 Auto release delay", palette.primary, themeText.formFontSize); return;
             case MenuItem::Sm64DpadDeadzoneLabel: drawMenuText(renderer, centerX, rowY, "SM64 D-pad deadzone", palette.primary, themeText.formFontSize); return;
             case MenuItem::CursorSpeedLabel: drawMenuText(renderer, centerX, rowY, "Cursor speed limit", palette.primary, themeText.formFontSize); return;
+            case MenuItem::LeftStickCalibrationHint:
+                drawMenuMultilineText(renderer, centerX, rowY, "Adjust the range of the left stick\nto correct asymmetrical inputs.\n(experimental feature)", palette.hint, themeText.gameplayStatusFontSize);
+                return;
+            case MenuItem::LeftStickScaleUpLabel: drawMenuText(renderer, centerX, rowY, "Top multiplier", palette.primary, themeText.formFontSize); return;
+            case MenuItem::LeftStickScaleDownLabel: drawMenuText(renderer, centerX, rowY, "Bottom multiplier", palette.primary, themeText.formFontSize); return;
+            case MenuItem::LeftStickScaleLeftLabel: drawMenuText(renderer, centerX, rowY, "Left multiplier", palette.primary, themeText.formFontSize); return;
+            case MenuItem::LeftStickScaleRightLabel: drawMenuText(renderer, centerX, rowY, "Right multiplier", palette.primary, themeText.formFontSize); return;
             default: break;
             }
 
@@ -1495,6 +1550,10 @@ namespace
             case MenuItem::Sm64AutoReleaseDelay: value = std::to_string(sm64AutoReleaseDelayMs) + " ms"; adjustable = true; break;
             case MenuItem::Sm64DpadDeadzone: value = std::to_string(sm64DpadDeadzone) + " %"; adjustable = true; break;
             case MenuItem::CursorSpeed: value = std::to_string(cursorSpeedLimit) + " px/s"; adjustable = true; break;
+            case MenuItem::LeftStickScaleUp: value = std::to_string(leftStickCalibration.up) + " %"; adjustable = true; break;
+            case MenuItem::LeftStickScaleDown: value = std::to_string(leftStickCalibration.down) + " %"; adjustable = true; break;
+            case MenuItem::LeftStickScaleLeft: value = std::to_string(leftStickCalibration.left) + " %"; adjustable = true; break;
+            case MenuItem::LeftStickScaleRight: value = std::to_string(leftStickCalibration.right) + " %"; adjustable = true; break;
             case MenuItem::Back: value = "Back"; break;
             case MenuItem::Quit: value = "Quit"; break;
             default: break;
@@ -1570,6 +1629,12 @@ namespace
         std::uint16_t sm64AutoReleaseDelayMs = configuredSm64AutoReleaseDelayMs(directory);
         std::uint16_t cursorSpeedLimit = configuredCursorSpeedLimit(directory);
         std::uint8_t sm64DpadDeadzone = configuredSm64DpadDeadzonePercent(directory);
+        widemelon::LeftStickCalibration leftStickCalibration{
+            configuredLeftStickScalePercent(directory, "left-stick-scale-left-percent"),
+            configuredLeftStickScalePercent(directory, "left-stick-scale-right-percent"),
+            configuredLeftStickScalePercent(directory, "left-stick-scale-up-percent"),
+            configuredLeftStickScalePercent(directory, "left-stick-scale-down-percent"),
+        };
         MenuPage page = MenuPage::Settings;
         int selected = 1;
         int scrollOffset = 0;
@@ -1584,7 +1649,7 @@ namespace
                 scrollOffset = menuScrollOffset(items, leftStickMode, selected, scrollOffset, height);
             }
             renderMenu(renderer, width, height, page, config, themes[themeIndex], leftStickMode, sm64AutoFrames, sm64AutoReleaseDelayMs,
-                           sm64DpadDeadzone, cursorSpeedLimit, items, selected, scrollOffset);
+                           sm64DpadDeadzone, cursorSpeedLimit, leftStickCalibration, items, selected, scrollOffset);
 
             input.pollEvent();
             if (input.exitComboPressed()) return SettingsResult::Exit;
@@ -1651,6 +1716,30 @@ namespace
                     if (saveConfiguredCursorSpeedLimit(directory, static_cast<std::uint16_t>(next))) cursorSpeedLimit = static_cast<std::uint16_t>(next);
                     break;
                 }
+                case MenuItem::LeftStickScaleUp:
+                {
+                    const int next = std::clamp(static_cast<int>(leftStickCalibration.up) + direction, static_cast<int>(widemelon::LeftStickScaleMinimumPercent), static_cast<int>(widemelon::LeftStickScaleMaximumPercent));
+                    if (saveConfiguredLeftStickScalePercent(directory, "left-stick-scale-up-percent", static_cast<std::uint8_t>(next))) leftStickCalibration.up = static_cast<std::uint8_t>(next);
+                    break;
+                }
+                case MenuItem::LeftStickScaleDown:
+                {
+                    const int next = std::clamp(static_cast<int>(leftStickCalibration.down) + direction, static_cast<int>(widemelon::LeftStickScaleMinimumPercent), static_cast<int>(widemelon::LeftStickScaleMaximumPercent));
+                    if (saveConfiguredLeftStickScalePercent(directory, "left-stick-scale-down-percent", static_cast<std::uint8_t>(next))) leftStickCalibration.down = static_cast<std::uint8_t>(next);
+                    break;
+                }
+                case MenuItem::LeftStickScaleLeft:
+                {
+                    const int next = std::clamp(static_cast<int>(leftStickCalibration.left) + direction, static_cast<int>(widemelon::LeftStickScaleMinimumPercent), static_cast<int>(widemelon::LeftStickScaleMaximumPercent));
+                    if (saveConfiguredLeftStickScalePercent(directory, "left-stick-scale-left-percent", static_cast<std::uint8_t>(next))) leftStickCalibration.left = static_cast<std::uint8_t>(next);
+                    break;
+                }
+                case MenuItem::LeftStickScaleRight:
+                {
+                    const int next = std::clamp(static_cast<int>(leftStickCalibration.right) + direction, static_cast<int>(widemelon::LeftStickScaleMinimumPercent), static_cast<int>(widemelon::LeftStickScaleMaximumPercent));
+                    if (saveConfiguredLeftStickScalePercent(directory, "left-stick-scale-right-percent", static_cast<std::uint8_t>(next))) leftStickCalibration.right = static_cast<std::uint8_t>(next);
+                    break;
+                }
                 default: break;
                 }
             }
@@ -1665,10 +1754,15 @@ namespace
                     break;
                 case MenuItem::LeftStickCalibration:
                     page = MenuPage::LeftStickCalibration;
-                    selected = 0;
+                    selected = 2;
                     scrollOffset = 0;
                     break;
-                case MenuItem::Back: return SettingsResult::Home;
+                case MenuItem::Back:
+                    if (page == MenuPage::Settings) return SettingsResult::Home;
+                    page = MenuPage::Settings;
+                    selected = 1;
+                    scrollOffset = 0;
+                    break;
                 case MenuItem::Quit: return SettingsResult::Exit;
                 default: break;
                 }
@@ -1688,7 +1782,7 @@ namespace
         {
             const std::vector<widemelon::display::MenuNavigationItem> navigationItems = menuNavigationItems(items);
             scrollOffset = menuScrollOffset(items, {}, selected, scrollOffset, height);
-            renderMenu(renderer, width, height, MenuPage::Home, config, "", "", 0, 0, 0, 0, items, selected, scrollOffset);
+            renderMenu(renderer, width, height, MenuPage::Home, config, "", "", 0, 0, 0, 0, widemelon::LeftStickCalibration{}, items, selected, scrollOffset);
 
             input.pollEvent();
             if (input.exitComboPressed()) return false;
@@ -1882,7 +1976,7 @@ namespace widemelon
                 while (connection.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready && client->connectionState() != widemelon::ConnectionState::Connected)
                 {
                     const std::vector<MenuItem> homeItems = menuItems(MenuPage::Home, "");
-                    renderMenu(renderer, width, height, MenuPage::Home, config, "", "", 0, 0, 0, 0, homeItems, 4, 0);
+                    renderMenu(renderer, width, height, MenuPage::Home, config, "", "", 0, 0, 0, 0, widemelon::LeftStickCalibration{}, homeItems, 4, 0);
                     exitInput.pollEvent();
                     if (exitInput.exitComboPressed())
                     {

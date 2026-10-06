@@ -58,7 +58,11 @@ namespace widemelon::display
         Sm64AutoDelayFrames,
         Sm64AutoReleaseDelayMs,
         Sm64DpadDeadzonePercent,
-        CursorSpeedLimit
+        CursorSpeedLimit,
+        LeftStickScaleUpPercent,
+        LeftStickScaleDownPercent,
+        LeftStickScaleLeftPercent,
+        LeftStickScaleRightPercent
     };
 
     enum class ActionId : std::uint8_t
