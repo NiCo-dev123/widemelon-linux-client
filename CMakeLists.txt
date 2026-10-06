@@ -18,6 +18,9 @@ add_executable(widemelon-client
     src/common/Logger.cpp
     src/config/Config.cpp
     src/display/ConfigScreen.cpp
+    src/display/MenuNavigation.cpp
+    src/display/PageRenderer.cpp
+    src/display/pages/HomePage.cpp
     src/input/EvdevInput.cpp
     src/input/CursorStickMod.cpp
     src/input/Sm64DpadMod.cpp

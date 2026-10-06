@@ -1,5 +1,8 @@
 #include "display/ConfigScreen.h"
 #include "display/LeftStickModeDescriptions.h"
+#include "display/MenuNavigation.h"
+#include "display/PageRenderer.h"
+#include "display/pages/HomePage.h"
 
 #include "common/Logger.h"
 #include "input/CursorStickMod.h"
@@ -639,8 +642,7 @@ namespace
         HomeHostLabel, HomeHost, HomePortLabel, HomePort, HomeSessionCodeLabel, HomeSessionCode,
         SectionConnect, HomeConnect, SectionSettings, HomeSettings,
         SectionTheme, Theme, SectionAnalogSticks, LeftStickMod, LeftStickCalibration,
-        LeftStickModeHintFirst, LeftStickModeHintSecond, LeftStickMode,
-        LeftStickDescriptionFirst, LeftStickDescriptionSecond, LeftStickDescriptionThird,
+        LeftStickModeHint, LeftStickMode, LeftStickDescription,
         Sm64AutoFramesLabel, Sm64AutoFrames, Sm64AutoReleaseDelayLabel, Sm64AutoReleaseDelay,
         Sm64DpadDeadzoneLabel, Sm64DpadDeadzone, CursorSpeedLabel, CursorSpeed,
         SectionNavigation, Back, Quit
@@ -680,45 +682,6 @@ namespace
         SDL_RenderPresent(renderer);
     }
 
-    bool isNavigation(widemelon::UiAction action)
-    {
-        return action == widemelon::UiAction::Up || action == widemelon::UiAction::Down
-            || action == widemelon::UiAction::Left || action == widemelon::UiAction::Right;
-    }
-
-    class UiNavigationRepeater
-    {
-    public:
-        widemelon::UiAction next(widemelon::UiAction action, widemelon::UiAction held)
-        {
-            const auto now = std::chrono::steady_clock::now();
-            if (isNavigation(action))
-            {
-                repeatedAction = action;
-                nextRepeatAt = now + widemelon::UiNavigationInitialDelay;
-                return action;
-            }
-            if (!isNavigation(held))
-            {
-                repeatedAction = widemelon::UiAction::None;
-                return action;
-            }
-            if (held != repeatedAction)
-            {
-                repeatedAction = held;
-                nextRepeatAt = now + widemelon::UiNavigationInitialDelay;
-                return held;
-            }
-            if (now < nextRepeatAt) return action;
-            nextRepeatAt = now + widemelon::UiNavigationRetriggerDelay;
-            return held;
-        }
-
-    private:
-        widemelon::UiAction repeatedAction = widemelon::UiAction::None;
-        std::chrono::steady_clock::time_point nextRepeatAt{};
-    };
-
     bool editNumericField(SDL_Renderer *renderer, int width, int height, widemelon::EvdevInput &input,
                           const std::string &title, std::string &value, std::size_t maximumLength, bool allowDot)
     {
@@ -728,24 +691,14 @@ namespace
             "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ".", "DEL", "OK"};
         const std::string original = value;
         int selectedKey = 0;
-        auto nextNavigationAt = std::chrono::steady_clock::time_point{};
-        UiNavigationRepeater navigationRepeater;
+        widemelon::display::MenuNavigation navigation;
         while (true)
         {
             renderKeyboard(renderer, width, height, title, value, selectedKey);
             input.pollEvent();
             if (input.exitComboPressed())
                 return false;
-            const widemelon::UiAction action = navigationRepeater.next(input.takeUiAction(), input.heldUiDirection());
-            const bool navigation = action == widemelon::UiAction::Up || action == widemelon::UiAction::Down || action == widemelon::UiAction::Left || action == widemelon::UiAction::Right;
-            const auto now = std::chrono::steady_clock::now();
-            if (navigation && now < nextNavigationAt)
-            {
-                SDL_Delay(10);
-                continue;
-            }
-            if (navigation)
-                nextNavigationAt = now + widemelon::UiNavigationCooldown;
+            const widemelon::UiAction action = navigation.nextAction(input.takeUiAction(), input.heldUiDirection());
             switch (action)
             {
             case widemelon::UiAction::Up:
@@ -1155,7 +1108,7 @@ namespace
         return true;
     }
 
-    int menuItemHeight(MenuItem item)
+    int menuItemHeight(MenuItem item, std::string_view leftStickMode = {})
     {
         switch (item)
         {
@@ -1172,40 +1125,42 @@ namespace
         case MenuItem::Sm64DpadDeadzoneLabel:
         case MenuItem::CursorSpeedLabel:
             return themeText.formFontSize;
-        case MenuItem::LeftStickModeHintFirst:
-        case MenuItem::LeftStickModeHintSecond:
-        case MenuItem::LeftStickDescriptionFirst:
-        case MenuItem::LeftStickDescriptionSecond:
-        case MenuItem::LeftStickDescriptionThird:
-            return themeText.gameplayStatusFontSize;
+        case MenuItem::LeftStickModeHint:
+            return themeText.gameplayStatusFontSize * 2 + 8;
+        case MenuItem::LeftStickDescription:
+        {
+            const auto description = widemelon::leftStickModeDescription(leftStickMode);
+            int lineCount = 0;
+            for (const std::string_view line : description.lines)
+                if (!line.empty()) ++lineCount;
+            return lineCount * themeText.gameplayStatusFontSize + std::max(0, lineCount - 1) * 8;
+        }
         default:
             return widemelon::UiFormFieldHeight;
         }
     }
 
-    int menuItemTop(const std::vector<MenuItem> &items, std::size_t index)
+    int menuItemTop(const std::vector<MenuItem> &items, std::size_t index, std::string_view leftStickMode = {})
     {
         int top = 0;
         for (std::size_t itemIndex = 0; itemIndex < index; ++itemIndex)
-            top += menuItemHeight(items[itemIndex]) + widemelon::UiMenuItemGap;
+            top += menuItemHeight(items[itemIndex], leftStickMode) + widemelon::UiMenuItemGap;
         return top;
-    }
-
-    int menuContentHeight(const std::vector<MenuItem> &items)
-    {
-        if (items.empty()) return 0;
-        return menuItemTop(items, items.size() - 1) + menuItemHeight(items.back());
     }
 
     int menuListTop()
     {
-        constexpr int headerTop = 36;
-        return headerTop + themeText.titleFontSize + widemelon::UiMenuItemGap;
+        widemelon::display::PageRenderContext context;
+        context.itemGap = widemelon::UiMenuItemGap;
+        context.titleFontSize = themeText.titleFontSize;
+        return widemelon::display::PageRenderer::firstItemY(context);
     }
 
     int menuFooterTop(int height)
     {
-        return height - 64;
+        widemelon::display::PageRenderContext context;
+        context.height = height;
+        return widemelon::display::PageRenderer::footerTop(context);
     }
 
     int menuListBottom(int height)
@@ -1224,11 +1179,8 @@ namespace
         case MenuItem::SectionSettings:
         case MenuItem::SectionTheme:
         case MenuItem::SectionAnalogSticks:
-        case MenuItem::LeftStickModeHintFirst:
-        case MenuItem::LeftStickModeHintSecond:
-        case MenuItem::LeftStickDescriptionFirst:
-        case MenuItem::LeftStickDescriptionSecond:
-        case MenuItem::LeftStickDescriptionThird:
+        case MenuItem::LeftStickModeHint:
+        case MenuItem::LeftStickDescription:
         case MenuItem::Sm64AutoFramesLabel:
         case MenuItem::Sm64AutoReleaseDelayLabel:
         case MenuItem::Sm64DpadDeadzoneLabel:
@@ -1240,23 +1192,58 @@ namespace
         }
     }
 
-    int advanceMenuSelection(const std::vector<MenuItem> &items, int selected, int direction)
+    std::vector<widemelon::display::MenuNavigationItem> menuNavigationItems(const std::vector<MenuItem> &items,
+                                                                              std::string_view leftStickMode = {})
     {
-        const int count = static_cast<int>(items.size());
-        do
+        std::vector<widemelon::display::MenuNavigationItem> navigationItems;
+        navigationItems.reserve(items.size());
+        for (std::size_t index = 0; index < items.size(); ++index)
         {
-            selected = (selected + direction + count) % count;
-        } while (!menuItemSelectable(items[static_cast<std::size_t>(selected)]));
-        return selected;
+            navigationItems.push_back({menuItemSelectable(items[index]), menuItemTop(items, index, leftStickMode),
+                                       menuItemHeight(items[index], leftStickMode)});
+        }
+        return navigationItems;
     }
 
     std::vector<MenuItem> menuItems(MenuPage page, const std::string &leftStickMode)
     {
         if (page == MenuPage::Home)
         {
-            return {MenuItem::HomeHostLabel, MenuItem::HomeHost, MenuItem::HomePortLabel, MenuItem::HomePort,
-                    MenuItem::HomeSessionCodeLabel, MenuItem::HomeSessionCode, MenuItem::SectionConnect,
-                    MenuItem::HomeConnect, MenuItem::SectionSettings, MenuItem::HomeSettings};
+            std::vector<MenuItem> items;
+            for (const widemelon::display::SectionDefinition &section : widemelon::display::pages::homePage().sections)
+            {
+                for (const widemelon::display::FieldDefinition &field : section.fields)
+                {
+                    switch (field.value)
+                    {
+                    case widemelon::display::ValueId::Host:
+                        items.push_back(MenuItem::HomeHostLabel);
+                        items.push_back(MenuItem::HomeHost);
+                        break;
+                    case widemelon::display::ValueId::Port:
+                        items.push_back(MenuItem::HomePortLabel);
+                        items.push_back(MenuItem::HomePort);
+                        break;
+                    case widemelon::display::ValueId::PairingCode:
+                        items.push_back(MenuItem::HomeSessionCodeLabel);
+                        items.push_back(MenuItem::HomeSessionCode);
+                        break;
+                    default:
+                        if (field.action == widemelon::display::ActionId::Connect)
+                        {
+                            items.push_back(MenuItem::SectionConnect);
+                            items.push_back(MenuItem::HomeConnect);
+                        }
+                        else if (field.destination == widemelon::display::PageId::Settings)
+                        {
+                            items.push_back(MenuItem::SectionSettings);
+                            items.push_back(MenuItem::HomeSettings);
+                        }
+                        break;
+                    }
+                }
+            }
+            return items;
         }
         if (page == MenuPage::Settings)
         {
@@ -1267,11 +1254,9 @@ namespace
         if (page == MenuPage::LeftStickCalibration)
             return {};
 
-        std::vector<MenuItem> items{MenuItem::LeftStickModeHintFirst, MenuItem::LeftStickModeHintSecond, MenuItem::LeftStickMode};
+        std::vector<MenuItem> items{MenuItem::LeftStickModeHint, MenuItem::LeftStickMode};
         const auto description = widemelon::leftStickModeDescription(leftStickMode);
-        if (!description.lines[0].empty()) items.push_back(MenuItem::LeftStickDescriptionFirst);
-        if (!description.lines[1].empty()) items.push_back(MenuItem::LeftStickDescriptionSecond);
-        if (!description.lines[2].empty()) items.push_back(MenuItem::LeftStickDescriptionThird);
+        if (!description.lines[0].empty()) items.push_back(MenuItem::LeftStickDescription);
         if (leftStickMode == "SM64 Auto")
         {
             items.push_back(MenuItem::Sm64AutoFramesLabel);
@@ -1298,7 +1283,7 @@ namespace
     {
         switch (page)
         {
-        case MenuPage::Home: return "WideMelon Client";
+        case MenuPage::Home: return widemelon::display::pages::homePage().title.data();
         case MenuPage::Settings: return "Settings";
         case MenuPage::LeftStickMod: return "Left stick mod";
         case MenuPage::LeftStickCalibration: return "Left stick calibration";
@@ -1341,8 +1326,8 @@ namespace
         const auto description = widemelon::leftStickModeDescription(leftStickMode);
         for (std::size_t index = 0; index < items.size(); ++index)
         {
-            const int rowY = listTop + menuItemTop(items, index) - scrollOffset;
-            if (rowY + menuItemHeight(items[index]) < listTop || rowY > listBottom) continue;
+            const int rowY = listTop + menuItemTop(items, index, leftStickMode) - scrollOffset;
+            if (rowY + menuItemHeight(items[index], leftStickMode) < listTop || rowY > listBottom) continue;
 
             switch (items[index])
             {
@@ -1354,11 +1339,17 @@ namespace
             case MenuItem::HomeHostLabel: drawMenuText(renderer, centerX, rowY, "Server Address", palette.primary, themeText.formFontSize); continue;
             case MenuItem::HomePortLabel: drawMenuText(renderer, centerX, rowY, "Port", palette.primary, themeText.formFontSize); continue;
             case MenuItem::HomeSessionCodeLabel: drawMenuText(renderer, centerX, rowY, "Session code", palette.primary, themeText.formFontSize); continue;
-            case MenuItem::LeftStickModeHintFirst: drawMenuText(renderer, centerX, rowY, "Select the desired behaviour", palette.hint, themeText.gameplayStatusFontSize); continue;
-            case MenuItem::LeftStickModeHintSecond: drawMenuText(renderer, centerX, rowY, "for the left stick while in-game.", palette.hint, themeText.gameplayStatusFontSize); continue;
-            case MenuItem::LeftStickDescriptionFirst: drawMenuText(renderer, centerX, rowY, description.lines[0], palette.hint, themeText.gameplayStatusFontSize); continue;
-            case MenuItem::LeftStickDescriptionSecond: drawMenuText(renderer, centerX, rowY, description.lines[1], palette.hint, themeText.gameplayStatusFontSize); continue;
-            case MenuItem::LeftStickDescriptionThird: drawMenuText(renderer, centerX, rowY, description.lines[2], palette.hint, themeText.gameplayStatusFontSize); continue;
+            case MenuItem::LeftStickModeHint:
+                drawMenuText(renderer, centerX, rowY, "Select the desired behaviour", palette.hint, themeText.gameplayStatusFontSize);
+                drawMenuText(renderer, centerX, rowY + themeText.gameplayStatusFontSize + 8, "for the left stick while in-game.", palette.hint, themeText.gameplayStatusFontSize);
+                continue;
+            case MenuItem::LeftStickDescription:
+                for (std::size_t line = 0; line < description.lines.size(); ++line)
+                {
+                    if (!description.lines[line].empty())
+                        drawMenuText(renderer, centerX, rowY + static_cast<int>(line) * (themeText.gameplayStatusFontSize + 8), description.lines[line], palette.hint, themeText.gameplayStatusFontSize);
+                }
+                continue;
             case MenuItem::Sm64AutoFramesLabel: drawMenuText(renderer, centerX, rowY, "SM64 Auto delay", palette.primary, themeText.formFontSize); continue;
             case MenuItem::Sm64AutoReleaseDelayLabel: drawMenuText(renderer, centerX, rowY, "SM64 Auto release delay", palette.primary, themeText.formFontSize); continue;
             case MenuItem::Sm64DpadDeadzoneLabel: drawMenuText(renderer, centerX, rowY, "SM64 D-pad deadzone", palette.primary, themeText.formFontSize); continue;
@@ -1459,8 +1450,7 @@ namespace
         MenuPage page = MenuPage::Settings;
         int selected = 1;
         int scrollOffset = 0;
-        UiNavigationRepeater repeater;
-        auto nextNavigationAt = std::chrono::steady_clock::time_point{};
+        widemelon::display::MenuNavigation navigation;
         while (true)
         {
             const std::string &leftStickMode = leftStickModes[leftStickModeIndex];
@@ -1470,18 +1460,15 @@ namespace
                 selected = std::min(selected, static_cast<int>(items.size()) - 1);
                 const int listTop = menuListTop();
                 const int viewportHeight = menuListBottom(height) - listTop;
-                const int selectedTop = menuItemTop(items, static_cast<std::size_t>(selected));
-                const int selectedHeight = menuItemHeight(items[static_cast<std::size_t>(selected)]);
-                if (selectedTop < scrollOffset) scrollOffset = selectedTop;
-                else if (selectedTop + selectedHeight > scrollOffset + viewportHeight) scrollOffset = selectedTop + selectedHeight - viewportHeight;
-                scrollOffset = std::clamp(scrollOffset, 0, std::max(0, menuContentHeight(items) - viewportHeight));
+                scrollOffset = widemelon::display::MenuNavigation::scrollOffsetForSelection(
+                    menuNavigationItems(items, leftStickMode), selected, scrollOffset, viewportHeight);
             }
             renderMenu(renderer, width, height, page, config, themes[themeIndex], leftStickMode, sm64AutoFrames, sm64AutoReleaseDelayMs,
                            sm64DpadDeadzone, cursorSpeedLimit, items, selected, scrollOffset);
 
             input.pollEvent();
             if (input.exitComboPressed()) return SettingsResult::Exit;
-            const auto action = repeater.next(input.takeUiAction(), input.heldUiDirection());
+            const auto action = navigation.nextAction(input.takeUiAction(), input.heldUiDirection());
             if (action == widemelon::UiAction::Back || action == widemelon::UiAction::Delete)
             {
                 if (page == MenuPage::Settings) return SettingsResult::Home;
@@ -1496,16 +1483,9 @@ namespace
                 continue;
             }
 
-            const bool navigation = isNavigation(action);
-            const auto now = std::chrono::steady_clock::now();
-            if (navigation && now < nextNavigationAt)
-            {
-                SDL_Delay(10);
-                continue;
-            }
-            if (navigation) nextNavigationAt = now + widemelon::UiNavigationCooldown;
-            if (action == widemelon::UiAction::Up) selected = advanceMenuSelection(items, selected, -1);
-            else if (action == widemelon::UiAction::Down) selected = advanceMenuSelection(items, selected, 1);
+            const std::vector<widemelon::display::MenuNavigationItem> navigationItems = menuNavigationItems(items, leftStickMode);
+            if (action == widemelon::UiAction::Up) selected = widemelon::display::MenuNavigation::nextSelection(navigationItems, selected, -1);
+            else if (action == widemelon::UiAction::Down) selected = widemelon::display::MenuNavigation::nextSelection(navigationItems, selected, 1);
             else if (action == widemelon::UiAction::Left || action == widemelon::UiAction::Right)
             {
                 const int direction = action == widemelon::UiAction::Left ? -1 : 1;
@@ -1583,33 +1563,23 @@ namespace
         const std::vector<MenuItem> items = menuItems(MenuPage::Home, "");
         int selected = 0;
         int scrollOffset = 0;
-        UiNavigationRepeater navigationRepeater;
-        auto nextNavigationAt = std::chrono::steady_clock::time_point{};
+        widemelon::display::MenuNavigation navigation;
         while (true)
         {
             const int listTop = menuListTop();
             const int viewportHeight = menuListBottom(height) - listTop;
-            const int selectedTop = menuItemTop(items, static_cast<std::size_t>(selected));
-            if (selectedTop < scrollOffset) scrollOffset = selectedTop;
-            else if (selectedTop + menuItemHeight(items[static_cast<std::size_t>(selected)]) > scrollOffset + viewportHeight) scrollOffset = selectedTop + menuItemHeight(items[static_cast<std::size_t>(selected)]) - viewportHeight;
-            scrollOffset = std::clamp(scrollOffset, 0, std::max(0, menuContentHeight(items) - viewportHeight));
+            const std::vector<widemelon::display::MenuNavigationItem> navigationItems = menuNavigationItems(items);
+            scrollOffset = widemelon::display::MenuNavigation::scrollOffsetForSelection(
+                navigationItems, selected, scrollOffset, viewportHeight);
             renderMenu(renderer, width, height, MenuPage::Home, config, "", "", 0, 0, 0, 0, items, selected, scrollOffset);
 
             input.pollEvent();
             if (input.exitComboPressed()) return false;
-            const widemelon::UiAction action = navigationRepeater.next(input.takeUiAction(), input.heldUiDirection());
-            const bool navigation = isNavigation(action);
-            const auto now = std::chrono::steady_clock::now();
-            if (navigation && now < nextNavigationAt)
-            {
-                SDL_Delay(10);
-                continue;
-            }
-            if (navigation) nextNavigationAt = now + widemelon::UiNavigationCooldown;
+            const widemelon::UiAction action = navigation.nextAction(input.takeUiAction(), input.heldUiDirection());
             if (action == widemelon::UiAction::Up)
-                selected = advanceMenuSelection(items, selected, -1);
+                selected = widemelon::display::MenuNavigation::nextSelection(navigationItems, selected, -1);
             else if (action == widemelon::UiAction::Down)
-                selected = advanceMenuSelection(items, selected, 1);
+                selected = widemelon::display::MenuNavigation::nextSelection(navigationItems, selected, 1);
             else if (action == widemelon::UiAction::Confirm || action == widemelon::UiAction::Start)
             {
                 if (action == widemelon::UiAction::Start)

@@ -1,0 +1,41 @@
+{
+    "title":"WideMelon Client",
+    "hints":[
+        {"icon":"hint-A.png"},
+        {"text":"select"},
+        {"icon":"hint-B.png"},
+        {"text":"back"},
+        {"icon":"hint-START.png"},
+        {"text":"connect"}
+    ],
+    "sections":[
+        {"title":"Server Address",
+        "fields":[
+            {"type":"input",
+            "param":"host"}
+            ]
+        },
+        {"title":"Port",
+        "fields":[
+            {"type":"input",
+            "param":"port"}
+            ]
+        },
+        {"title":"Pairing Code",
+        "fields":[
+            {"type":"input",
+            "param":"pairing_code"}
+            ]
+        },
+        {"title":"Navigation",
+        "fields":[
+            {"type":"button",
+            "title":"Connect",
+            "action":"connectToServer"},
+            {"type":"button",
+            "title":"Settings",
+            "goto":"settings"}
+            ]
+        }
+    ]
+}
