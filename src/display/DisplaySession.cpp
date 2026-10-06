@@ -1,6 +1,5 @@
 #include "display/ConfigScreen.h"
 #include "display/DisplaySession.h"
-#include "display/LeftStickModeDescriptions.h"
 #include "display/MenuNavigation.h"
 #include "display/PageRenderer.h"
 #include "display/pages/HomePage.h"
@@ -246,9 +245,9 @@ namespace
         const std::string directory = std::string(executable.data()).substr(0, std::string(executable.data()).find_last_of('/'));
         std::ifstream file(directory + "/widemelon-client-ui.conf");
 #ifdef WIDEMELON_HAVE_SDL_TTF
-        std::string textFont = "assets/themes/WaterMelon/comfortaa-latin-400-normal.ttf";
+        std::string textFont = "assets/themes/DukuSlice/comfortaa-latin-400-normal.ttf";
 #endif
-        std::string activeTheme = "WaterMelon";
+        std::string activeTheme = "DukuSlice";
         std::string line;
         while (std::getline(file, line))
         {
@@ -296,12 +295,12 @@ namespace
         std::error_code themeError;
         if (!std::filesystem::is_directory(themeDirectory, themeError))
         {
-            if (activeTheme != "WaterMelon")
-                widemelon::Logger::error("UI theme not found: " + activeTheme + "; using WaterMelon");
-            themeDirectory = themesDirectory / "WaterMelon";
+            if (activeTheme != "DukuSlice")
+                widemelon::Logger::error("UI theme not found: " + activeTheme + "; using DukuSlice");
+            themeDirectory = themesDirectory / "DukuSlice";
             themeError.clear();
         }
-        const std::filesystem::path defaultThemeDirectory = themesDirectory / "WaterMelon";
+        const std::filesystem::path defaultThemeDirectory = themesDirectory / "DukuSlice";
         if (!std::filesystem::is_directory(themeDirectory, themeError))
         {
             widemelon::Logger::error("Default UI theme not found; using square UI fallbacks");
@@ -772,7 +771,7 @@ namespace
             if (line.compare(0, key.size(), key) == 0 && line.size() > key.size())
                 return line.substr(key.size());
         }
-        return "WaterMelon";
+        return "DukuSlice";
     }
 
     bool saveConfiguredTheme(const std::string &directory, const std::string &theme)
@@ -1135,10 +1134,8 @@ namespace
             return themeText.gameplayStatusFontSize * 2 + 8;
         case MenuItem::LeftStickDescription:
         {
-            const auto description = widemelon::leftStickModeDescription(leftStickMode);
-            int lineCount = 0;
-            for (const std::string_view line : description.lines)
-                if (!line.empty()) ++lineCount;
+            const std::string_view description = widemelon::display::pages::leftStickModeDescription(leftStickMode);
+            const int lineCount = 1 + static_cast<int>(std::count(description.begin(), description.end(), '\n'));
             return lineCount * themeText.gameplayStatusFontSize + std::max(0, lineCount - 1) * 8;
         }
         default:
@@ -1354,6 +1351,23 @@ namespace
         drawTextColored(renderer, text, centerX - textWidth(text, fontSize) / 2, rowY, fontSize, color);
     }
 
+    void drawMenuMultilineText(SDL_Renderer *renderer, int centerX, int rowY, std::string_view text,
+                               SDL_Color color, int fontSize)
+    {
+        constexpr int lineGap = 8;
+        std::size_t start = 0;
+        int line = 0;
+        while (start <= text.size())
+        {
+            const std::size_t end = text.find('\n', start);
+            const std::string_view current = text.substr(start, end == std::string_view::npos ? text.size() - start : end - start);
+            if (!current.empty()) drawMenuText(renderer, centerX, rowY + line * (fontSize + lineGap), current, color, fontSize);
+            if (end == std::string_view::npos) break;
+            start = end + 1;
+            ++line;
+        }
+    }
+
     void renderMenu(SDL_Renderer *renderer, int width, int height, MenuPage page, const widemelon::Config &config, const std::string &theme, const std::string &leftStickMode,
                     std::uint8_t sm64AutoFrames, std::uint16_t sm64AutoReleaseDelayMs, std::uint8_t sm64DpadDeadzone, std::uint16_t cursorSpeedLimit,
                     const std::vector<MenuItem> &items, int selected, int scrollOffset)
@@ -1365,7 +1379,7 @@ namespace
         const std::string title = menuTitle(page);
         const int listTop = menuListTop();
         const int listBottom = menuListBottom(height);
-        const auto description = widemelon::leftStickModeDescription(leftStickMode);
+        const std::string_view description = widemelon::display::pages::leftStickModeDescription(leftStickMode);
         widemelon::display::MenuRenderContext renderContext;
         renderContext.page.width = width;
         renderContext.page.height = height;
@@ -1394,15 +1408,10 @@ namespace
             case MenuItem::HomePortLabel: drawMenuText(renderer, centerX, rowY, "Port", palette.primary, themeText.formFontSize); return;
             case MenuItem::HomeSessionCodeLabel: drawMenuText(renderer, centerX, rowY, "Session code", palette.primary, themeText.formFontSize); return;
             case MenuItem::LeftStickModeHint:
-                drawMenuText(renderer, centerX, rowY, "Select the desired behaviour", palette.hint, themeText.gameplayStatusFontSize);
-                drawMenuText(renderer, centerX, rowY + themeText.gameplayStatusFontSize + 8, "for the left stick while in-game.", palette.hint, themeText.gameplayStatusFontSize);
+                drawMenuMultilineText(renderer, centerX, rowY, "Select the desired behaviour\nfor the left stick while in-game.", palette.hint, themeText.gameplayStatusFontSize);
                 return;
             case MenuItem::LeftStickDescription:
-                for (std::size_t line = 0; line < description.lines.size(); ++line)
-                {
-                    if (!description.lines[line].empty())
-                        drawMenuText(renderer, centerX, rowY + static_cast<int>(line) * (themeText.gameplayStatusFontSize + 8), description.lines[line], palette.hint, themeText.gameplayStatusFontSize);
-                }
+                drawMenuMultilineText(renderer, centerX, rowY, description, palette.hint, themeText.gameplayStatusFontSize);
                 return;
             case MenuItem::Sm64AutoFramesLabel: drawMenuText(renderer, centerX, rowY, "SM64 Auto delay", palette.primary, themeText.formFontSize); return;
             case MenuItem::Sm64AutoReleaseDelayLabel: drawMenuText(renderer, centerX, rowY, "SM64 Auto release delay", palette.primary, themeText.formFontSize); return;

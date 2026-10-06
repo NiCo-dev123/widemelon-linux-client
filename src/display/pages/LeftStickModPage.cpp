@@ -1,12 +1,26 @@
 #include "display/pages/LeftStickModPage.h"
 
-#include "display/LeftStickModeDescriptions.h"
 #include "input/CursorStickMod.h"
 #include "input/Sm64DpadMod.h"
 #include "input/Sm64StickMod.h"
 
 namespace widemelon::display::pages
 {
+
+    std::string_view leftStickModeDescription(std::string_view mode)
+    {
+        if (mode == "D-pad")
+            return "The left stick mirrors\nD-pad inputs.";
+        if (mode == "SM64 D-pad")
+            return "The left stick mirrors D-pad inputs.\nY is held automatically for running.";
+        if (mode == "SM64 Auto")
+            return "Emulates the stylus in SM64DS.\nTouch control is automatic.\nAdds input delay.";
+        if (mode == "SM64 Manual")
+            return "Emulates the stylus for true analog\nmovement in SM64DS.\nPress R2 to toggle touch.";
+        if (mode == "Cursor")
+            return "Moves the stylus freely.\nHold R2 to touch the screen.";
+        return "The left stick is disabled.";
+    }
 
     PageDefinition leftStickModPage(std::string_view mode)
     {
@@ -18,16 +32,12 @@ namespace widemelon::display::pages
                 {FooterItemType::Icon, FooterIcon::B, "BACK"},
             },
             {
-                {"Mode hint", {"Select the desired behaviour", "for the left stick while in-game."}, {}},
+                {"Mode hint", {"Select the desired behaviour\nfor the left stick while in-game."}, {}},
                 {"", {}, {{FieldType::Choice, {}, ValueId::LeftStickMode}}},
             },
         };
 
-        const LeftStickModeDescription description = leftStickModeDescription(mode);
-        SectionDefinition descriptionSection;
-        for (const std::string_view line : description.lines)
-            if (!line.empty()) descriptionSection.hintLines.push_back(line);
-        if (!descriptionSection.hintLines.empty()) page.sections.push_back(std::move(descriptionSection));
+        page.sections.push_back({"", {leftStickModeDescription(mode)}, {}});
 
         if (mode == "SM64 Auto")
         {
