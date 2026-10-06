@@ -3,6 +3,10 @@
 #include "display/MenuNavigation.h"
 #include "display/PageRenderer.h"
 #include "display/pages/HomePage.h"
+#include "display/pages/LeftStickCalibrationPage.h"
+#include "display/pages/LeftStickModPage.h"
+#include "display/pages/NumpadPage.h"
+#include "display/pages/SettingsPage.h"
 
 #include "common/Logger.h"
 #include "input/CursorStickMod.h"
@@ -651,6 +655,7 @@ namespace
     void renderKeyboard(SDL_Renderer *renderer, int width, int height, const std::string &title,
                         const std::string &value, int selectedKey)
     {
+        const widemelon::display::PageDefinition page = widemelon::display::pages::numpadPage(title);
         static const std::array<const char *, 13> keys{
             "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ".", "DEL", "OK"};
         const int columns = widemelon::UiKeyboardColumns;
@@ -661,7 +666,7 @@ namespace
 
         drawGradientBackground(renderer, width, height);
         SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
-        drawText(renderer, title, (width - textWidth(title, themeText.titleFontSize)) / 2, 65, themeText.titleFontSize);
+        drawText(renderer, page.title, (width - textWidth(page.title, themeText.titleFontSize)) / 2, 65, themeText.titleFontSize);
         drawText(renderer, value.empty() ? "_" : value, (width - textWidth(value.empty() ? "_" : value, themeText.keyboardValueFontSize)) / 2, 125, themeText.keyboardValueFontSize);
         for (std::size_t index = 0; index < keys.size(); ++index)
         {
@@ -675,10 +680,10 @@ namespace
         }
         int hintX = width / 2 - 190;
         const int hintY = height - 64;
-        hintX = drawControlHint(renderer, uiTextures.hintA, "A", "SELECT", hintX, hintY, themeText.hintFontSize);
-        hintX = drawControlHint(renderer, uiTextures.hintB, "B", "DELETE", hintX, hintY, themeText.hintFontSize);
-        hintX = drawControlHint(renderer, uiTextures.hintX, "X", "Back", hintX, hintY, themeText.hintFontSize);
-        drawControlHint(renderer, uiTextures.hintStart, "START", "OK", hintX, hintY, themeText.hintFontSize);
+        hintX = drawControlHint(renderer, uiTextures.hintA, "A", page.footer[0].text, hintX, hintY, themeText.hintFontSize);
+        hintX = drawControlHint(renderer, uiTextures.hintB, "B", page.footer[1].text, hintX, hintY, themeText.hintFontSize);
+        hintX = drawControlHint(renderer, uiTextures.hintX, "X", page.footer[2].text, hintX, hintY, themeText.hintFontSize);
+        drawControlHint(renderer, uiTextures.hintStart, "START", page.footer[3].text, hintX, hintY, themeText.hintFontSize);
         SDL_RenderPresent(renderer);
     }
 
@@ -1247,35 +1252,68 @@ namespace
         }
         if (page == MenuPage::Settings)
         {
-            return {MenuItem::SectionTheme, MenuItem::Theme, MenuItem::SectionAnalogSticks,
-                    MenuItem::LeftStickMod, MenuItem::LeftStickCalibration,
-                    MenuItem::SectionNavigation, MenuItem::Back, MenuItem::Quit};
+            std::vector<MenuItem> items;
+            for (const widemelon::display::SectionDefinition &section : widemelon::display::pages::settingsPage().sections)
+            {
+                if (section.title == "Theme") items.push_back(MenuItem::SectionTheme);
+                else if (section.title == "Analog sticks") items.push_back(MenuItem::SectionAnalogSticks);
+                else if (section.title == "Navigation") items.push_back(MenuItem::SectionNavigation);
+
+                for (const widemelon::display::FieldDefinition &field : section.fields)
+                {
+                    if (field.value == widemelon::display::ValueId::ActiveTheme)
+                        items.push_back(MenuItem::Theme);
+                    else if (field.destination == widemelon::display::PageId::LeftStickMod)
+                        items.push_back(MenuItem::LeftStickMod);
+                    else if (field.destination == widemelon::display::PageId::LeftStickCalibration)
+                        items.push_back(MenuItem::LeftStickCalibration);
+                    else if (field.action == widemelon::display::ActionId::Quit)
+                        items.push_back(MenuItem::Quit);
+                    else if (field.destination == widemelon::display::PageId::Home)
+                        items.push_back(MenuItem::Back);
+                }
+            }
+            return items;
         }
         if (page == MenuPage::LeftStickCalibration)
             return {};
 
-        std::vector<MenuItem> items{MenuItem::LeftStickModeHint, MenuItem::LeftStickMode};
-        const auto description = widemelon::leftStickModeDescription(leftStickMode);
-        if (!description.lines[0].empty()) items.push_back(MenuItem::LeftStickDescription);
-        if (leftStickMode == "SM64 Auto")
+        const widemelon::display::PageDefinition definition = widemelon::display::pages::leftStickModPage(leftStickMode);
+        std::vector<MenuItem> items;
+        for (const widemelon::display::SectionDefinition &section : definition.sections)
         {
-            items.push_back(MenuItem::Sm64AutoFramesLabel);
-            items.push_back(MenuItem::Sm64AutoFrames);
-            items.push_back(MenuItem::Sm64AutoReleaseDelayLabel);
-            items.push_back(MenuItem::Sm64AutoReleaseDelay);
+            if (section.title == "Navigation") items.push_back(MenuItem::SectionNavigation);
+            if (!section.hintLines.empty())
+            {
+                items.push_back(section.title == "Mode hint" ? MenuItem::LeftStickModeHint : MenuItem::LeftStickDescription);
+            }
+            for (const widemelon::display::FieldDefinition &field : section.fields)
+            {
+                switch (field.value)
+                {
+                case widemelon::display::ValueId::LeftStickMode: items.push_back(MenuItem::LeftStickMode); break;
+                case widemelon::display::ValueId::Sm64AutoDelayFrames:
+                    items.push_back(MenuItem::Sm64AutoFramesLabel);
+                    items.push_back(MenuItem::Sm64AutoFrames);
+                    break;
+                case widemelon::display::ValueId::Sm64AutoReleaseDelayMs:
+                    items.push_back(MenuItem::Sm64AutoReleaseDelayLabel);
+                    items.push_back(MenuItem::Sm64AutoReleaseDelay);
+                    break;
+                case widemelon::display::ValueId::Sm64DpadDeadzonePercent:
+                    items.push_back(MenuItem::Sm64DpadDeadzoneLabel);
+                    items.push_back(MenuItem::Sm64DpadDeadzone);
+                    break;
+                case widemelon::display::ValueId::CursorSpeedLimit:
+                    items.push_back(MenuItem::CursorSpeedLabel);
+                    items.push_back(MenuItem::CursorSpeed);
+                    break;
+                default:
+                    if (field.destination == widemelon::display::PageId::Settings) items.push_back(MenuItem::Back);
+                    break;
+                }
+            }
         }
-        else if (leftStickMode == "SM64 D-pad")
-        {
-            items.push_back(MenuItem::Sm64DpadDeadzoneLabel);
-            items.push_back(MenuItem::Sm64DpadDeadzone);
-        }
-        else if (leftStickMode == "Cursor")
-        {
-            items.push_back(MenuItem::CursorSpeedLabel);
-            items.push_back(MenuItem::CursorSpeed);
-        }
-        items.push_back(MenuItem::SectionNavigation);
-        items.push_back(MenuItem::Back);
         return items;
     }
 
@@ -1284,9 +1322,9 @@ namespace
         switch (page)
         {
         case MenuPage::Home: return widemelon::display::pages::homePage().title.data();
-        case MenuPage::Settings: return "Settings";
-        case MenuPage::LeftStickMod: return "Left stick mod";
-        case MenuPage::LeftStickCalibration: return "Left stick calibration";
+        case MenuPage::Settings: return widemelon::display::pages::settingsPage().title.data();
+        case MenuPage::LeftStickMod: return widemelon::display::pages::leftStickModPage({}).title.data();
+        case MenuPage::LeftStickCalibration: return widemelon::display::pages::leftStickCalibrationPage().title.data();
         }
         return "Settings";
     }

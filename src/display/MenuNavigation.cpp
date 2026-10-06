@@ -68,7 +68,13 @@ namespace widemelon::display
             return 0;
 
         const MenuNavigationItem &item = items[static_cast<std::size_t>(selected)];
-        if (item.top < currentOffset) currentOffset = item.top;
+        const auto firstSelectable = std::find_if(items.begin(), items.end(), [](const MenuNavigationItem &candidate)
+        {
+            return candidate.selectable;
+        });
+        if (firstSelectable != items.end() && &item == &*firstSelectable)
+            currentOffset = 0;
+        else if (item.top < currentOffset) currentOffset = item.top;
         else if (item.top + item.height > currentOffset + viewportHeight)
             currentOffset = item.top + item.height - viewportHeight;
 
