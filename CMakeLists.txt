@@ -21,6 +21,7 @@ add_executable(widemelon-client
     src/display/DisplaySession.cpp
     src/display/GameplayScreen.cpp
     src/display/MenuNavigation.cpp
+    src/display/MenuScreen.cpp
     src/display/NumpadScreen.cpp
     src/display/PageRenderer.cpp
     src/display/UiConfig.cpp
