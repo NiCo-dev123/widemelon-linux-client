@@ -1,5 +1,6 @@
 #include "display/ConfigScreen.h"
 #include "display/DisplaySession.h"
+#include "display/GameplayScreen.h"
 #include "display/MenuNavigation.h"
 #include "display/NumpadScreen.h"
 #include "display/PageRenderer.h"
@@ -597,68 +598,6 @@ namespace
         return labelX + textWidth(label, fontSize) + 20;
     }
 #endif
-
-    bool updateVideoTexture(SDL_Renderer *renderer, SDL_Texture *&texture, const widemelon::DecodedVideoFrame &frame)
-    {
-        if (frame.width == 0 || frame.height == 0 || frame.rgb.size() != static_cast<std::size_t>(frame.width) * frame.height * 3)
-            return false;
-        if (!texture)
-        {
-            texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING,
-                                        frame.width, frame.height);
-            if (!texture)
-            {
-                widemelon::Logger::error(std::string("Cannot create video texture: ") + SDL_GetError());
-                return false;
-            }
-            SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE);
-        }
-        if (SDL_UpdateTexture(texture, nullptr, frame.rgb.data(), frame.width * 3) != 0)
-        {
-            widemelon::Logger::error(std::string("Cannot update video texture: ") + SDL_GetError());
-            return false;
-        }
-        return true;
-    }
-
-    void render(SDL_Renderer *renderer, int width, int height, const widemelon::Config &config, const std::string &status,
-                SDL_Texture *videoTexture, const widemelon::Sm64TouchState *cursor = nullptr)
-    {
-        (void)config;
-        drawBackground(renderer, width, height, true);
-        SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
-        const std::string title = "WideMelon Client";
-        drawTextColored(renderer, title, (width - textWidth(title, themeText.titleFontSize)) / 2, 8, themeText.titleFontSize, palette.hint);
-        const SDL_Rect video{(width - 768) / 2, 45, 768, 576};
-        if (videoTexture)
-            SDL_RenderCopy(renderer, videoTexture, nullptr, &video);
-        else
-            SDL_RenderFillRect(renderer, &video);
-        if (cursor)
-        {
-            const SDL_Rect pointer{video.x + static_cast<int>(cursor->x) * video.w / 256,
-                                   video.y + static_cast<int>(cursor->y) * video.h / 192, 48, 48};
-            if (uiTextures.cursor)
-            {
-                SDL_SetTextureAlphaMod(uiTextures.cursor, cursor->active ? 255 : 128);
-                SDL_RenderCopy(renderer, uiTextures.cursor, nullptr, &pointer);
-            }
-            else
-            {
-                SDL_SetRenderDrawColor(renderer, palette.hint.r, palette.hint.g, palette.hint.b, 255);
-                const SDL_Rect fallback{pointer.x, pointer.y, 8, 8};
-                SDL_RenderFillRect(renderer, &fallback);
-            }
-        }
-        const std::string connection = "Connection status: " + status;
-        drawTextColored(renderer, connection, video.x, video.y + video.h + 6, themeText.gameplayStatusFontSize, palette.hint);
-        int exitX = video.x;
-        const int exitY = video.y + video.h + 50;
-        exitX = drawControlHint(renderer, uiTextures.hintStart, "START", "+", exitX, exitY, themeText.hintFontSize);
-        exitX = drawControlHint(renderer, uiTextures.hintR, "R", "+", exitX, exitY, themeText.hintFontSize);
-        drawControlHint(renderer, uiTextures.hintL, "L", ": QUIT", exitX, exitY, themeText.hintFontSize);
-        SDL_RenderPresent(renderer);
-    }
 
     enum class MenuPage { Home, Settings, LeftStickMod, LeftStickCalibration };
     enum class MenuItem {
@@ -1560,7 +1499,7 @@ namespace widemelon
             connection = std::async(std::launch::async, []
                                     { return std::string{}; });
         }
-        render(renderer, width, height, config, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
+        widemelon::display::GameplayScreen::render(renderer, width, height, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
 
         bool running = true;
         ConnectionState displayedConnectionState = client->connectionState();
@@ -1588,7 +1527,7 @@ namespace widemelon
                     if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
                     {
                         SDL_GetWindowSize(window, &width, &height);
-                        render(renderer, width, height, config, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
+                        widemelon::display::GameplayScreen::render(renderer, width, height, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
                     }
                     break;
                 default:
@@ -1603,11 +1542,11 @@ namespace widemelon
             const bool sm64DpadChanged = sm64Dpad.update(calibratedStick);
             inputDirty = exitInput.takeStateChanged() || sm64TouchChanged || sm64ManualTouchChanged || cursorTouchChanged || sm64DpadChanged || inputDirty;
             if ((sm64TouchChanged || sm64ManualTouchChanged || cursorTouchChanged) && !inputTest)
-                render(renderer, width, height, config, status, videoTexture, &sm64TouchState());
+                widemelon::display::GameplayScreen::render(renderer, width, height, status, videoTexture, &sm64TouchState());
             if (inputTest && !inputEvent.empty())
             {
                 status = inputEvent;
-                render(renderer, width, height, config, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
+                widemelon::display::GameplayScreen::render(renderer, width, height, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
             }
             const ConnectionState currentConnectionState = client->connectionState();
             if (!inputTest && currentConnectionState != displayedConnectionState)
@@ -1618,7 +1557,7 @@ namespace widemelon
                     status = "RECONNECTING";
                 else if (currentConnectionState == ConnectionState::Failed)
                     status = "CONNECTION ERROR";
-                render(renderer, width, height, config, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
+                widemelon::display::GameplayScreen::render(renderer, width, height, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
                 displayedConnectionState = currentConnectionState;
             }
             if (!inputTest && connection.valid() && connection.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
@@ -1627,7 +1566,7 @@ namespace widemelon
                 if (result != "Cancelled")
                 {
                     status = "CONNECTION ERROR";
-                    render(renderer, width, height, config, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
+                    widemelon::display::GameplayScreen::render(renderer, width, height, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
                 }
             }
             if (!inputTest && client->connectionState() == ConnectionState::Connected)
@@ -1644,7 +1583,7 @@ namespace widemelon
                     inputDirty = true;
                     sendReleasedSnapshot = true;
                     nextInputSnapshot = now;
-                    render(renderer, width, height, config, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
+                    widemelon::display::GameplayScreen::render(renderer, width, height, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
                 }
                 if (sendReleasedSnapshot)
                 {
@@ -1663,10 +1602,10 @@ namespace widemelon
                 }
 
                 DecodedVideoFrame decodedFrame;
-                if (client->latestDecodedVideoFrame(decodedFrame) && decodedFrame.sequence != displayedVideoSequence && updateVideoTexture(renderer, videoTexture, decodedFrame))
+                if (client->latestDecodedVideoFrame(decodedFrame) && decodedFrame.sequence != displayedVideoSequence && widemelon::display::GameplayScreen::updateVideoTexture(renderer, videoTexture, decodedFrame))
                 {
                     displayedVideoSequence = decodedFrame.sequence;
-                    render(renderer, width, height, config, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
+                    widemelon::display::GameplayScreen::render(renderer, width, height, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
                 }
             }
             if (exitInput.exitComboPressed())
