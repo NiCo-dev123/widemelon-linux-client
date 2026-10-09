@@ -1,5 +1,8 @@
 #include "display/MenuScreen.h"
+
+#include "common/Logger.h"
 #include "display/ConfigScreen.h"
+#include "display/MenuEntry.h"
 #include "display/MenuNavigation.h"
 #include "display/NumpadScreen.h"
 #include "display/PageRenderer.h"
@@ -9,758 +12,235 @@
 #include "display/pages/LeftStickCalibrationPage.h"
 #include "display/pages/LeftStickModPage.h"
 #include "display/pages/SettingsPage.h"
-#include "common/Logger.h"
 #include "input/CursorStickMod.h"
+#include "input/EvdevInput.h"
 #include "input/LeftStickCalibration.h"
 #include "input/Sm64DpadMod.h"
 #include "input/Sm64StickMod.h"
-#include "input/EvdevInput.h"
 
 #include <algorithm>
 #include <array>
 #include <charconv>
-#include <cstdint>
 #include <filesystem>
-#include <string_view>
 #include <unistd.h>
-#include <vector>
 
 namespace widemelon::display
 {
 namespace
 {
-constexpr std::string_view UiConfigThemeKey{"active-theme"};
-constexpr std::string_view UiConfigLeftStickModeKey{"left-stick-mod"};
-constexpr std::string_view UiConfigSm64AutoFramesKey{"sm64-auto-center-hold-frames"};
-constexpr std::string_view UiConfigSm64AutoReleaseDelayKey{"sm64-auto-release-delay-ms"};
-constexpr std::string_view UiConfigCursorSpeedKey{"cursor-speed-limit"};
-constexpr std::string_view UiConfigSm64DpadDeadzoneKey{"sm64-dpad-deadzone-percent"};
-constexpr std::string_view UiConfigLeftStickScaleLeftKey{"left-stick-scale-left-percent"};
-constexpr std::string_view UiConfigLeftStickScaleRightKey{"left-stick-scale-right-percent"};
-constexpr std::string_view UiConfigLeftStickScaleUpKey{"left-stick-scale-up-percent"};
-constexpr std::string_view UiConfigLeftStickScaleDownKey{"left-stick-scale-down-percent"};
+constexpr std::string_view ThemeKey{"active-theme"}, ModeKey{"left-stick-mod"};
+constexpr std::string_view AutoFramesKey{"sm64-auto-center-hold-frames"}, AutoReleaseKey{"sm64-auto-release-delay-ms"};
+constexpr std::string_view CursorSpeedKey{"cursor-speed-limit"}, DpadDeadzoneKey{"sm64-dpad-deadzone-percent"};
+constexpr std::array<std::string_view, 4> CalibrationKeys{
+    "left-stick-scale-left-percent", "left-stick-scale-right-percent", "left-stick-scale-up-percent", "left-stick-scale-down-percent"};
 
-UiConfig uiConfigFor(const std::string &directory) { return UiConfig(std::filesystem::path(directory) / "widemelon-client-ui.conf"); }
-auto &palette = uiPalette();
-auto &themeText = uiTextSettings();
-auto &uiTextures = widemelon::display::uiTextures();
-using widemelon::display::drawControlHint;
-using widemelon::display::drawGradientBackground;
-using widemelon::display::drawPill;
-using widemelon::display::drawTextColored;
-using widemelon::display::textWidth;
-
-enum class MenuPage { Home, Settings, LeftStickMod, LeftStickCalibration };
-enum class MenuItem {
-    HomeHostLabel, HomeHost, HomePortLabel, HomePort, HomeSessionCodeLabel, HomeSessionCode,
-    SectionConnect, HomeConnect, SectionSettings, HomeSettings,
-    SectionTheme, Theme, SectionAnalogSticks, LeftStickMod, LeftStickCalibration,
-    LeftStickModeHint, LeftStickMode, LeftStickDescription,
-    Sm64AutoFramesLabel, Sm64AutoFrames, Sm64AutoReleaseDelayLabel, Sm64AutoReleaseDelay,
-    Sm64DpadDeadzoneLabel, Sm64DpadDeadzone, CursorSpeedLabel, CursorSpeed,
-    LeftStickCalibrationHint, LeftStickScaleUpLabel, LeftStickScaleUp,
-    LeftStickScaleDownLabel, LeftStickScaleDown, LeftStickScaleLeftLabel, LeftStickScaleLeft,
-    LeftStickScaleRightLabel, LeftStickScaleRight,
-    SectionNavigation, Back, Quit
+struct MenuState
+{
+    std::string theme;
+    std::string mode;
+    std::uint8_t autoFrames{Sm64TouchCenterHoldFramesDefault};
+    std::uint16_t autoRelease{Sm64TouchReleaseDelayDefaultMs};
+    std::uint8_t dpadDeadzone{Sm64DpadDeadzoneDefaultPercent};
+    std::uint16_t cursorSpeed{CursorSpeedDefault};
+    LeftStickCalibration calibration{};
 };
 
-    enum class SettingsResult { Home, Exit };
-
-    std::vector<std::string> availableThemes(const std::string &directory)
+const PageDefinition &pageDefinition(PageId id, std::string_view mode)
+{
+    switch (id)
     {
-        std::vector<std::string> themes;
-        std::error_code error;
-        for (const auto &entry : std::filesystem::directory_iterator(std::filesystem::path(directory) / "assets" / "themes", error))
-            if (entry.is_directory(error)) themes.push_back(entry.path().filename().string());
-        std::sort(themes.begin(), themes.end());
-        return themes;
+    case PageId::Home: return pages::homePage();
+    case PageId::Settings: return pages::settingsPage();
+    case PageId::LeftStickCalibration: return pages::leftStickCalibrationPage();
+    case PageId::LeftStickMod: { static PageDefinition page; page = pages::leftStickModPage(mode); return page; }
+    default: return pages::settingsPage();
     }
-
-
-    int menuItemHeight(MenuItem item, std::string_view leftStickMode = {})
-    {
-        switch (item)
-        {
-        case MenuItem::SectionConnect:
-        case MenuItem::SectionSettings:
-        case MenuItem::SectionTheme:
-        case MenuItem::SectionAnalogSticks:
-        case MenuItem::SectionNavigation:
-        case MenuItem::HomeHostLabel:
-        case MenuItem::HomePortLabel:
-        case MenuItem::HomeSessionCodeLabel:
-        case MenuItem::Sm64AutoFramesLabel:
-        case MenuItem::Sm64AutoReleaseDelayLabel:
-        case MenuItem::Sm64DpadDeadzoneLabel:
-        case MenuItem::CursorSpeedLabel:
-        case MenuItem::LeftStickScaleUpLabel:
-        case MenuItem::LeftStickScaleDownLabel:
-        case MenuItem::LeftStickScaleLeftLabel:
-        case MenuItem::LeftStickScaleRightLabel:
-            return themeText.formFontSize;
-        case MenuItem::LeftStickModeHint:
-            return themeText.gameplayStatusFontSize * 2 + 8;
-        case MenuItem::LeftStickCalibrationHint:
-            return themeText.gameplayStatusFontSize * 3 + 16;
-        case MenuItem::LeftStickDescription:
-        {
-            const std::string_view description = widemelon::display::pages::leftStickModeDescription(leftStickMode);
-            const int lineCount = 1 + static_cast<int>(std::count(description.begin(), description.end(), '\n'));
-            return lineCount * themeText.gameplayStatusFontSize + std::max(0, lineCount - 1) * 8;
-        }
-        default:
-            return widemelon::UiFormFieldHeight;
-        }
-    }
-
-    int menuItemTop(const std::vector<MenuItem> &items, std::size_t index, std::string_view leftStickMode = {})
-    {
-        int top = 0;
-        for (std::size_t itemIndex = 0; itemIndex < index; ++itemIndex)
-            top += menuItemHeight(items[itemIndex], leftStickMode) + widemelon::UiMenuItemGap;
-        return top;
-    }
-
-    int menuListTop()
-    {
-        widemelon::display::PageRenderContext context;
-        context.itemGap = widemelon::UiMenuItemGap;
-        context.titleFontSize = themeText.titleFontSize;
-        return widemelon::display::PageRenderer::firstItemY(context);
-    }
-
-    int menuFooterTop(int height)
-    {
-        widemelon::display::PageRenderContext context;
-        context.height = height;
-        return widemelon::display::PageRenderer::footerTop(context);
-    }
-
-    int menuListBottom(int height)
-    {
-        return menuFooterTop(height) - widemelon::UiMenuItemGap;
-    }
-
-    bool menuItemSelectable(MenuItem item)
-    {
-        switch (item)
-        {
-        case MenuItem::HomeHostLabel:
-        case MenuItem::HomePortLabel:
-        case MenuItem::HomeSessionCodeLabel:
-        case MenuItem::SectionConnect:
-        case MenuItem::SectionSettings:
-        case MenuItem::SectionTheme:
-        case MenuItem::SectionAnalogSticks:
-        case MenuItem::LeftStickModeHint:
-        case MenuItem::LeftStickDescription:
-        case MenuItem::LeftStickCalibrationHint:
-        case MenuItem::Sm64AutoFramesLabel:
-        case MenuItem::Sm64AutoReleaseDelayLabel:
-        case MenuItem::Sm64DpadDeadzoneLabel:
-        case MenuItem::CursorSpeedLabel:
-        case MenuItem::LeftStickScaleUpLabel:
-        case MenuItem::LeftStickScaleDownLabel:
-        case MenuItem::LeftStickScaleLeftLabel:
-        case MenuItem::LeftStickScaleRightLabel:
-        case MenuItem::SectionNavigation:
-            return false;
-        default:
-            return true;
-        }
-    }
-
-    std::vector<widemelon::display::MenuNavigationItem> menuNavigationItems(const std::vector<MenuItem> &items,
-                                                                              std::string_view leftStickMode = {})
-    {
-        std::vector<widemelon::display::MenuNavigationItem> navigationItems;
-        navigationItems.reserve(items.size());
-        for (std::size_t index = 0; index < items.size(); ++index)
-        {
-            navigationItems.push_back({menuItemSelectable(items[index]), menuItemTop(items, index, leftStickMode),
-                                       menuItemHeight(items[index], leftStickMode)});
-        }
-        return navigationItems;
-    }
-
-    int menuScrollOffset(const std::vector<MenuItem> &items, std::string_view leftStickMode, int selected,
-                         int currentOffset, int height)
-    {
-        const int viewportHeight = menuListBottom(height) - menuListTop();
-        return widemelon::display::MenuNavigation::scrollOffsetForSelection(
-            menuNavigationItems(items, leftStickMode), selected, currentOffset, viewportHeight);
-    }
-
-    std::vector<MenuItem> menuItems(MenuPage page, const std::string &leftStickMode)
-    {
-        if (page == MenuPage::Home)
-        {
-            std::vector<MenuItem> items;
-            for (const widemelon::display::SectionDefinition &section : widemelon::display::pages::homePage().sections)
-            {
-                for (const widemelon::display::FieldDefinition &field : section.fields)
-                {
-                    switch (field.value)
-                    {
-                    case widemelon::display::ValueId::Host:
-                        items.push_back(MenuItem::HomeHostLabel);
-                        items.push_back(MenuItem::HomeHost);
-                        break;
-                    case widemelon::display::ValueId::Port:
-                        items.push_back(MenuItem::HomePortLabel);
-                        items.push_back(MenuItem::HomePort);
-                        break;
-                    case widemelon::display::ValueId::PairingCode:
-                        items.push_back(MenuItem::HomeSessionCodeLabel);
-                        items.push_back(MenuItem::HomeSessionCode);
-                        break;
-                    default:
-                        if (field.action == widemelon::display::ActionId::Connect)
-                        {
-                            items.push_back(MenuItem::SectionConnect);
-                            items.push_back(MenuItem::HomeConnect);
-                        }
-                        else if (field.destination == widemelon::display::PageId::Settings)
-                        {
-                            items.push_back(MenuItem::SectionSettings);
-                            items.push_back(MenuItem::HomeSettings);
-                        }
-                        break;
-                    }
-                }
-            }
-            return items;
-        }
-        if (page == MenuPage::Settings)
-        {
-            std::vector<MenuItem> items;
-            for (const widemelon::display::SectionDefinition &section : widemelon::display::pages::settingsPage().sections)
-            {
-                if (section.title == "Theme") items.push_back(MenuItem::SectionTheme);
-                else if (section.title == "Analog sticks") items.push_back(MenuItem::SectionAnalogSticks);
-                else if (section.title == "Navigation") items.push_back(MenuItem::SectionNavigation);
-
-                for (const widemelon::display::FieldDefinition &field : section.fields)
-                {
-                    if (field.value == widemelon::display::ValueId::ActiveTheme)
-                        items.push_back(MenuItem::Theme);
-                    else if (field.destination == widemelon::display::PageId::LeftStickMod)
-                        items.push_back(MenuItem::LeftStickMod);
-                    else if (field.destination == widemelon::display::PageId::LeftStickCalibration)
-                        items.push_back(MenuItem::LeftStickCalibration);
-                    else if (field.action == widemelon::display::ActionId::Quit)
-                        items.push_back(MenuItem::Quit);
-                    else if (field.destination == widemelon::display::PageId::Home)
-                        items.push_back(MenuItem::Back);
-                }
-            }
-            return items;
-        }
-        if (page == MenuPage::LeftStickCalibration)
-        {
-            std::vector<MenuItem> items;
-            for (const widemelon::display::SectionDefinition &section : widemelon::display::pages::leftStickCalibrationPage().sections)
-            {
-                if (section.title == "Navigation") items.push_back(MenuItem::SectionNavigation);
-                if (!section.hintLines.empty()) items.push_back(MenuItem::LeftStickCalibrationHint);
-                for (const widemelon::display::FieldDefinition &field : section.fields)
-                {
-                    switch (field.value)
-                    {
-                    case widemelon::display::ValueId::LeftStickScaleUpPercent:
-                        items.push_back(MenuItem::LeftStickScaleUpLabel);
-                        items.push_back(MenuItem::LeftStickScaleUp);
-                        break;
-                    case widemelon::display::ValueId::LeftStickScaleDownPercent:
-                        items.push_back(MenuItem::LeftStickScaleDownLabel);
-                        items.push_back(MenuItem::LeftStickScaleDown);
-                        break;
-                    case widemelon::display::ValueId::LeftStickScaleLeftPercent:
-                        items.push_back(MenuItem::LeftStickScaleLeftLabel);
-                        items.push_back(MenuItem::LeftStickScaleLeft);
-                        break;
-                    case widemelon::display::ValueId::LeftStickScaleRightPercent:
-                        items.push_back(MenuItem::LeftStickScaleRightLabel);
-                        items.push_back(MenuItem::LeftStickScaleRight);
-                        break;
-                    default:
-                        if (field.destination == widemelon::display::PageId::Settings) items.push_back(MenuItem::Back);
-                        break;
-                    }
-                }
-            }
-            return items;
-        }
-
-        const widemelon::display::PageDefinition definition = widemelon::display::pages::leftStickModPage(leftStickMode);
-        std::vector<MenuItem> items;
-        for (const widemelon::display::SectionDefinition &section : definition.sections)
-        {
-            if (section.title == "Navigation") items.push_back(MenuItem::SectionNavigation);
-            if (!section.hintLines.empty())
-            {
-                items.push_back(section.title == "Mode hint" ? MenuItem::LeftStickModeHint : MenuItem::LeftStickDescription);
-            }
-            for (const widemelon::display::FieldDefinition &field : section.fields)
-            {
-                switch (field.value)
-                {
-                case widemelon::display::ValueId::LeftStickMode: items.push_back(MenuItem::LeftStickMode); break;
-                case widemelon::display::ValueId::Sm64AutoDelayFrames:
-                    items.push_back(MenuItem::Sm64AutoFramesLabel);
-                    items.push_back(MenuItem::Sm64AutoFrames);
-                    break;
-                case widemelon::display::ValueId::Sm64AutoReleaseDelayMs:
-                    items.push_back(MenuItem::Sm64AutoReleaseDelayLabel);
-                    items.push_back(MenuItem::Sm64AutoReleaseDelay);
-                    break;
-                case widemelon::display::ValueId::Sm64DpadDeadzonePercent:
-                    items.push_back(MenuItem::Sm64DpadDeadzoneLabel);
-                    items.push_back(MenuItem::Sm64DpadDeadzone);
-                    break;
-                case widemelon::display::ValueId::CursorSpeedLimit:
-                    items.push_back(MenuItem::CursorSpeedLabel);
-                    items.push_back(MenuItem::CursorSpeed);
-                    break;
-                default:
-                    if (field.destination == widemelon::display::PageId::Settings) items.push_back(MenuItem::Back);
-                    break;
-                }
-            }
-        }
-        return items;
-    }
-
-    const char *menuTitle(MenuPage page)
-    {
-        switch (page)
-        {
-        case MenuPage::Home: return widemelon::display::pages::homePage().title.data();
-        case MenuPage::Settings: return widemelon::display::pages::settingsPage().title.data();
-        case MenuPage::LeftStickMod: return widemelon::display::pages::leftStickModPage({}).title.data();
-        case MenuPage::LeftStickCalibration: return widemelon::display::pages::leftStickCalibrationPage().title.data();
-        }
-        return "Settings";
-    }
-
-    void drawAdjustableValue(SDL_Renderer *renderer, const SDL_Rect &field, const std::string &value, bool selected)
-    {
-        drawPill(renderer, field, selected);
-        const int textY = field.y + (field.h - themeText.formFontSize) / 2;
-        drawTextColored(renderer, "<", field.x + 12, textY, themeText.formFontSize, palette.primary);
-        drawTextColored(renderer, value, field.x + (field.w - textWidth(value, themeText.formFontSize)) / 2,
-                        textY, themeText.formFontSize, palette.primary);
-        drawTextColored(renderer, ">", field.x + field.w - textWidth(">", themeText.formFontSize) - 12,
-                        textY, themeText.formFontSize, palette.primary);
-    }
-
-    void drawMenuText(SDL_Renderer *renderer, int centerX, int rowY, std::string_view text, SDL_Color color, int fontSize)
-    {
-        drawTextColored(renderer, text, centerX - textWidth(text, fontSize) / 2, rowY, fontSize, color);
-    }
-
-    void drawMenuMultilineText(SDL_Renderer *renderer, int centerX, int rowY, std::string_view text,
-                               SDL_Color color, int fontSize)
-    {
-        constexpr int lineGap = 8;
-        std::size_t start = 0;
-        int line = 0;
-        while (start <= text.size())
-        {
-            const std::size_t end = text.find('\n', start);
-            const std::string_view current = text.substr(start, end == std::string_view::npos ? text.size() - start : end - start);
-            if (!current.empty()) drawMenuText(renderer, centerX, rowY + line * (fontSize + lineGap), current, color, fontSize);
-            if (end == std::string_view::npos) break;
-            start = end + 1;
-            ++line;
-        }
-    }
-
-    void renderMenu(SDL_Renderer *renderer, int width, int height, MenuPage page, const widemelon::Config &config, const std::string &theme, const std::string &leftStickMode,
-                    std::uint8_t sm64AutoFrames, std::uint16_t sm64AutoReleaseDelayMs, std::uint8_t sm64DpadDeadzone, std::uint16_t cursorSpeedLimit,
-                    const widemelon::LeftStickCalibration &leftStickCalibration,
-                    const std::vector<MenuItem> &items, int selected, int scrollOffset)
-    {
-        const int centerX = width / 2;
-        const int fieldWidth = widemelon::UiFormFieldWidth;
-        const int fieldHeight = widemelon::UiFormFieldHeight;
-        const int fieldX = centerX - fieldWidth / 2;
-        const std::string title = menuTitle(page);
-        const int listTop = menuListTop();
-        const int listBottom = menuListBottom(height);
-        const std::string_view description = widemelon::display::pages::leftStickModeDescription(leftStickMode);
-        widemelon::display::MenuRenderContext renderContext;
-        renderContext.page.width = width;
-        renderContext.page.height = height;
-        renderContext.page.drawBackground = [=]() { drawGradientBackground(renderer, width, height); };
-        renderContext.renderer = renderer;
-        renderContext.listTop = listTop;
-        renderContext.listBottom = listBottom;
-        renderContext.scrollOffset = scrollOffset;
-        for (std::size_t index = 0; index < items.size(); ++index)
-            renderContext.items.push_back({menuItemTop(items, index, leftStickMode), menuItemHeight(items[index], leftStickMode)});
-        renderContext.renderHeader = [&]()
-        {
-            drawMenuText(renderer, centerX, 36, title, palette.primary, themeText.titleFontSize);
-        };
-        renderContext.renderItem = [&](std::size_t index, int rowY)
-        {
-
-            switch (items[index])
-            {
-            case MenuItem::SectionConnect: drawMenuText(renderer, centerX, rowY, "Connect", palette.primary, themeText.formFontSize); return;
-            case MenuItem::SectionSettings: drawMenuText(renderer, centerX, rowY, "Settings", palette.primary, themeText.formFontSize); return;
-            case MenuItem::SectionTheme: drawMenuText(renderer, centerX, rowY, "Theme", palette.primary, themeText.formFontSize); return;
-            case MenuItem::SectionAnalogSticks: drawMenuText(renderer, centerX, rowY, "Analog sticks", palette.primary, themeText.formFontSize); return;
-            case MenuItem::SectionNavigation: drawMenuText(renderer, centerX, rowY, "Navigation", palette.primary, themeText.formFontSize); return;
-            case MenuItem::HomeHostLabel: drawMenuText(renderer, centerX, rowY, "Server Address", palette.primary, themeText.formFontSize); return;
-            case MenuItem::HomePortLabel: drawMenuText(renderer, centerX, rowY, "Port", palette.primary, themeText.formFontSize); return;
-            case MenuItem::HomeSessionCodeLabel: drawMenuText(renderer, centerX, rowY, "Session code", palette.primary, themeText.formFontSize); return;
-            case MenuItem::LeftStickModeHint:
-                drawMenuMultilineText(renderer, centerX, rowY, "Select the desired behaviour\nfor the left stick while in-game.", palette.hint, themeText.gameplayStatusFontSize);
-                return;
-            case MenuItem::LeftStickDescription:
-                drawMenuMultilineText(renderer, centerX, rowY, description, palette.hint, themeText.gameplayStatusFontSize);
-                return;
-            case MenuItem::Sm64AutoFramesLabel: drawMenuText(renderer, centerX, rowY, "SM64 Auto delay", palette.primary, themeText.formFontSize); return;
-            case MenuItem::Sm64AutoReleaseDelayLabel: drawMenuText(renderer, centerX, rowY, "SM64 Auto release delay", palette.primary, themeText.formFontSize); return;
-            case MenuItem::Sm64DpadDeadzoneLabel: drawMenuText(renderer, centerX, rowY, "SM64 D-pad deadzone", palette.primary, themeText.formFontSize); return;
-            case MenuItem::CursorSpeedLabel: drawMenuText(renderer, centerX, rowY, "Cursor speed limit", palette.primary, themeText.formFontSize); return;
-            case MenuItem::LeftStickCalibrationHint:
-                drawMenuMultilineText(renderer, centerX, rowY, "Adjust the range of the left stick\nto correct asymmetrical inputs.\n(experimental feature)", palette.hint, themeText.gameplayStatusFontSize);
-                return;
-            case MenuItem::LeftStickScaleUpLabel: drawMenuText(renderer, centerX, rowY, "Top multiplier", palette.primary, themeText.formFontSize); return;
-            case MenuItem::LeftStickScaleDownLabel: drawMenuText(renderer, centerX, rowY, "Bottom multiplier", palette.primary, themeText.formFontSize); return;
-            case MenuItem::LeftStickScaleLeftLabel: drawMenuText(renderer, centerX, rowY, "Left multiplier", palette.primary, themeText.formFontSize); return;
-            case MenuItem::LeftStickScaleRightLabel: drawMenuText(renderer, centerX, rowY, "Right multiplier", palette.primary, themeText.formFontSize); return;
-            default: break;
-            }
-
-            std::string value;
-            bool adjustable = false;
-            switch (items[index])
-            {
-            case MenuItem::HomeHost: value = config.host; break;
-            case MenuItem::HomePort: value = std::to_string(config.port); break;
-            case MenuItem::HomeSessionCode: value = config.pairingCode; break;
-            case MenuItem::HomeConnect: value = "Connect"; break;
-            case MenuItem::HomeSettings: value = "Settings"; break;
-            case MenuItem::Theme: value = theme; adjustable = true; break;
-            case MenuItem::LeftStickMod: value = "Left stick mod"; break;
-            case MenuItem::LeftStickCalibration: value = "Left stick calibration"; break;
-            case MenuItem::LeftStickMode: value = leftStickMode; adjustable = true; break;
-            case MenuItem::Sm64AutoFrames: value = std::to_string(sm64AutoFrames) + " frames"; adjustable = true; break;
-            case MenuItem::Sm64AutoReleaseDelay: value = std::to_string(sm64AutoReleaseDelayMs) + " ms"; adjustable = true; break;
-            case MenuItem::Sm64DpadDeadzone: value = std::to_string(sm64DpadDeadzone) + " %"; adjustable = true; break;
-            case MenuItem::CursorSpeed: value = std::to_string(cursorSpeedLimit) + " px/s"; adjustable = true; break;
-            case MenuItem::LeftStickScaleUp: value = std::to_string(leftStickCalibration.up) + " %"; adjustable = true; break;
-            case MenuItem::LeftStickScaleDown: value = std::to_string(leftStickCalibration.down) + " %"; adjustable = true; break;
-            case MenuItem::LeftStickScaleLeft: value = std::to_string(leftStickCalibration.left) + " %"; adjustable = true; break;
-            case MenuItem::LeftStickScaleRight: value = std::to_string(leftStickCalibration.right) + " %"; adjustable = true; break;
-            case MenuItem::Back: value = "Back"; break;
-            case MenuItem::Quit: value = "Quit"; break;
-            default: break;
-            }
-
-            const SDL_Rect field{fieldX, rowY, fieldWidth, fieldHeight};
-            if (adjustable)
-                drawAdjustableValue(renderer, field, value, static_cast<int>(index) == selected);
-            else
-            {
-                drawPill(renderer, field, static_cast<int>(index) == selected);
-                drawMenuText(renderer, centerX, field.y + (field.h - themeText.formFontSize) / 2, value, palette.primary, themeText.formFontSize);
-            }
-        };
-
-        renderContext.renderFooter = [&]()
-        {
-            const int hintY = menuFooterTop(height);
-            if (page == MenuPage::Home)
-            {
-                const int formHintWidth = controlHintWidth(uiTextures.hintA, "A", "EDIT", themeText.hintFontSize)
-                    + controlHintWidth(uiTextures.hintStart, "START", "CONNECT", themeText.hintFontSize);
-                int hintX = width - formHintWidth - 20;
-                hintX = drawControlHint(renderer, uiTextures.hintA, "A", "EDIT", hintX, hintY, themeText.hintFontSize);
-                drawControlHint(renderer, uiTextures.hintStart, "START", "CONNECT", hintX, hintY, themeText.hintFontSize);
-            }
-            else if (page == MenuPage::Settings)
-            {
-                const int footerWidth = controlHintWidth(uiTextures.hintA, "A", "SELECT", themeText.hintFontSize)
-                    + controlHintWidth(uiTextures.hintB, "B", "BACK", themeText.hintFontSize);
-                int hintX = width - footerWidth - 20;
-                hintX = drawControlHint(renderer, uiTextures.hintA, "A", "SELECT", hintX, hintY, themeText.hintFontSize);
-                drawControlHint(renderer, uiTextures.hintB, "B", "BACK", hintX, hintY, themeText.hintFontSize);
-            }
-            else
-            {
-                const int footerWidth = (page == MenuPage::LeftStickMod ? controlHintWidth(uiTextures.hintA, "A", "SELECT", themeText.hintFontSize) : 0)
-                    + controlHintWidth(uiTextures.hintB, "B", "BACK", themeText.hintFontSize);
-                int hintX = width - footerWidth - 20;
-                if (page == MenuPage::LeftStickMod)
-                    hintX = drawControlHint(renderer, uiTextures.hintA, "A", "SELECT", hintX, hintY, themeText.hintFontSize);
-                drawControlHint(renderer, uiTextures.hintB, "B", "BACK", hintX, hintY, themeText.hintFontSize);
-            }
-        };
-        renderContext.present = [=]() { SDL_RenderPresent(renderer); };
-        widemelon::display::PageRenderer::renderMenu(renderContext);
-    }
-
-    SettingsResult editSettings(SDL_Renderer *renderer, int width, int height, const widemelon::Config &config, widemelon::EvdevInput &input)
-    {
-        std::array<char, 4096> executable{};
-        const ssize_t length = readlink("/proc/self/exe", executable.data(), executable.size() - 1);
-        if (length <= 0) return SettingsResult::Home;
-        executable[static_cast<std::size_t>(length)] = 0;
-        const std::string directory = std::filesystem::path(executable.data()).parent_path().string();
-        const widemelon::display::UiConfig uiConfig = uiConfigFor(directory);
-        std::vector<std::string> themes = availableThemes(directory);
-        if (themes.empty()) return SettingsResult::Home;
-        std::size_t themeIndex = 0;
-        const std::string currentTheme = uiConfig.readValue(UiConfigThemeKey).value_or("DukuSlice");
-        const auto current = std::find(themes.begin(), themes.end(), currentTheme);
-        if (current != themes.end()) themeIndex = static_cast<std::size_t>(std::distance(themes.begin(), current));
-
-        const std::array<std::string, 6> leftStickModes{"Disabled", "D-pad", "SM64 Auto", "SM64 Manual", "SM64 D-pad", "Cursor"};
-        std::size_t leftStickModeIndex = 0;
-        const std::string currentLeftStickMode = uiConfig.readValue(UiConfigLeftStickModeKey).value_or("D-pad");
-        const auto currentLeftStick = std::find(leftStickModes.begin(), leftStickModes.end(), currentLeftStickMode);
-        if (currentLeftStick != leftStickModes.end())
-            leftStickModeIndex = static_cast<std::size_t>(std::distance(leftStickModes.begin(), currentLeftStick));
-        else if (currentLeftStickMode == "SM64")
-            leftStickModeIndex = 2;
-
-        std::uint8_t sm64AutoFrames = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigSm64AutoFramesKey, widemelon::Sm64TouchCenterHoldFramesDefault,
-                                                                                  widemelon::Sm64TouchCenterHoldFramesMinimum, widemelon::Sm64TouchCenterHoldFramesMaximum));
-        std::uint16_t sm64AutoReleaseDelayMs = static_cast<std::uint16_t>(uiConfig.readInt(UiConfigSm64AutoReleaseDelayKey, widemelon::Sm64TouchReleaseDelayDefaultMs,
-                                                                                            widemelon::Sm64TouchReleaseDelayMinimumMs, widemelon::Sm64TouchReleaseDelayMaximumMs));
-        std::uint16_t cursorSpeedLimit = static_cast<std::uint16_t>(uiConfig.readInt(UiConfigCursorSpeedKey, widemelon::CursorSpeedDefault,
-                                                                                      widemelon::CursorSpeedMinimum, widemelon::CursorSpeedMaximum));
-        std::uint8_t sm64DpadDeadzone = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigSm64DpadDeadzoneKey, widemelon::Sm64DpadDeadzoneDefaultPercent,
-                                                                                    widemelon::Sm64DpadDeadzoneMinimumPercent, widemelon::Sm64DpadDeadzoneMaximumPercent));
-        widemelon::LeftStickCalibration leftStickCalibration{
-            static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleLeftKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)),
-            static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleRightKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)),
-            static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleUpKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)),
-            static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleDownKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)),
-        };
-        MenuPage page = MenuPage::Settings;
-        int selected = 1;
-        int scrollOffset = 0;
-        widemelon::display::MenuNavigation navigation;
-        while (true)
-        {
-            const std::string &leftStickMode = leftStickModes[leftStickModeIndex];
-            const std::vector<MenuItem> items = menuItems(page, leftStickMode);
-            if (!items.empty())
-            {
-                selected = std::min(selected, static_cast<int>(items.size()) - 1);
-                scrollOffset = menuScrollOffset(items, leftStickMode, selected, scrollOffset, height);
-            }
-            renderMenu(renderer, width, height, page, config, themes[themeIndex], leftStickMode, sm64AutoFrames, sm64AutoReleaseDelayMs,
-                           sm64DpadDeadzone, cursorSpeedLimit, leftStickCalibration, items, selected, scrollOffset);
-
-            input.pollEvent();
-            if (input.exitComboPressed()) return SettingsResult::Exit;
-            const auto action = navigation.nextAction(input.takeUiAction(), input.heldUiDirection());
-            if (action == widemelon::UiAction::Back || action == widemelon::UiAction::Delete)
-            {
-                if (page == MenuPage::Settings) return SettingsResult::Home;
-                page = MenuPage::Settings;
-                selected = 1;
-                scrollOffset = 0;
-                continue;
-            }
-            if (items.empty())
-            {
-                SDL_Delay(10);
-                continue;
-            }
-
-            const std::vector<widemelon::display::MenuNavigationItem> navigationItems = menuNavigationItems(items, leftStickMode);
-            if (action == widemelon::UiAction::Up) selected = widemelon::display::MenuNavigation::nextSelection(navigationItems, selected, -1);
-            else if (action == widemelon::UiAction::Down) selected = widemelon::display::MenuNavigation::nextSelection(navigationItems, selected, 1);
-            else if (action == widemelon::UiAction::Left || action == widemelon::UiAction::Right)
-            {
-                const int direction = action == widemelon::UiAction::Left ? -1 : 1;
-                switch (items[static_cast<std::size_t>(selected)])
-                {
-                case MenuItem::Theme:
-                {
-                    const std::size_t nextTheme = static_cast<std::size_t>((static_cast<int>(themeIndex) + direction + static_cast<int>(themes.size())) % static_cast<int>(themes.size()));
-                    if (uiConfig.writeValue(UiConfigThemeKey, themes[nextTheme]))
-                    {
-                        themeIndex = nextTheme;
-                        reloadUiResources(renderer);
-                    }
-                    break;
-                }
-                case MenuItem::LeftStickMode:
-                {
-                    const std::size_t nextMode = static_cast<std::size_t>((static_cast<int>(leftStickModeIndex) + direction + static_cast<int>(leftStickModes.size())) % static_cast<int>(leftStickModes.size()));
-                    if (uiConfig.writeValue(UiConfigLeftStickModeKey, leftStickModes[nextMode])) leftStickModeIndex = nextMode;
-                    break;
-                }
-                case MenuItem::Sm64AutoFrames:
-                {
-                    const int next = std::clamp(static_cast<int>(sm64AutoFrames) + direction, static_cast<int>(widemelon::Sm64TouchCenterHoldFramesMinimum), static_cast<int>(widemelon::Sm64TouchCenterHoldFramesMaximum));
-                    if (uiConfig.writeInt(UiConfigSm64AutoFramesKey, next, widemelon::Sm64TouchCenterHoldFramesMinimum, widemelon::Sm64TouchCenterHoldFramesMaximum)) sm64AutoFrames = static_cast<std::uint8_t>(next);
-                    break;
-                }
-                case MenuItem::Sm64AutoReleaseDelay:
-                {
-                    const int next = std::clamp(static_cast<int>(sm64AutoReleaseDelayMs) + direction * static_cast<int>(widemelon::Sm64TouchReleaseDelayStepMs), static_cast<int>(widemelon::Sm64TouchReleaseDelayMinimumMs), static_cast<int>(widemelon::Sm64TouchReleaseDelayMaximumMs));
-                    if (uiConfig.writeInt(UiConfigSm64AutoReleaseDelayKey, next, widemelon::Sm64TouchReleaseDelayMinimumMs, widemelon::Sm64TouchReleaseDelayMaximumMs)) sm64AutoReleaseDelayMs = static_cast<std::uint16_t>(next);
-                    break;
-                }
-                case MenuItem::Sm64DpadDeadzone:
-                {
-                    const int next = std::clamp(static_cast<int>(sm64DpadDeadzone) + direction, static_cast<int>(widemelon::Sm64DpadDeadzoneMinimumPercent), static_cast<int>(widemelon::Sm64DpadDeadzoneMaximumPercent));
-                    if (uiConfig.writeInt(UiConfigSm64DpadDeadzoneKey, next, widemelon::Sm64DpadDeadzoneMinimumPercent, widemelon::Sm64DpadDeadzoneMaximumPercent)) sm64DpadDeadzone = static_cast<std::uint8_t>(next);
-                    break;
-                }
-                case MenuItem::CursorSpeed:
-                {
-                    const int next = std::clamp(static_cast<int>(cursorSpeedLimit) + direction * static_cast<int>(widemelon::CursorSpeedStep), static_cast<int>(widemelon::CursorSpeedMinimum), static_cast<int>(widemelon::CursorSpeedMaximum));
-                    if (uiConfig.writeInt(UiConfigCursorSpeedKey, next, widemelon::CursorSpeedMinimum, widemelon::CursorSpeedMaximum)) cursorSpeedLimit = static_cast<std::uint16_t>(next);
-                    break;
-                }
-                case MenuItem::LeftStickScaleUp:
-                {
-                    const int next = std::clamp(static_cast<int>(leftStickCalibration.up) + direction, static_cast<int>(widemelon::LeftStickScaleMinimumPercent), static_cast<int>(widemelon::LeftStickScaleMaximumPercent));
-                    if (uiConfig.writeInt(UiConfigLeftStickScaleUpKey, next, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)) leftStickCalibration.up = static_cast<std::uint8_t>(next);
-                    break;
-                }
-                case MenuItem::LeftStickScaleDown:
-                {
-                    const int next = std::clamp(static_cast<int>(leftStickCalibration.down) + direction, static_cast<int>(widemelon::LeftStickScaleMinimumPercent), static_cast<int>(widemelon::LeftStickScaleMaximumPercent));
-                    if (uiConfig.writeInt(UiConfigLeftStickScaleDownKey, next, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)) leftStickCalibration.down = static_cast<std::uint8_t>(next);
-                    break;
-                }
-                case MenuItem::LeftStickScaleLeft:
-                {
-                    const int next = std::clamp(static_cast<int>(leftStickCalibration.left) + direction, static_cast<int>(widemelon::LeftStickScaleMinimumPercent), static_cast<int>(widemelon::LeftStickScaleMaximumPercent));
-                    if (uiConfig.writeInt(UiConfigLeftStickScaleLeftKey, next, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)) leftStickCalibration.left = static_cast<std::uint8_t>(next);
-                    break;
-                }
-                case MenuItem::LeftStickScaleRight:
-                {
-                    const int next = std::clamp(static_cast<int>(leftStickCalibration.right) + direction, static_cast<int>(widemelon::LeftStickScaleMinimumPercent), static_cast<int>(widemelon::LeftStickScaleMaximumPercent));
-                    if (uiConfig.writeInt(UiConfigLeftStickScaleRightKey, next, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)) leftStickCalibration.right = static_cast<std::uint8_t>(next);
-                    break;
-                }
-                default: break;
-                }
-            }
-            else if (action == widemelon::UiAction::Confirm)
-            {
-                switch (items[static_cast<std::size_t>(selected)])
-                {
-                case MenuItem::LeftStickMod:
-                    page = MenuPage::LeftStickMod;
-                    selected = 2;
-                    scrollOffset = 0;
-                    break;
-                case MenuItem::LeftStickCalibration:
-                    page = MenuPage::LeftStickCalibration;
-                    selected = 2;
-                    scrollOffset = 0;
-                    break;
-                case MenuItem::Back:
-                    if (page == MenuPage::Settings) return SettingsResult::Home;
-                    page = MenuPage::Settings;
-                    selected = 1;
-                    scrollOffset = 0;
-                    break;
-                case MenuItem::Quit: return SettingsResult::Exit;
-                default: break;
-                }
-            }
-            SDL_Delay(10);
-        }
-    }
-
 }
-bool MenuScreen::editConfiguration(SDL_Renderer *renderer, int width, int height, Config &config, EvdevInput &input)
+
+std::vector<MenuEntry> entriesFor(const PageDefinition &page)
+{
+    std::vector<MenuEntry> entries;
+    for (const SectionDefinition &section : page.sections)
     {
-        const std::vector<MenuItem> items = menuItems(MenuPage::Home, "");
-        int selected = 0;
-        int scrollOffset = 0;
-        widemelon::display::MenuNavigation navigation;
-        while (true)
-        {
-            const std::vector<widemelon::display::MenuNavigationItem> navigationItems = menuNavigationItems(items);
-            scrollOffset = menuScrollOffset(items, {}, selected, scrollOffset, height);
-            renderMenu(renderer, width, height, MenuPage::Home, config, "", "", 0, 0, 0, 0, widemelon::LeftStickCalibration{}, items, selected, scrollOffset);
-
-            input.pollEvent();
-            if (input.exitComboPressed()) return false;
-            const widemelon::UiAction action = navigation.nextAction(input.takeUiAction(), input.heldUiDirection());
-            if (action == widemelon::UiAction::Up)
-                selected = widemelon::display::MenuNavigation::nextSelection(navigationItems, selected, -1);
-            else if (action == widemelon::UiAction::Down)
-                selected = widemelon::display::MenuNavigation::nextSelection(navigationItems, selected, 1);
-            else if (action == widemelon::UiAction::Confirm || action == widemelon::UiAction::Start)
-            {
-                if (action == widemelon::UiAction::Start)
-                    selected = 7;
-                switch (items[static_cast<std::size_t>(selected)])
-                {
-                case MenuItem::HomeHost:
-                    widemelon::display::NumpadScreen::edit(renderer, width, height, input, "HOST ADDRESS", config.host, 15, true);
-                    break;
-                case MenuItem::HomePort:
-                {
-                    std::string port = std::to_string(config.port);
-                    if (widemelon::display::NumpadScreen::edit(renderer, width, height, input, "PORT", port, 5, false))
-                    {
-                        unsigned int parsed = 0;
-                        const auto result = std::from_chars(port.data(), port.data() + port.size(), parsed);
-                        if (result.ec == std::errc{} && result.ptr == port.data() + port.size() && parsed <= 65535)
-                            config.port = static_cast<std::uint16_t>(parsed);
-                        else
-                            widemelon::Logger::error("Configuration form error: invalid port");
-                    }
-                    break;
-                }
-                case MenuItem::HomeSessionCode:
-                    widemelon::display::NumpadScreen::edit(renderer, width, height, input, "SESSION CODE", config.pairingCode, 16, false);
-                    break;
-                case MenuItem::HomeConnect:
-                {
-                    const widemelon::ConfigLoadResult checked = widemelon::ConfigLoader::validate(config);
-                    if (!checked.ok)
-                    {
-                        widemelon::Logger::error("Configuration form error: " + checked.error);
-                        break;
-                    }
-                    std::string error;
-                    if (widemelon::ConfigLoader::saveConfiguration(config, error))
-                    {
-                        widemelon::Logger::info("Configuration saved from setup form");
-                        return true;
-                    }
-                    // Persistence is optional: the values entered in this
-                    // session remain valid and must not prevent connecting.
-                    widemelon::Logger::error("Configuration save warning: " + error);
-                    return true;
-                }
-                case MenuItem::HomeSettings:
-                    if (editSettings(renderer, width, height, config, input) == SettingsResult::Exit)
-                        return false;
-                    break;
-                default:
-                    break;
-                }
-            }
-            SDL_Delay(10);
-        }
+        if (!section.title.empty()) entries.push_back({MenuEntryType::SectionTitle, &section, nullptr, section.title});
+        for (const std::string_view hint : section.hintLines) entries.push_back({MenuEntryType::Hint, &section, nullptr, hint});
+        for (const FieldDefinition &field : section.fields) entries.push_back({MenuEntryType::Field, &section, &field, {}});
     }
+    return entries;
+}
 
+int lineCount(std::string_view text) { return 1 + static_cast<int>(std::count(text.begin(), text.end(), '\n')); }
+int entryHeight(const MenuEntry &entry)
+{
+    const ThemeTextSettings &text = uiTextSettings();
+    return entry.type == MenuEntryType::Hint ? lineCount(entry.text) * text.gameplayStatusFontSize + (lineCount(entry.text) - 1) * 8
+                                              : entry.type == MenuEntryType::Field ? UiFormFieldHeight : text.formFontSize;
+}
+int entryTop(const std::vector<MenuEntry> &entries, std::size_t index)
+{
+    int top = 0;
+    for (std::size_t i = 0; i < index; ++i) top += entryHeight(entries[i]) + UiMenuItemGap;
+    return top;
+}
+int footerTop(int height) { PageRenderContext c; c.height = height; return PageRenderer::footerTop(c); }
+int listTop() { PageRenderContext c; c.itemGap = UiMenuItemGap; c.titleFontSize = uiTextSettings().titleFontSize; return PageRenderer::firstItemY(c); }
 
+std::vector<MenuNavigationItem> navigationItems(const std::vector<MenuEntry> &entries)
+{
+    std::vector<MenuNavigationItem> items;
+    for (std::size_t i = 0; i < entries.size(); ++i) items.push_back({entries[i].selectable(), entryTop(entries, i), entryHeight(entries[i])});
+    return items;
+}
+
+int firstSelectable(const std::vector<MenuNavigationItem> &items)
+{
+    for (std::size_t index = 0; index < items.size(); ++index)
+        if (items[index].selectable) return static_cast<int>(index);
+    return 0;
+}
+
+std::string fieldValue(const FieldDefinition &field, const Config &config, const MenuState &state)
+{
+    switch (field.value)
+    {
+    case ValueId::Host: return config.host;
+    case ValueId::Port: return std::to_string(config.port);
+    case ValueId::PairingCode: return config.pairingCode;
+    case ValueId::ActiveTheme: return state.theme;
+    case ValueId::LeftStickMode: return state.mode;
+    case ValueId::Sm64AutoDelayFrames: return std::to_string(state.autoFrames) + " frames";
+    case ValueId::Sm64AutoReleaseDelayMs: return std::to_string(state.autoRelease) + " ms";
+    case ValueId::Sm64DpadDeadzonePercent: return std::to_string(state.dpadDeadzone) + " %";
+    case ValueId::CursorSpeedLimit: return std::to_string(state.cursorSpeed) + " px/s";
+    case ValueId::LeftStickScaleLeftPercent: return std::to_string(state.calibration.left) + " %";
+    case ValueId::LeftStickScaleRightPercent: return std::to_string(state.calibration.right) + " %";
+    case ValueId::LeftStickScaleUpPercent: return std::to_string(state.calibration.up) + " %";
+    case ValueId::LeftStickScaleDownPercent: return std::to_string(state.calibration.down) + " %";
+    default: return std::string(field.label);
+    }
+}
+
+bool isAdjustable(const FieldDefinition &field) { return field.type == FieldType::Choice || field.type == FieldType::Range; }
+void text(SDL_Renderer *r, int x, int y, std::string_view value, SDL_Color color, int size)
+{ drawTextColored(r, value, x - textWidth(value, size) / 2, y, size, color); }
+void multiline(SDL_Renderer *r, int x, int y, std::string_view value)
+{
+    std::size_t start = 0; int line = 0;
+    while (start <= value.size()) { const std::size_t end = value.find('\n', start); const std::string_view current = value.substr(start, end == std::string_view::npos ? value.size() - start : end - start); if (!current.empty()) text(r, x, y + line * (uiTextSettings().gameplayStatusFontSize + 8), current, uiPalette().hint, uiTextSettings().gameplayStatusFontSize); if (end == std::string_view::npos) break; start = end + 1; ++line; }
+}
+
+SDL_Texture *icon(FooterIcon value)
+{
+    const UiTextures &t = uiTextures();
+    switch (value) { case FooterIcon::A: return t.hintA; case FooterIcon::B: return t.hintB; case FooterIcon::X: return t.hintX; case FooterIcon::Start: return t.hintStart; case FooterIcon::L: return t.hintL; case FooterIcon::R: return t.hintR; }
+    return nullptr;
+}
+const char *iconFallback(FooterIcon value)
+{ switch (value) { case FooterIcon::A: return "A"; case FooterIcon::B: return "B"; case FooterIcon::X: return "X"; case FooterIcon::Start: return "START"; case FooterIcon::L: return "L"; case FooterIcon::R: return "R"; } return ""; }
+
+void render(SDL_Renderer *renderer, int width, int height, const PageDefinition &page, const Config &config,
+            const MenuState &state, const std::vector<MenuEntry> &entries, int selected, int scroll)
+{
+    const ThemeTextSettings &fonts = uiTextSettings();
+    const int center = width / 2, fieldX = center - UiFormFieldWidth / 2;
+    MenuRenderContext context;
+    context.page.width = width; context.page.height = height;
+    context.page.drawBackground = [=] { drawGradientBackground(renderer, width, height); };
+    context.renderer = renderer; context.listTop = listTop(); context.listBottom = footerTop(height) - UiMenuItemGap; context.scrollOffset = scroll;
+    for (std::size_t i = 0; i < entries.size(); ++i) context.items.push_back({entryTop(entries, i), entryHeight(entries[i])});
+    context.renderHeader = [&] { text(renderer, center, 36, page.title, uiPalette().primary, fonts.titleFontSize); };
+    context.renderItem = [&](std::size_t index, int y) {
+        const MenuEntry &entry = entries[index];
+        if (entry.type == MenuEntryType::SectionTitle) { text(renderer, center, y, entry.text, uiPalette().primary, fonts.formFontSize); return; }
+        if (entry.type == MenuEntryType::Hint) { multiline(renderer, center, y, entry.text); return; }
+        const FieldDefinition &field = *entry.field; const std::string value = fieldValue(field, config, state);
+        const SDL_Rect rect{fieldX, y, UiFormFieldWidth, UiFormFieldHeight}; drawPill(renderer, rect, static_cast<int>(index) == selected);
+        const int yText = y + (rect.h - fonts.formFontSize) / 2;
+        if (isAdjustable(field)) { drawTextColored(renderer, "<", rect.x + 12, yText, fonts.formFontSize, uiPalette().primary); drawTextColored(renderer, ">", rect.x + rect.w - textWidth(">", fonts.formFontSize) - 12, yText, fonts.formFontSize, uiPalette().primary); }
+        text(renderer, center, yText, value, uiPalette().primary, fonts.formFontSize);
+    };
+    context.renderFooter = [&] { int total = 0; for (const FooterItem &item : page.footer) total += controlHintWidth(icon(item.icon), iconFallback(item.icon), item.text, fonts.hintFontSize); int x = width - total - 20; for (const FooterItem &item : page.footer) x = drawControlHint(renderer, icon(item.icon), iconFallback(item.icon), item.text, x, footerTop(height), fonts.hintFontSize); };
+    context.present = [=] { SDL_RenderPresent(renderer); }; PageRenderer::renderMenu(context);
+}
+
+std::vector<std::string> themes(const std::string &directory)
+{ std::vector<std::string> result; std::error_code error; for (const auto &entry : std::filesystem::directory_iterator(std::filesystem::path(directory) / "assets/themes", error)) if (entry.is_directory(error)) result.push_back(entry.path().filename().string()); std::sort(result.begin(), result.end()); return result; }
+UiConfig configFor(const std::string &directory) { return UiConfig(std::filesystem::path(directory) / "widemelon-client-ui.conf"); }
+std::string executableDirectory() { std::array<char, 4096> path{}; const ssize_t length = readlink("/proc/self/exe", path.data(), path.size() - 1); return length > 0 ? std::filesystem::path(std::string(path.data(), static_cast<std::size_t>(length))).parent_path().string() : std::string{}; }
+
+void updateRange(const FieldDefinition &field, int direction, MenuState &state, const UiConfig &config)
+{
+    const int minimum = field.minimum, maximum = field.maximum, step = field.step * direction;
+    auto update = [&](std::string_view key, auto &target) { const int value = std::clamp(static_cast<int>(target) + step, minimum, maximum); if (config.writeInt(key, value, minimum, maximum)) target = static_cast<std::decay_t<decltype(target)>>(value); };
+    switch (field.value) {
+    case ValueId::Sm64AutoDelayFrames: update(AutoFramesKey, state.autoFrames); break;
+    case ValueId::Sm64AutoReleaseDelayMs: update(AutoReleaseKey, state.autoRelease); break;
+    case ValueId::Sm64DpadDeadzonePercent: update(DpadDeadzoneKey, state.dpadDeadzone); break;
+    case ValueId::CursorSpeedLimit: update(CursorSpeedKey, state.cursorSpeed); break;
+    case ValueId::LeftStickScaleLeftPercent: update(CalibrationKeys[0], state.calibration.left); break;
+    case ValueId::LeftStickScaleRightPercent: update(CalibrationKeys[1], state.calibration.right); break;
+    case ValueId::LeftStickScaleUpPercent: update(CalibrationKeys[2], state.calibration.up); break;
+    case ValueId::LeftStickScaleDownPercent: update(CalibrationKeys[3], state.calibration.down); break;
+    default: break; }
+}
+
+enum class Result { Home, Exit };
+Result editSettings(SDL_Renderer *renderer, int width, int height, const Config &config, EvdevInput &input)
+{
+    const std::string directory = executableDirectory(); if (directory.empty()) return Result::Home;
+    const UiConfig uiConfig = configFor(directory); std::vector<std::string> availableThemes = themes(directory); if (availableThemes.empty()) return Result::Home;
+    MenuState state; state.theme = uiConfig.readValue(ThemeKey).value_or("DukuSlice"); state.mode = uiConfig.readValue(ModeKey).value_or("D-pad");
+    state.autoFrames = static_cast<std::uint8_t>(uiConfig.readInt(AutoFramesKey, Sm64TouchCenterHoldFramesDefault, Sm64TouchCenterHoldFramesMinimum, Sm64TouchCenterHoldFramesMaximum));
+    state.autoRelease = static_cast<std::uint16_t>(uiConfig.readInt(AutoReleaseKey, Sm64TouchReleaseDelayDefaultMs, Sm64TouchReleaseDelayMinimumMs, Sm64TouchReleaseDelayMaximumMs));
+    state.dpadDeadzone = static_cast<std::uint8_t>(uiConfig.readInt(DpadDeadzoneKey, Sm64DpadDeadzoneDefaultPercent, Sm64DpadDeadzoneMinimumPercent, Sm64DpadDeadzoneMaximumPercent));
+    state.cursorSpeed = static_cast<std::uint16_t>(uiConfig.readInt(CursorSpeedKey, CursorSpeedDefault, CursorSpeedMinimum, CursorSpeedMaximum));
+    state.calibration = {static_cast<std::uint8_t>(uiConfig.readInt(CalibrationKeys[0], LeftStickScaleDefaultPercent, LeftStickScaleMinimumPercent, LeftStickScaleMaximumPercent)), static_cast<std::uint8_t>(uiConfig.readInt(CalibrationKeys[1], LeftStickScaleDefaultPercent, LeftStickScaleMinimumPercent, LeftStickScaleMaximumPercent)), static_cast<std::uint8_t>(uiConfig.readInt(CalibrationKeys[2], LeftStickScaleDefaultPercent, LeftStickScaleMinimumPercent, LeftStickScaleMaximumPercent)), static_cast<std::uint8_t>(uiConfig.readInt(CalibrationKeys[3], LeftStickScaleDefaultPercent, LeftStickScaleMinimumPercent, LeftStickScaleMaximumPercent))};
+    const std::array<std::string, 6> modes{"Disabled", "D-pad", "SM64 Auto", "SM64 Manual", "SM64 D-pad", "Cursor"};
+    PageId pageId = PageId::Settings; int selected = 0, scroll = 0; MenuNavigation navigation;
+    while (true) {
+        const PageDefinition &page = pageDefinition(pageId, state.mode); const std::vector<MenuEntry> entries = entriesFor(page); const auto nav = navigationItems(entries);
+        if (selected < 0 || selected >= static_cast<int>(nav.size()) || !nav[static_cast<std::size_t>(selected)].selectable) selected = firstSelectable(nav);
+        scroll = MenuNavigation::scrollOffsetForSelection(nav, selected, scroll, footerTop(height) - UiMenuItemGap - listTop()); render(renderer, width, height, page, config, state, entries, selected, scroll);
+        input.pollEvent(); if (input.exitComboPressed()) return Result::Exit; const UiAction action = navigation.nextAction(input.takeUiAction(), input.heldUiDirection());
+        if (action == UiAction::Back || action == UiAction::Delete) { if (pageId == PageId::Settings) return Result::Home; pageId = PageId::Settings; selected = 0; scroll = 0; continue; }
+        if (action == UiAction::Up || action == UiAction::Down) { selected = MenuNavigation::nextSelection(nav, selected, action == UiAction::Up ? -1 : 1); SDL_Delay(10); continue; }
+        if (selected < 0 || selected >= static_cast<int>(entries.size())) { SDL_Delay(10); continue; }
+        const FieldDefinition &field = *entries[static_cast<std::size_t>(selected)].field;
+        if ((action == UiAction::Left || action == UiAction::Right) && isAdjustable(field)) {
+            const int direction = action == UiAction::Left ? -1 : 1;
+            if (field.value == ValueId::ActiveTheme) { auto it = std::find(availableThemes.begin(), availableThemes.end(), state.theme); const int index = it == availableThemes.end() ? 0 : static_cast<int>(std::distance(availableThemes.begin(), it)); state.theme = availableThemes[static_cast<std::size_t>((index + direction + static_cast<int>(availableThemes.size())) % static_cast<int>(availableThemes.size()))]; if (uiConfig.writeValue(ThemeKey, state.theme)) reloadUiResources(renderer); }
+            else if (field.value == ValueId::LeftStickMode) { auto it = std::find(modes.begin(), modes.end(), state.mode); const int index = it == modes.end() ? 0 : static_cast<int>(std::distance(modes.begin(), it)); state.mode = modes[static_cast<std::size_t>((index + direction + static_cast<int>(modes.size())) % static_cast<int>(modes.size()))]; uiConfig.writeValue(ModeKey, state.mode); }
+            else updateRange(field, direction, state, uiConfig);
+        } else if (action == UiAction::Confirm) {
+            if (field.action == ActionId::Quit) return Result::Exit;
+            if (field.type == FieldType::NavigationButton)
+            {
+                if (field.destination == PageId::Home) { if (pageId == PageId::Settings) return Result::Home; pageId = PageId::Settings; }
+                else if (field.destination != pageId) { pageId = field.destination; selected = 0; scroll = 0; }
+            }
+        }
+        SDL_Delay(10);
+    }
+}
+}
+
+bool MenuScreen::editConfiguration(SDL_Renderer *renderer, int width, int height, Config &config, EvdevInput &input)
+{
+    int selected = 0, scroll = 0; MenuNavigation navigation;
+    while (true) {
+        const PageDefinition &page = pages::homePage(); const std::vector<MenuEntry> entries = entriesFor(page); const auto nav = navigationItems(entries);
+        if (selected < 0 || selected >= static_cast<int>(nav.size()) || !nav[static_cast<std::size_t>(selected)].selectable) selected = firstSelectable(nav);
+        scroll = MenuNavigation::scrollOffsetForSelection(nav, selected, scroll, footerTop(height) - UiMenuItemGap - listTop()); MenuState state; render(renderer, width, height, page, config, state, entries, selected, scroll);
+        input.pollEvent(); if (input.exitComboPressed()) return false; const UiAction action = navigation.nextAction(input.takeUiAction(), input.heldUiDirection());
+        if (action == UiAction::Up || action == UiAction::Down) { selected = MenuNavigation::nextSelection(nav, selected, action == UiAction::Up ? -1 : 1); SDL_Delay(10); continue; }
+        if (action == UiAction::Start) { for (std::size_t i = 0; i < entries.size(); ++i) if (entries[i].field && entries[i].field->action == ActionId::Connect) { selected = static_cast<int>(i); break; } }
+        if (action == UiAction::Confirm || action == UiAction::Start) { const FieldDefinition &field = *entries[static_cast<std::size_t>(selected)].field; if (field.value == ValueId::Host) NumpadScreen::edit(renderer, width, height, input, "HOST ADDRESS", config.host, 15, true); else if (field.value == ValueId::Port) { std::string port = std::to_string(config.port); if (NumpadScreen::edit(renderer, width, height, input, "PORT", port, 5, false)) { unsigned int parsed = 0; const auto result = std::from_chars(port.data(), port.data() + port.size(), parsed); if (result.ec == std::errc{} && result.ptr == port.data() + port.size() && parsed <= 65535) config.port = static_cast<std::uint16_t>(parsed); else Logger::error("Configuration form error: invalid port"); } } else if (field.value == ValueId::PairingCode) NumpadScreen::edit(renderer, width, height, input, "SESSION CODE", config.pairingCode, 16, false); else if (field.destination == PageId::Settings) { if (editSettings(renderer, width, height, config, input) == Result::Exit) return false; } else if (field.action == ActionId::Connect) { const ConfigLoadResult checked = ConfigLoader::validate(config); if (!checked.ok) { Logger::error("Configuration form error: " + checked.error); } else { std::string error; if (!ConfigLoader::saveConfiguration(config, error)) Logger::error("Configuration save warning: " + error); else Logger::info("Configuration saved from setup form"); return true; } } }
+        SDL_Delay(10);
+    }
+}
 
 void MenuScreen::renderConnecting(SDL_Renderer *renderer, int width, int height, const Config &config)
 {
-    const std::vector<MenuItem> items = menuItems(MenuPage::Home, "");
-    renderMenu(renderer, width, height, MenuPage::Home, config, "", "", 0, 0, 0, 0, LeftStickCalibration{}, items, 4, 0);
+    MenuState state; const PageDefinition &page = pages::homePage(); const std::vector<MenuEntry> entries = entriesFor(page); render(renderer, width, height, page, config, state, entries, 0, 0);
 }
 }
