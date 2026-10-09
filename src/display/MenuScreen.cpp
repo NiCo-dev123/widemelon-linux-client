@@ -12,6 +12,7 @@
 #include "display/pages/AboutPage.h"
 #include "display/pages/LeftStickCalibrationPage.h"
 #include "display/pages/LeftStickModPage.h"
+#include "display/pages/RightStickModPage.h"
 #include "display/pages/SettingsPage.h"
 #include "input/CursorStickMod.h"
 #include "input/EvdevInput.h"
@@ -29,7 +30,7 @@ namespace widemelon::display
 {
 namespace
 {
-constexpr std::string_view ThemeKey{"active-theme"}, ModeKey{"left-stick-mod"};
+constexpr std::string_view ThemeKey{"active-theme"}, ModeKey{"left-stick-mod"}, RightModeKey{"right-stick-mod"};
 constexpr std::string_view AutoFramesKey{"sm64-auto-center-hold-frames"}, AutoReleaseKey{"sm64-auto-release-delay-ms"};
 constexpr std::string_view CursorSpeedKey{"cursor-speed-limit"}, DpadDeadzoneKey{"sm64-dpad-deadzone-percent"};
 constexpr std::array<std::string_view, 4> CalibrationKeys{
@@ -39,6 +40,7 @@ struct MenuState
 {
     std::string theme;
     std::string mode;
+    std::string rightMode{"Disabled"};
     std::uint8_t autoFrames{Sm64TouchCenterHoldFramesDefault};
     std::uint16_t autoRelease{Sm64TouchReleaseDelayDefaultMs};
     std::uint8_t dpadDeadzone{Sm64DpadDeadzoneDefaultPercent};
@@ -55,6 +57,7 @@ const PageDefinition &pageDefinition(PageId id, std::string_view mode)
     case PageId::About: return pages::aboutPage();
     case PageId::LeftStickCalibration: return pages::leftStickCalibrationPage();
     case PageId::LeftStickMod: { static PageDefinition page; page = pages::leftStickModPage(mode); return page; }
+    case PageId::RightStickMod: return pages::rightStickModPage();
     default: return pages::settingsPage();
     }
 }
@@ -110,6 +113,7 @@ std::string fieldValue(const FieldDefinition &field, const Config &config, const
     case ValueId::PairingCode: return config.pairingCode;
     case ValueId::ActiveTheme: return state.theme;
     case ValueId::LeftStickMode: return state.mode;
+    case ValueId::RightStickMode: return state.rightMode;
     case ValueId::Sm64AutoDelayFrames: return std::to_string(state.autoFrames) + " frames";
     case ValueId::Sm64AutoReleaseDelayMs: return std::to_string(state.autoRelease) + " ms";
     case ValueId::Sm64DpadDeadzonePercent: return std::to_string(state.dpadDeadzone) + " %";
@@ -191,7 +195,7 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
 {
     const std::string directory = executableDirectory(); if (directory.empty()) return Result::Home;
     const UiConfig uiConfig = configFor(directory); std::vector<std::string> availableThemes = themes(directory); if (availableThemes.empty()) return Result::Home;
-    MenuState state; state.theme = uiConfig.readValue(ThemeKey).value_or("DukuSlice"); state.mode = uiConfig.readValue(ModeKey).value_or("D-pad");
+    MenuState state; state.theme = uiConfig.readValue(ThemeKey).value_or("DukuSlice"); state.mode = uiConfig.readValue(ModeKey).value_or("D-pad"); state.rightMode = uiConfig.readValue(RightModeKey).value_or("Disabled");
     state.autoFrames = static_cast<std::uint8_t>(uiConfig.readInt(AutoFramesKey, Sm64TouchCenterHoldFramesDefault, Sm64TouchCenterHoldFramesMinimum, Sm64TouchCenterHoldFramesMaximum));
     state.autoRelease = static_cast<std::uint16_t>(uiConfig.readInt(AutoReleaseKey, Sm64TouchReleaseDelayDefaultMs, Sm64TouchReleaseDelayMinimumMs, Sm64TouchReleaseDelayMaximumMs));
     state.dpadDeadzone = static_cast<std::uint8_t>(uiConfig.readInt(DpadDeadzoneKey, Sm64DpadDeadzoneDefaultPercent, Sm64DpadDeadzoneMinimumPercent, Sm64DpadDeadzoneMaximumPercent));
@@ -212,6 +216,7 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
             const int direction = action == UiAction::Left ? -1 : 1;
             if (field.value == ValueId::ActiveTheme) { auto it = std::find(availableThemes.begin(), availableThemes.end(), state.theme); const int index = it == availableThemes.end() ? 0 : static_cast<int>(std::distance(availableThemes.begin(), it)); state.theme = availableThemes[static_cast<std::size_t>((index + direction + static_cast<int>(availableThemes.size())) % static_cast<int>(availableThemes.size()))]; if (uiConfig.writeValue(ThemeKey, state.theme)) reloadUiResources(renderer); }
             else if (field.value == ValueId::LeftStickMode) { auto it = std::find(modes.begin(), modes.end(), state.mode); const int index = it == modes.end() ? 0 : static_cast<int>(std::distance(modes.begin(), it)); state.mode = modes[static_cast<std::size_t>((index + direction + static_cast<int>(modes.size())) % static_cast<int>(modes.size()))]; uiConfig.writeValue(ModeKey, state.mode); }
+            else if (field.value == ValueId::RightStickMode) { static const std::array<std::string, 2> rightModes{"Disabled", "Cursor"}; auto it = std::find(rightModes.begin(), rightModes.end(), state.rightMode); const int index = it == rightModes.end() ? 0 : static_cast<int>(std::distance(rightModes.begin(), it)); state.rightMode = rightModes[static_cast<std::size_t>((index + direction + static_cast<int>(rightModes.size())) % static_cast<int>(rightModes.size()))]; uiConfig.writeValue(RightModeKey, state.rightMode); }
             else updateRange(field, direction, state, uiConfig);
         } else if (action == UiAction::Confirm) {
             if (field.action == ActionId::Quit) return Result::Exit;

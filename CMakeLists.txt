@@ -30,6 +30,7 @@ add_executable(widemelon-client
     src/display/pages/AboutPage.cpp
     src/display/pages/LeftStickCalibrationPage.cpp
     src/display/pages/LeftStickModPage.cpp
+    src/display/pages/RightStickModPage.cpp
     src/display/pages/NumpadPage.cpp
     src/display/pages/SettingsPage.cpp
     src/input/EvdevInput.cpp

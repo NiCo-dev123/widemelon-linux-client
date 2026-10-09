@@ -17,6 +17,7 @@ namespace widemelon::display::pages
                 {"Analog sticks", {}, {
                     {FieldType::NavigationButton, "Left stick mod", ValueId::None, PageId::LeftStickMod},
                     {FieldType::NavigationButton, "Left stick calibration", ValueId::None, PageId::LeftStickCalibration},
+                    {FieldType::NavigationButton, "Right stick mod", ValueId::None, PageId::RightStickMod},
                 }},
                 {"Navigation", {}, {
                     {FieldType::NavigationButton, "Back", ValueId::None, PageId::Home},

@@ -53,8 +53,13 @@ bool EvdevInput::open(const std::string& path, std::string& error)
     }
     configureStickAxis(fileDescriptor, ABS_X, leftStickXMinimum, leftStickXMaximum, leftStickXCenter, leftStickXThreshold);
     configureStickAxis(fileDescriptor, ABS_Y, leftStickYMinimum, leftStickYMaximum, leftStickYCenter, leftStickYThreshold);
+    int unusedThreshold = 0;
+    configureStickAxis(fileDescriptor, ABS_RX, rightStickXMinimum, rightStickXMaximum, rightStickXCenter, unusedThreshold);
+    configureStickAxis(fileDescriptor, ABS_RY, rightStickYMinimum, rightStickYMaximum, rightStickYCenter, unusedThreshold);
     leftStickX = leftStickXCenter;
     leftStickY = leftStickYCenter;
+    rightStickX = rightStickXCenter;
+    rightStickY = rightStickYCenter;
     return true;
 }
 
@@ -112,6 +117,12 @@ bool EvdevInput::takeLeftStickChanged()
 LeftStickState EvdevInput::leftStickState() const
 {
     return {leftStickX, leftStickY, leftStickXMinimum, leftStickXMaximum, leftStickYMinimum, leftStickYMaximum, leftStickXCenter, leftStickYCenter};
+}
+
+LeftStickState EvdevInput::rightStickState() const
+{
+    return {rightStickX, rightStickY, rightStickXMinimum, rightStickXMaximum, rightStickYMinimum, rightStickYMaximum,
+            rightStickXCenter, rightStickYCenter};
 }
 
 void EvdevInput::setLeftStickDpadEnabled(bool enabled)
@@ -217,6 +228,12 @@ std::string EvdevInput::pollEvent()
             const int threshold = horizontal ? leftStickXThreshold : leftStickYThreshold;
             if (leftStickDpadEnabled && updateDirectionMask(leftStickMask, horizontal, event.value, center, threshold))
                 setUiDirection(horizontal, event.value, center, threshold);
+        }
+        else if (event.type == EV_ABS && (event.code == ABS_RX || event.code == ABS_RY))
+        {
+            if (event.code == ABS_RX) rightStickX = event.value;
+            else rightStickY = event.value;
+            stateChanged = true;
         }
     }
     return description;

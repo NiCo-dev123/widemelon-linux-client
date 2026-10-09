@@ -12,6 +12,7 @@ namespace widemelon::display
         Settings,
         About,
         LeftStickMod,
+        RightStickMod,
         LeftStickCalibration,
         Numpad
     };
@@ -56,6 +57,7 @@ namespace widemelon::display
         PairingCode,
         ActiveTheme,
         LeftStickMode,
+        RightStickMode,
         Sm64AutoDelayFrames,
         Sm64AutoReleaseDelayMs,
         Sm64DpadDeadzonePercent,
