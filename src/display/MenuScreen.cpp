@@ -9,6 +9,7 @@
 #include "display/UiConfig.h"
 #include "display/UiTheme.h"
 #include "display/pages/HomePage.h"
+#include "display/pages/AboutPage.h"
 #include "display/pages/LeftStickCalibrationPage.h"
 #include "display/pages/LeftStickModPage.h"
 #include "display/pages/SettingsPage.h"
@@ -51,6 +52,7 @@ const PageDefinition &pageDefinition(PageId id, std::string_view mode)
     {
     case PageId::Home: return pages::homePage();
     case PageId::Settings: return pages::settingsPage();
+    case PageId::About: return pages::aboutPage();
     case PageId::LeftStickCalibration: return pages::leftStickCalibrationPage();
     case PageId::LeftStickMod: { static PageDefinition page; page = pages::leftStickModPage(mode); return page; }
     default: return pages::settingsPage();

@@ -22,6 +22,7 @@ namespace widemelon::display::pages
                     {FieldType::NavigationButton, "Back", ValueId::None, PageId::Home},
                     {FieldType::ActionButton, "Quit", ValueId::None, PageId::Home, ActionId::Quit},
                 }},
+                {"More", {}, {{FieldType::NavigationButton, "About this app", ValueId::None, PageId::About}}},
             },
         };
         return page;

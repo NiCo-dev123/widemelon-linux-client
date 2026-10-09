@@ -10,6 +10,7 @@ namespace widemelon::display
     {
         Home,
         Settings,
+        About,
         LeftStickMod,
         LeftStickCalibration,
         Numpad
