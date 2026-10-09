@@ -3,6 +3,7 @@
 #include "display/MenuNavigation.h"
 #include "display/PageRenderer.h"
 #include "display/UiConfig.h"
+#include "display/UiTheme.h"
 #include "display/pages/HomePage.h"
 #include "display/pages/LeftStickCalibrationPage.h"
 #include "display/pages/LeftStickModPage.h"
@@ -46,20 +47,19 @@
 namespace
 {
 
-    using Glyph = std::array<std::uint8_t, 7>;
-
-    struct Palette
-    {
-        SDL_Color backgroundDark{204, 51, 51, 255};
-        SDL_Color backgroundLight{255, 80, 80, 255};
-        SDL_Color primary{51, 12, 0, 255};
-        SDL_Color hint{255, 114, 114, 255};
-        SDL_Color buttonFill{255, 114, 114, 255};
-        SDL_Color buttonOutline{98, 213, 93, 255};
-        int buttonOutlineWidth{6};
-    };
-
-    Palette palette;
+    auto &palette = widemelon::display::uiPalette();
+    auto &themeText = widemelon::display::uiTextSettings();
+    auto &uiTextures = widemelon::display::uiTextures();
+    using widemelon::display::controlHintWidth;
+    using widemelon::display::drawBackground;
+    using widemelon::display::drawControlHint;
+    using widemelon::display::drawGradientBackground;
+    using widemelon::display::drawPill;
+    using widemelon::display::drawText;
+    using widemelon::display::drawTextColored;
+    using widemelon::display::loadUiResources;
+    using widemelon::display::reloadUiResources;
+    using widemelon::display::textWidth;
 
     constexpr std::string_view UiConfigThemeKey{"active-theme"};
     constexpr std::string_view UiConfigLeftStickModeKey{"left-stick-mod"};
@@ -77,6 +77,9 @@ namespace
         return widemelon::display::UiConfig(std::filesystem::path(directory) / "widemelon-client-ui.conf");
     }
 
+// Replaced by display/UiTheme.cpp. Keep the old implementation out of the
+// build temporarily until the remaining display modules have been extracted.
+#if 0
     struct ThemeTextSettings
     {
         int titleFontSize{widemelon::UiTitleFontSize};
@@ -592,6 +595,7 @@ namespace
         drawTextColored(renderer, label, labelX, y + (iconHeight - fontSize) / 2, fontSize, palette.hint);
         return labelX + textWidth(label, fontSize) + 20;
     }
+#endif
 
     bool updateVideoTexture(SDL_Renderer *renderer, SDL_Texture *&texture, const widemelon::DecodedVideoFrame &frame)
     {
@@ -1499,7 +1503,7 @@ namespace widemelon
         if (TTF_Init() != 0)
         {
             error = TTF_GetError();
-            closeUiTextures();
+            widemelon::display::closeUiResources();
 #ifdef WIDEMELON_HAVE_SDL_IMAGE
             IMG_Quit();
 #endif
@@ -1508,10 +1512,10 @@ namespace widemelon
             SDL_Quit();
             return false;
         }
-        if (!fontForSize(14))
-            Logger::error("Cannot load UI font: " + fontPath + "; " + TTF_GetError());
+        if (!widemelon::display::loadUiFont(14))
+            Logger::error("Cannot load UI font: " + widemelon::display::uiFontPath() + "; " + TTF_GetError());
         else
-            Logger::info("Loaded UI font: " + fontPath);
+            Logger::info("Loaded UI font: " + widemelon::display::uiFontPath());
 #endif
 
         int width = 0;
@@ -1523,11 +1527,10 @@ namespace widemelon
         if (!exitInput.open("/dev/input/event4", inputError))
         {
             error = "Cannot open controller input: " + inputError;
+            widemelon::display::closeUiResources();
 #ifdef WIDEMELON_HAVE_SDL_TTF
-            closeFonts();
             TTF_Quit();
 #endif
-            closeUiTextures();
 #ifdef WIDEMELON_HAVE_SDL_IMAGE
             IMG_Quit();
 #endif
@@ -1540,12 +1543,11 @@ namespace widemelon
         auto closeDisplay = [&]
         {
             SDL_DestroyTexture(videoTexture);
-            closeUiTextures();
+            widemelon::display::closeUiResources();
 #ifdef WIDEMELON_HAVE_SDL_IMAGE
             IMG_Quit();
 #endif
 #ifdef WIDEMELON_HAVE_SDL_TTF
-            closeFonts();
             TTF_Quit();
 #endif
             SDL_DestroyRenderer(renderer);

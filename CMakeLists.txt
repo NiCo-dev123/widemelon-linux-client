@@ -22,6 +22,7 @@ add_executable(widemelon-client
     src/display/MenuNavigation.cpp
     src/display/PageRenderer.cpp
     src/display/UiConfig.cpp
+    src/display/UiTheme.cpp
     src/display/pages/HomePage.cpp
     src/display/pages/LeftStickCalibrationPage.cpp
     src/display/pages/LeftStickModPage.cpp
