@@ -163,7 +163,6 @@ namespace widemelon
         widemelon::Sm64StickMod sm64Stick;
         widemelon::Sm64ManualStickMod sm64ManualStick;
         widemelon::CursorStickMod cursorStick;
-        widemelon::CursorStickMod rightCursorStick;
         widemelon::Sm64DpadMod sm64Dpad;
         bool sm64Enabled = false;
         bool sm64ManualEnabled = false;
@@ -173,7 +172,7 @@ namespace widemelon
         widemelon::LeftStickCalibration leftStickCalibration;
         auto sm64ModeEnabled = [&] { return sm64Enabled || sm64ManualEnabled || cursorEnabled || rightCursorEnabled; };
         auto sm64TouchState = [&]() -> const Sm64TouchState&
-        { return rightCursorEnabled ? rightCursorStick.touchState() : (cursorEnabled ? cursorStick.touchState() : (sm64ManualEnabled ? sm64ManualStick.touchState() : sm64Stick.touchState())); };
+        { return (cursorEnabled || rightCursorEnabled) ? cursorStick.touchState() : (sm64ManualEnabled ? sm64ManualStick.touchState() : sm64Stick.touchState()); };
         std::future<std::string> connection;
         if (!inputTest)
         {
@@ -242,8 +241,7 @@ namespace widemelon
                 sm64ManualStick.setEnabled(sm64ManualEnabled);
                 cursorStick.setSpeedLimit(static_cast<std::uint16_t>(uiConfig.readInt(UiConfigCursorSpeedKey, widemelon::CursorSpeedDefault,
                                                                                        widemelon::CursorSpeedMinimum, widemelon::CursorSpeedMaximum)));
-                cursorStick.setEnabled(cursorEnabled);
-                rightCursorStick.setEnabled(rightCursorEnabled);
+                cursorStick.setEnabled(cursorEnabled || rightCursorEnabled);
                 sm64Dpad.setDeadzonePercent(static_cast<std::uint8_t>(uiConfig.readInt(UiConfigSm64DpadDeadzoneKey, widemelon::Sm64DpadDeadzoneDefaultPercent,
                                                                                          widemelon::Sm64DpadDeadzoneMinimumPercent, widemelon::Sm64DpadDeadzoneMaximumPercent)));
                 sm64Dpad.setEnabled(sm64DpadEnabled);
@@ -303,11 +301,25 @@ namespace widemelon
             const widemelon::LeftStickState calibratedStick = widemelon::applyLeftStickCalibration(exitInput.leftStickState(), leftStickCalibration);
             const bool sm64TouchChanged = sm64Stick.update(calibratedStick);
             const bool sm64ManualTouchChanged = sm64ManualStick.update(calibratedStick, exitInput.r2Pressed());
-            const bool cursorTouchChanged = cursorStick.update(calibratedStick, exitInput.r2Pressed());
-            const bool rightCursorTouchChanged = rightCursorStick.update(exitInput.rightStickState(), exitInput.r2Pressed());
+            const widemelon::LeftStickState rightStick = exitInput.rightStickState();
+            const auto stickMoved = [](const widemelon::LeftStickState &stick)
+            {
+                const int horizontalRange = std::max(stick.xCenter - stick.xMinimum, stick.xMaximum - stick.xCenter);
+                const int verticalRange = std::max(stick.yCenter - stick.yMinimum, stick.yMaximum - stick.yCenter);
+                return std::abs(stick.x - stick.xCenter) > horizontalRange / 20
+                    || std::abs(stick.y - stick.yCenter) > verticalRange / 20;
+            };
+            // Both sticks feed one stylus. If both are configured, whichever
+            // one is currently moved controls it; users should avoid moving
+            // both simultaneously.
+            const widemelon::LeftStickState &cursorStickInput = rightCursorEnabled
+                && (!cursorEnabled || stickMoved(rightStick))
+                ? rightStick
+                : calibratedStick;
+            const bool cursorTouchChanged = cursorStick.update(cursorStickInput, exitInput.r2Pressed());
             const bool sm64DpadChanged = sm64Dpad.update(calibratedStick);
-            inputDirty = exitInput.takeStateChanged() || sm64TouchChanged || sm64ManualTouchChanged || cursorTouchChanged || rightCursorTouchChanged || sm64DpadChanged || inputDirty;
-            if ((sm64TouchChanged || sm64ManualTouchChanged || cursorTouchChanged || rightCursorTouchChanged) && !inputTest)
+            inputDirty = exitInput.takeStateChanged() || sm64TouchChanged || sm64ManualTouchChanged || cursorTouchChanged || sm64DpadChanged || inputDirty;
+            if ((sm64TouchChanged || sm64ManualTouchChanged || cursorTouchChanged) && !inputTest)
                 widemelon::display::GameplayScreen::render(renderer, width, height, status, videoTexture, &sm64TouchState());
             if (inputTest && !inputEvent.empty())
             {
