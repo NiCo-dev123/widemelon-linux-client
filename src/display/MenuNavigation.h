@@ -20,6 +20,7 @@ namespace widemelon::display
     public:
         UiAction nextAction(UiAction action, UiAction held);
 
+        static int firstSelection(const std::vector<MenuNavigationItem> &items);
         static int nextSelection(const std::vector<MenuNavigationItem> &items, int selected, int direction);
         static int scrollOffsetForSelection(const std::vector<MenuNavigationItem> &items, int selected,
                                             int currentOffset, int viewportHeight);

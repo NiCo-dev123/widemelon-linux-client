@@ -49,6 +49,15 @@ namespace widemelon::display
         return result;
     }
 
+    int MenuNavigation::firstSelection(const std::vector<MenuNavigationItem> &items)
+    {
+        const auto firstSelectable = std::find_if(items.begin(), items.end(), [](const MenuNavigationItem &item)
+        {
+            return item.selectable;
+        });
+        return firstSelectable == items.end() ? 0 : static_cast<int>(std::distance(items.begin(), firstSelectable));
+    }
+
     int MenuNavigation::nextSelection(const std::vector<MenuNavigationItem> &items, int selected, int direction)
     {
         if (items.empty() || direction == 0) return selected;

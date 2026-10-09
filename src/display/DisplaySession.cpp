@@ -1288,6 +1288,11 @@ namespace
             menuNavigationItems(items, leftStickMode), selected, currentOffset, viewportHeight);
     }
 
+    int firstMenuSelection(const std::vector<MenuItem> &items, std::string_view leftStickMode = {})
+    {
+        return widemelon::display::MenuNavigation::firstSelection(menuNavigationItems(items, leftStickMode));
+    }
+
     std::vector<MenuItem> menuItems(MenuPage page, const std::string &leftStickMode)
     {
         if (page == MenuPage::Home)
@@ -1636,7 +1641,7 @@ namespace
             configuredLeftStickScalePercent(directory, "left-stick-scale-down-percent"),
         };
         MenuPage page = MenuPage::Settings;
-        int selected = 1;
+        int selected = firstMenuSelection(menuItems(MenuPage::Settings, leftStickModes[leftStickModeIndex]), leftStickModes[leftStickModeIndex]);
         int scrollOffset = 0;
         widemelon::display::MenuNavigation navigation;
         while (true)
@@ -1658,7 +1663,7 @@ namespace
             {
                 if (page == MenuPage::Settings) return SettingsResult::Home;
                 page = MenuPage::Settings;
-                selected = 1;
+                selected = firstMenuSelection(menuItems(page, leftStickMode), leftStickMode);
                 scrollOffset = 0;
                 continue;
             }
@@ -1749,18 +1754,18 @@ namespace
                 {
                 case MenuItem::LeftStickMod:
                     page = MenuPage::LeftStickMod;
-                    selected = 2;
+                    selected = firstMenuSelection(menuItems(page, leftStickMode), leftStickMode);
                     scrollOffset = 0;
                     break;
                 case MenuItem::LeftStickCalibration:
                     page = MenuPage::LeftStickCalibration;
-                    selected = 2;
+                    selected = firstMenuSelection(menuItems(page, leftStickMode), leftStickMode);
                     scrollOffset = 0;
                     break;
                 case MenuItem::Back:
                     if (page == MenuPage::Settings) return SettingsResult::Home;
                     page = MenuPage::Settings;
-                    selected = 1;
+                    selected = firstMenuSelection(menuItems(page, leftStickMode), leftStickMode);
                     scrollOffset = 0;
                     break;
                 case MenuItem::Quit: return SettingsResult::Exit;
@@ -1775,7 +1780,7 @@ namespace
                            widemelon::EvdevInput &input)
     {
         const std::vector<MenuItem> items = menuItems(MenuPage::Home, "");
-        int selected = 0;
+        int selected = firstMenuSelection(items);
         int scrollOffset = 0;
         widemelon::display::MenuNavigation navigation;
         while (true)
