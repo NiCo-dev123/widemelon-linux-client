@@ -1,6 +1,7 @@
 #include "display/ConfigScreen.h"
 #include "display/DisplaySession.h"
 #include "display/MenuNavigation.h"
+#include "display/NumpadScreen.h"
 #include "display/PageRenderer.h"
 #include "display/UiConfig.h"
 #include "display/UiTheme.h"
@@ -673,102 +674,6 @@ namespace
         SectionNavigation, Back, Quit
     };
 
-    void renderKeyboard(SDL_Renderer *renderer, int width, int height, const std::string &title,
-                        const std::string &value, int selectedKey)
-    {
-        const widemelon::display::PageDefinition page = widemelon::display::pages::numpadPage(title);
-        static const std::array<const char *, 13> keys{
-            "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ".", "DEL", "OK"};
-        const int columns = widemelon::UiKeyboardColumns;
-        const int keyWidth = widemelon::UiKeyboardKeyWidth;
-        const int keyHeight = widemelon::UiKeyboardKeyHeight;
-        const int startX = widemelon::UiKeyboardStartX;
-        const int startY = widemelon::UiKeyboardStartY;
-
-        drawGradientBackground(renderer, width, height);
-        SDL_SetRenderDrawColor(renderer, palette.primary.r, palette.primary.g, palette.primary.b, 255);
-        drawText(renderer, page.title, (width - textWidth(page.title, themeText.titleFontSize)) / 2, 65, themeText.titleFontSize);
-        drawText(renderer, value.empty() ? "_" : value, (width - textWidth(value.empty() ? "_" : value, themeText.keyboardValueFontSize)) / 2, 125, themeText.keyboardValueFontSize);
-        for (std::size_t index = 0; index < keys.size(); ++index)
-        {
-            const int row = static_cast<int>(index) / columns;
-            const int column = static_cast<int>(index) % columns;
-            const SDL_Rect key{startX + column * keyWidth, startY + row * keyHeight, keyWidth - 10, keyHeight - 8};
-            drawPill(renderer, key, static_cast<int>(index) == selectedKey, true);
-            const int fontSize = std::string_view(keys[index]).size() > 1 ? themeText.keyboardActionFontSize : themeText.keyboardValueFontSize;
-            drawText(renderer, keys[index], key.x + (key.w - textWidth(keys[index], fontSize)) / 2,
-                     key.y + (key.h - fontSize) / 2, fontSize);
-        }
-        int hintX = width / 2 - 190;
-        const int hintY = height - 64;
-        hintX = drawControlHint(renderer, uiTextures.hintA, "A", page.footer[0].text, hintX, hintY, themeText.hintFontSize);
-        hintX = drawControlHint(renderer, uiTextures.hintB, "B", page.footer[1].text, hintX, hintY, themeText.hintFontSize);
-        hintX = drawControlHint(renderer, uiTextures.hintX, "X", page.footer[2].text, hintX, hintY, themeText.hintFontSize);
-        drawControlHint(renderer, uiTextures.hintStart, "START", page.footer[3].text, hintX, hintY, themeText.hintFontSize);
-        SDL_RenderPresent(renderer);
-    }
-
-    bool editNumericField(SDL_Renderer *renderer, int width, int height, widemelon::EvdevInput &input,
-                          const std::string &title, std::string &value, std::size_t maximumLength, bool allowDot)
-    {
-        static constexpr int keyCount = 13;
-        static constexpr int columns = 4;
-        static const std::array<const char *, keyCount> keys{
-            "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ".", "DEL", "OK"};
-        const std::string original = value;
-        int selectedKey = 0;
-        widemelon::display::MenuNavigation navigation;
-        while (true)
-        {
-            renderKeyboard(renderer, width, height, title, value, selectedKey);
-            input.pollEvent();
-            if (input.exitComboPressed())
-                return false;
-            const widemelon::UiAction action = navigation.nextAction(input.takeUiAction(), input.heldUiDirection());
-            switch (action)
-            {
-            case widemelon::UiAction::Up:
-                selectedKey = (selectedKey + keyCount - columns) % keyCount;
-                break;
-            case widemelon::UiAction::Down:
-                selectedKey = (selectedKey + columns) % keyCount;
-                break;
-            case widemelon::UiAction::Left:
-                selectedKey = (selectedKey + keyCount - 1) % keyCount;
-                break;
-            case widemelon::UiAction::Right:
-                selectedKey = (selectedKey + 1) % keyCount;
-                break;
-            case widemelon::UiAction::Delete:
-                if (!value.empty())
-                    value.pop_back();
-                break;
-            case widemelon::UiAction::Back:
-                value = original;
-                return false;
-            case widemelon::UiAction::Start:
-                return true;
-            case widemelon::UiAction::Confirm:
-            {
-                const std::string_view key = keys[static_cast<std::size_t>(selectedKey)];
-                if (key == "OK")
-                    return true;
-                if (key == "DEL")
-                {
-                    if (!value.empty())
-                        value.pop_back();
-                }
-                else if (value.size() < maximumLength && (key != "." || allowDot))
-                    value.append(key);
-                break;
-            }
-            default:
-                break;
-            }
-            SDL_Delay(10);
-        }
-    }
-
     enum class SettingsResult { Home, Exit };
 
     std::vector<std::string> availableThemes(const std::string &directory)
@@ -1411,12 +1316,12 @@ namespace
                 switch (items[static_cast<std::size_t>(selected)])
                 {
                 case MenuItem::HomeHost:
-                    editNumericField(renderer, width, height, input, "HOST ADDRESS", config.host, 15, true);
+                    widemelon::display::NumpadScreen::edit(renderer, width, height, input, "HOST ADDRESS", config.host, 15, true);
                     break;
                 case MenuItem::HomePort:
                 {
                     std::string port = std::to_string(config.port);
-                    if (editNumericField(renderer, width, height, input, "PORT", port, 5, false))
+                    if (widemelon::display::NumpadScreen::edit(renderer, width, height, input, "PORT", port, 5, false))
                     {
                         unsigned int parsed = 0;
                         const auto result = std::from_chars(port.data(), port.data() + port.size(), parsed);
@@ -1428,7 +1333,7 @@ namespace
                     break;
                 }
                 case MenuItem::HomeSessionCode:
-                    editNumericField(renderer, width, height, input, "SESSION CODE", config.pairingCode, 16, false);
+                    widemelon::display::NumpadScreen::edit(renderer, width, height, input, "SESSION CODE", config.pairingCode, 16, false);
                     break;
                 case MenuItem::HomeConnect:
                 {
