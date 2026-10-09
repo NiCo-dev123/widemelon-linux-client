@@ -2,6 +2,7 @@
 #include "display/DisplaySession.h"
 #include "display/MenuNavigation.h"
 #include "display/PageRenderer.h"
+#include "display/UiConfig.h"
 #include "display/pages/HomePage.h"
 #include "display/pages/LeftStickCalibrationPage.h"
 #include "display/pages/LeftStickModPage.h"
@@ -59,6 +60,22 @@ namespace
     };
 
     Palette palette;
+
+    constexpr std::string_view UiConfigThemeKey{"active-theme"};
+    constexpr std::string_view UiConfigLeftStickModeKey{"left-stick-mod"};
+    constexpr std::string_view UiConfigSm64AutoFramesKey{"sm64-auto-center-hold-frames"};
+    constexpr std::string_view UiConfigSm64AutoReleaseDelayKey{"sm64-auto-release-delay-ms"};
+    constexpr std::string_view UiConfigCursorSpeedKey{"cursor-speed-limit"};
+    constexpr std::string_view UiConfigSm64DpadDeadzoneKey{"sm64-dpad-deadzone-percent"};
+    constexpr std::string_view UiConfigLeftStickScaleLeftKey{"left-stick-scale-left-percent"};
+    constexpr std::string_view UiConfigLeftStickScaleRightKey{"left-stick-scale-right-percent"};
+    constexpr std::string_view UiConfigLeftStickScaleUpKey{"left-stick-scale-up-percent"};
+    constexpr std::string_view UiConfigLeftStickScaleDownKey{"left-stick-scale-down-percent"};
+
+    widemelon::display::UiConfig uiConfigFor(const std::string &directory)
+    {
+        return widemelon::display::UiConfig(std::filesystem::path(directory) / "widemelon-client-ui.conf");
+    }
 
     struct ThemeTextSettings
     {
@@ -244,11 +261,12 @@ namespace
             return;
         executable[static_cast<std::size_t>(length)] = '\0';
         const std::string directory = std::string(executable.data()).substr(0, std::string(executable.data()).find_last_of('/'));
+        const widemelon::display::UiConfig uiConfig = uiConfigFor(directory);
         std::ifstream file(directory + "/widemelon-client-ui.conf");
 #ifdef WIDEMELON_HAVE_SDL_TTF
         std::string textFont = "assets/themes/DukuSlice/comfortaa-latin-400-normal.ttf";
 #endif
-        std::string activeTheme = "DukuSlice";
+        std::string activeTheme = uiConfig.readValue(UiConfigThemeKey).value_or("DukuSlice");
         std::string line;
         while (std::getline(file, line))
         {
@@ -257,11 +275,6 @@ namespace
                 continue;
             const std::string key = line.substr(0, separator);
             const std::string value = line.substr(separator + 1);
-            if (key == "active-theme")
-            {
-                if (!value.empty()) activeTheme = value;
-                continue;
-            }
 #ifdef WIDEMELON_HAVE_SDL_TTF
             if (key == "text-font")
             {
@@ -765,415 +778,6 @@ namespace
     }
 
 
-    std::string configuredTheme(const std::string &directory)
-    {
-        std::ifstream file(std::filesystem::path(directory) / "widemelon-client-ui.conf");
-        std::string line;
-        while (std::getline(file, line))
-        {
-            constexpr std::string_view key{"active-theme="};
-            if (line.compare(0, key.size(), key) == 0 && line.size() > key.size())
-                return line.substr(key.size());
-        }
-        return "DukuSlice";
-    }
-
-    bool saveConfiguredTheme(const std::string &directory, const std::string &theme)
-    {
-        const std::filesystem::path path = std::filesystem::path(directory) / "widemelon-client-ui.conf";
-        std::ifstream input(path);
-        if (!input)
-        {
-            widemelon::Logger::error("Cannot open UI configuration for theme selection: " + path.string());
-            return false;
-        }
-
-        std::vector<std::string> lines;
-        std::string line;
-        bool replaced = false;
-        while (std::getline(input, line))
-        {
-            if (line.compare(0, 13, "active-theme=") == 0)
-            {
-                lines.push_back("active-theme=" + theme);
-                replaced = true;
-            }
-            else
-                lines.push_back(line);
-        }
-        if (!replaced) lines.push_back("active-theme=" + theme);
-
-        const std::filesystem::path temporary = path.string() + ".tmp";
-        {
-            std::ofstream output(temporary, std::ios::trunc);
-            if (!output)
-            {
-                widemelon::Logger::error("Cannot save UI theme selection: " + temporary.string());
-                return false;
-            }
-            for (const std::string &entry : lines) output << entry << "\n";
-            if (!output)
-            {
-                widemelon::Logger::error("Cannot write UI theme selection: " + temporary.string());
-                return false;
-            }
-        }
-        std::error_code error;
-        std::filesystem::rename(temporary, path, error);
-        if (error)
-        {
-            std::filesystem::remove(temporary, error);
-            widemelon::Logger::error("Cannot activate UI theme: " + error.message());
-            return false;
-        }
-        widemelon::Logger::info("UI theme selected: " + theme);
-        return true;
-    }
-
-    std::string configuredLeftStickMode(const std::string &directory)
-    {
-        std::ifstream file(std::filesystem::path(directory) / "widemelon-client-ui.conf");
-        std::string line;
-        while (std::getline(file, line))
-        {
-            constexpr std::string_view key{"left-stick-mod="};
-            if (line.compare(0, key.size(), key) == 0 && line.size() > key.size())
-                return line.substr(key.size());
-        }
-        return "D-pad";
-    }
-
-    bool saveConfiguredLeftStickMode(const std::string &directory, const std::string &mode)
-    {
-        const std::filesystem::path path = std::filesystem::path(directory) / "widemelon-client-ui.conf";
-        std::ifstream input(path);
-        if (!input)
-        {
-            widemelon::Logger::error("Cannot open UI configuration for left stick mode: " + path.string());
-            return false;
-        }
-
-        std::vector<std::string> lines;
-        std::string line;
-        bool replaced = false;
-        while (std::getline(input, line))
-        {
-            if (line.compare(0, 15, "left-stick-mod=") == 0)
-            {
-                lines.push_back("left-stick-mod=" + mode);
-                replaced = true;
-            }
-            else
-                lines.push_back(line);
-        }
-        if (!replaced) lines.push_back("left-stick-mod=" + mode);
-
-        const std::filesystem::path temporary = path.string() + ".tmp";
-        {
-            std::ofstream output(temporary, std::ios::trunc);
-            if (!output)
-            {
-                widemelon::Logger::error("Cannot save left stick mode: " + temporary.string());
-                return false;
-            }
-            for (const std::string &entry : lines) output << entry << "\n";
-            if (!output)
-            {
-                widemelon::Logger::error("Cannot write left stick mode: " + temporary.string());
-                return false;
-            }
-        }
-        std::error_code error;
-        std::filesystem::rename(temporary, path, error);
-        if (error)
-        {
-            std::filesystem::remove(temporary, error);
-            widemelon::Logger::error("Cannot activate left stick mode: " + error.message());
-            return false;
-        }
-        widemelon::Logger::info("Left stick mode selected: " + mode);
-        return true;
-    }
-
-    std::uint8_t configuredSm64AutoCenterHoldFrames(const std::string &directory)
-    {
-        std::ifstream file(std::filesystem::path(directory) / "widemelon-client-ui.conf");
-        std::string line;
-        while (std::getline(file, line))
-        {
-            constexpr std::string_view key{"sm64-auto-center-hold-frames="};
-            if (line.compare(0, key.size(), key) == 0)
-            {
-                unsigned int value = 0;
-                const std::string raw = line.substr(key.size());
-                const auto result = std::from_chars(raw.data(), raw.data() + raw.size(), value);
-                if (result.ec == std::errc{} && result.ptr == raw.data() + raw.size())
-                    return static_cast<std::uint8_t>(std::clamp(value, static_cast<unsigned int>(widemelon::Sm64TouchCenterHoldFramesMinimum), static_cast<unsigned int>(widemelon::Sm64TouchCenterHoldFramesMaximum)));
-            }
-        }
-        return widemelon::Sm64TouchCenterHoldFramesDefault;
-    }
-
-    bool saveConfiguredSm64AutoCenterHoldFrames(const std::string &directory, std::uint8_t frames)
-    {
-        const std::filesystem::path path = std::filesystem::path(directory) / "widemelon-client-ui.conf";
-        std::ifstream input(path);
-        if (!input) return false;
-
-        std::vector<std::string> lines;
-        std::string line;
-        bool replaced = false;
-        while (std::getline(input, line))
-        {
-            if (line.compare(0, 29, "sm64-auto-center-hold-frames=") == 0)
-            {
-                lines.push_back("sm64-auto-center-hold-frames=" + std::to_string(frames));
-                replaced = true;
-            }
-            else
-                lines.push_back(line);
-        }
-        if (!replaced) lines.push_back("sm64-auto-center-hold-frames=" + std::to_string(frames));
-
-        const std::filesystem::path temporary = path.string() + ".tmp";
-        {
-            std::ofstream output(temporary, std::ios::trunc);
-            if (!output) return false;
-            for (const std::string &entry : lines) output << entry << "\n";
-            if (!output) return false;
-        }
-        std::error_code error;
-        std::filesystem::rename(temporary, path, error);
-        if (error)
-        {
-            std::filesystem::remove(temporary, error);
-            return false;
-        }
-        return true;
-    }
-
-    std::uint16_t configuredSm64AutoReleaseDelayMs(const std::string &directory)
-    {
-        std::ifstream file(std::filesystem::path(directory) / "widemelon-client-ui.conf");
-        std::string line;
-        while (std::getline(file, line))
-        {
-            constexpr std::string_view key{"sm64-auto-release-delay-ms="};
-            if (line.compare(0, key.size(), key) == 0)
-            {
-                unsigned int value = 0;
-                const std::string raw = line.substr(key.size());
-                const auto result = std::from_chars(raw.data(), raw.data() + raw.size(), value);
-                if (result.ec == std::errc{} && result.ptr == raw.data() + raw.size())
-                    return static_cast<std::uint16_t>(std::clamp(value, static_cast<unsigned int>(widemelon::Sm64TouchReleaseDelayMinimumMs), static_cast<unsigned int>(widemelon::Sm64TouchReleaseDelayMaximumMs)));
-            }
-        }
-        return widemelon::Sm64TouchReleaseDelayDefaultMs;
-    }
-
-    bool saveConfiguredSm64AutoReleaseDelayMs(const std::string &directory, std::uint16_t milliseconds)
-    {
-        const std::filesystem::path path = std::filesystem::path(directory) / "widemelon-client-ui.conf";
-        std::ifstream input(path);
-        if (!input) return false;
-
-        std::vector<std::string> lines;
-        std::string line;
-        bool replaced = false;
-        while (std::getline(input, line))
-        {
-            if (line.compare(0, 27, "sm64-auto-release-delay-ms=") == 0)
-            {
-                lines.push_back("sm64-auto-release-delay-ms=" + std::to_string(milliseconds));
-                replaced = true;
-            }
-            else
-                lines.push_back(line);
-        }
-        if (!replaced) lines.push_back("sm64-auto-release-delay-ms=" + std::to_string(milliseconds));
-
-        const std::filesystem::path temporary = path.string() + ".tmp";
-        {
-            std::ofstream output(temporary, std::ios::trunc);
-            if (!output) return false;
-            for (const std::string &entry : lines) output << entry << "\n";
-            if (!output) return false;
-        }
-        std::error_code error;
-        std::filesystem::rename(temporary, path, error);
-        if (error)
-        {
-            std::filesystem::remove(temporary, error);
-            return false;
-        }
-        return true;
-    }
-
-    std::uint16_t configuredCursorSpeedLimit(const std::string &directory)
-    {
-        std::ifstream file(std::filesystem::path(directory) / "widemelon-client-ui.conf");
-        std::string line;
-        while (std::getline(file, line))
-        {
-            constexpr std::string_view key{"cursor-speed-limit="};
-            if (line.compare(0, key.size(), key) == 0)
-            {
-                unsigned int value = 0;
-                const std::string raw = line.substr(key.size());
-                const auto result = std::from_chars(raw.data(), raw.data() + raw.size(), value);
-                if (result.ec == std::errc{} && result.ptr == raw.data() + raw.size())
-                    return static_cast<std::uint16_t>(std::clamp(value, static_cast<unsigned int>(widemelon::CursorSpeedMinimum), static_cast<unsigned int>(widemelon::CursorSpeedMaximum)));
-            }
-        }
-        return widemelon::CursorSpeedDefault;
-    }
-
-    bool saveConfiguredCursorSpeedLimit(const std::string &directory, std::uint16_t pixelsPerSecond)
-    {
-        const std::filesystem::path path = std::filesystem::path(directory) / "widemelon-client-ui.conf";
-        std::ifstream input(path);
-        if (!input) return false;
-        std::vector<std::string> lines;
-        std::string line;
-        bool replaced = false;
-        while (std::getline(input, line))
-        {
-            if (line.compare(0, 19, "cursor-speed-limit=") == 0)
-            {
-                lines.push_back("cursor-speed-limit=" + std::to_string(pixelsPerSecond));
-                replaced = true;
-            }
-            else lines.push_back(line);
-        }
-        if (!replaced) lines.push_back("cursor-speed-limit=" + std::to_string(pixelsPerSecond));
-        const std::filesystem::path temporary = path.string() + ".tmp";
-        {
-            std::ofstream output(temporary, std::ios::trunc);
-            if (!output) return false;
-            for (const std::string &entry : lines) output << entry << "\n";
-            if (!output) return false;
-        }
-        std::error_code error;
-        std::filesystem::rename(temporary, path, error);
-        if (error)
-        {
-            std::filesystem::remove(temporary, error);
-            return false;
-        }
-        return true;
-    }
-
-    std::uint8_t configuredSm64DpadDeadzonePercent(const std::string &directory)
-    {
-        std::ifstream file(std::filesystem::path(directory) / "widemelon-client-ui.conf");
-        std::string line;
-        while (std::getline(file, line))
-        {
-            constexpr std::string_view key{"sm64-dpad-deadzone-percent="};
-            if (line.compare(0, key.size(), key) == 0)
-            {
-                unsigned int value = 0;
-                const std::string raw = line.substr(key.size());
-                const auto result = std::from_chars(raw.data(), raw.data() + raw.size(), value);
-                if (result.ec == std::errc{} && result.ptr == raw.data() + raw.size())
-                    return static_cast<std::uint8_t>(std::clamp(value, static_cast<unsigned int>(widemelon::Sm64DpadDeadzoneMinimumPercent), static_cast<unsigned int>(widemelon::Sm64DpadDeadzoneMaximumPercent)));
-            }
-        }
-        return widemelon::Sm64DpadDeadzoneDefaultPercent;
-    }
-
-    bool saveConfiguredSm64DpadDeadzonePercent(const std::string &directory, std::uint8_t percent)
-    {
-        const std::filesystem::path path = std::filesystem::path(directory) / "widemelon-client-ui.conf";
-        std::ifstream input(path);
-        if (!input) return false;
-        std::vector<std::string> lines;
-        std::string line;
-        bool replaced = false;
-        while (std::getline(input, line))
-        {
-            if (line.compare(0, 27, "sm64-dpad-deadzone-percent=") == 0)
-            {
-                lines.push_back("sm64-dpad-deadzone-percent=" + std::to_string(percent));
-                replaced = true;
-            }
-            else lines.push_back(line);
-        }
-        if (!replaced) lines.push_back("sm64-dpad-deadzone-percent=" + std::to_string(percent));
-        const std::filesystem::path temporary = path.string() + ".tmp";
-        {
-            std::ofstream output(temporary, std::ios::trunc);
-            if (!output) return false;
-            for (const std::string &entry : lines) output << entry << "\n";
-            if (!output) return false;
-        }
-        std::error_code error;
-        std::filesystem::rename(temporary, path, error);
-        if (error)
-        {
-            std::filesystem::remove(temporary, error);
-            return false;
-        }
-        return true;
-    }
-
-    std::uint8_t configuredLeftStickScalePercent(const std::string &directory, std::string_view key)
-    {
-        std::ifstream file(std::filesystem::path(directory) / "widemelon-client-ui.conf");
-        std::string line;
-        const std::string prefix = std::string(key) + "=";
-        while (std::getline(file, line))
-        {
-            if (line.compare(0, prefix.size(), prefix) != 0) continue;
-            unsigned int value = 0;
-            const std::string raw = line.substr(prefix.size());
-            const auto result = std::from_chars(raw.data(), raw.data() + raw.size(), value);
-            if (result.ec == std::errc{} && result.ptr == raw.data() + raw.size())
-                return static_cast<std::uint8_t>(std::clamp(value, static_cast<unsigned int>(widemelon::LeftStickScaleMinimumPercent),
-                                                           static_cast<unsigned int>(widemelon::LeftStickScaleMaximumPercent)));
-        }
-        return widemelon::LeftStickScaleDefaultPercent;
-    }
-
-    bool saveConfiguredLeftStickScalePercent(const std::string &directory, std::string_view key, std::uint8_t percent)
-    {
-        const std::filesystem::path path = std::filesystem::path(directory) / "widemelon-client-ui.conf";
-        std::ifstream input(path);
-        if (!input) return false;
-        const std::string prefix = std::string(key) + "=";
-        const std::string replacement = prefix + std::to_string(std::clamp(percent, widemelon::LeftStickScaleMinimumPercent,
-                                                                            widemelon::LeftStickScaleMaximumPercent));
-        std::vector<std::string> lines;
-        std::string line;
-        bool replaced = false;
-        while (std::getline(input, line))
-        {
-            if (line.compare(0, prefix.size(), prefix) == 0)
-            {
-                lines.push_back(replacement);
-                replaced = true;
-            }
-            else lines.push_back(line);
-        }
-        if (!replaced) lines.push_back(replacement);
-
-        const std::filesystem::path temporary = path.string() + ".tmp";
-        {
-            std::ofstream output(temporary, std::ios::trunc);
-            if (!output) return false;
-            for (const std::string &entry : lines) output << entry << "\n";
-            if (!output) return false;
-        }
-        std::error_code error;
-        std::filesystem::rename(temporary, path, error);
-        if (error)
-        {
-            std::filesystem::remove(temporary, error);
-            return false;
-        }
-        return true;
-    }
-
     int menuItemHeight(MenuItem item, std::string_view leftStickMode = {})
     {
         switch (item)
@@ -1609,31 +1213,36 @@ namespace
         if (length <= 0) return SettingsResult::Home;
         executable[static_cast<std::size_t>(length)] = 0;
         const std::string directory = std::filesystem::path(executable.data()).parent_path().string();
+        const widemelon::display::UiConfig uiConfig = uiConfigFor(directory);
         std::vector<std::string> themes = availableThemes(directory);
         if (themes.empty()) return SettingsResult::Home;
         std::size_t themeIndex = 0;
-        const std::string currentTheme = configuredTheme(directory);
+        const std::string currentTheme = uiConfig.readValue(UiConfigThemeKey).value_or("DukuSlice");
         const auto current = std::find(themes.begin(), themes.end(), currentTheme);
         if (current != themes.end()) themeIndex = static_cast<std::size_t>(std::distance(themes.begin(), current));
 
         const std::array<std::string, 6> leftStickModes{"Disabled", "D-pad", "SM64 Auto", "SM64 Manual", "SM64 D-pad", "Cursor"};
         std::size_t leftStickModeIndex = 0;
-        const std::string currentLeftStickMode = configuredLeftStickMode(directory);
+        const std::string currentLeftStickMode = uiConfig.readValue(UiConfigLeftStickModeKey).value_or("D-pad");
         const auto currentLeftStick = std::find(leftStickModes.begin(), leftStickModes.end(), currentLeftStickMode);
         if (currentLeftStick != leftStickModes.end())
             leftStickModeIndex = static_cast<std::size_t>(std::distance(leftStickModes.begin(), currentLeftStick));
         else if (currentLeftStickMode == "SM64")
             leftStickModeIndex = 2;
 
-        std::uint8_t sm64AutoFrames = configuredSm64AutoCenterHoldFrames(directory);
-        std::uint16_t sm64AutoReleaseDelayMs = configuredSm64AutoReleaseDelayMs(directory);
-        std::uint16_t cursorSpeedLimit = configuredCursorSpeedLimit(directory);
-        std::uint8_t sm64DpadDeadzone = configuredSm64DpadDeadzonePercent(directory);
+        std::uint8_t sm64AutoFrames = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigSm64AutoFramesKey, widemelon::Sm64TouchCenterHoldFramesDefault,
+                                                                                  widemelon::Sm64TouchCenterHoldFramesMinimum, widemelon::Sm64TouchCenterHoldFramesMaximum));
+        std::uint16_t sm64AutoReleaseDelayMs = static_cast<std::uint16_t>(uiConfig.readInt(UiConfigSm64AutoReleaseDelayKey, widemelon::Sm64TouchReleaseDelayDefaultMs,
+                                                                                            widemelon::Sm64TouchReleaseDelayMinimumMs, widemelon::Sm64TouchReleaseDelayMaximumMs));
+        std::uint16_t cursorSpeedLimit = static_cast<std::uint16_t>(uiConfig.readInt(UiConfigCursorSpeedKey, widemelon::CursorSpeedDefault,
+                                                                                      widemelon::CursorSpeedMinimum, widemelon::CursorSpeedMaximum));
+        std::uint8_t sm64DpadDeadzone = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigSm64DpadDeadzoneKey, widemelon::Sm64DpadDeadzoneDefaultPercent,
+                                                                                    widemelon::Sm64DpadDeadzoneMinimumPercent, widemelon::Sm64DpadDeadzoneMaximumPercent));
         widemelon::LeftStickCalibration leftStickCalibration{
-            configuredLeftStickScalePercent(directory, "left-stick-scale-left-percent"),
-            configuredLeftStickScalePercent(directory, "left-stick-scale-right-percent"),
-            configuredLeftStickScalePercent(directory, "left-stick-scale-up-percent"),
-            configuredLeftStickScalePercent(directory, "left-stick-scale-down-percent"),
+            static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleLeftKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)),
+            static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleRightKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)),
+            static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleUpKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)),
+            static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleDownKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)),
         };
         MenuPage page = MenuPage::Settings;
         int selected = 1;
@@ -1679,7 +1288,7 @@ namespace
                 case MenuItem::Theme:
                 {
                     const std::size_t nextTheme = static_cast<std::size_t>((static_cast<int>(themeIndex) + direction + static_cast<int>(themes.size())) % static_cast<int>(themes.size()));
-                    if (saveConfiguredTheme(directory, themes[nextTheme]))
+                    if (uiConfig.writeValue(UiConfigThemeKey, themes[nextTheme]))
                     {
                         themeIndex = nextTheme;
                         reloadUiResources(renderer);
@@ -1689,55 +1298,55 @@ namespace
                 case MenuItem::LeftStickMode:
                 {
                     const std::size_t nextMode = static_cast<std::size_t>((static_cast<int>(leftStickModeIndex) + direction + static_cast<int>(leftStickModes.size())) % static_cast<int>(leftStickModes.size()));
-                    if (saveConfiguredLeftStickMode(directory, leftStickModes[nextMode])) leftStickModeIndex = nextMode;
+                    if (uiConfig.writeValue(UiConfigLeftStickModeKey, leftStickModes[nextMode])) leftStickModeIndex = nextMode;
                     break;
                 }
                 case MenuItem::Sm64AutoFrames:
                 {
                     const int next = std::clamp(static_cast<int>(sm64AutoFrames) + direction, static_cast<int>(widemelon::Sm64TouchCenterHoldFramesMinimum), static_cast<int>(widemelon::Sm64TouchCenterHoldFramesMaximum));
-                    if (saveConfiguredSm64AutoCenterHoldFrames(directory, static_cast<std::uint8_t>(next))) sm64AutoFrames = static_cast<std::uint8_t>(next);
+                    if (uiConfig.writeInt(UiConfigSm64AutoFramesKey, next, widemelon::Sm64TouchCenterHoldFramesMinimum, widemelon::Sm64TouchCenterHoldFramesMaximum)) sm64AutoFrames = static_cast<std::uint8_t>(next);
                     break;
                 }
                 case MenuItem::Sm64AutoReleaseDelay:
                 {
                     const int next = std::clamp(static_cast<int>(sm64AutoReleaseDelayMs) + direction * static_cast<int>(widemelon::Sm64TouchReleaseDelayStepMs), static_cast<int>(widemelon::Sm64TouchReleaseDelayMinimumMs), static_cast<int>(widemelon::Sm64TouchReleaseDelayMaximumMs));
-                    if (saveConfiguredSm64AutoReleaseDelayMs(directory, static_cast<std::uint16_t>(next))) sm64AutoReleaseDelayMs = static_cast<std::uint16_t>(next);
+                    if (uiConfig.writeInt(UiConfigSm64AutoReleaseDelayKey, next, widemelon::Sm64TouchReleaseDelayMinimumMs, widemelon::Sm64TouchReleaseDelayMaximumMs)) sm64AutoReleaseDelayMs = static_cast<std::uint16_t>(next);
                     break;
                 }
                 case MenuItem::Sm64DpadDeadzone:
                 {
                     const int next = std::clamp(static_cast<int>(sm64DpadDeadzone) + direction, static_cast<int>(widemelon::Sm64DpadDeadzoneMinimumPercent), static_cast<int>(widemelon::Sm64DpadDeadzoneMaximumPercent));
-                    if (saveConfiguredSm64DpadDeadzonePercent(directory, static_cast<std::uint8_t>(next))) sm64DpadDeadzone = static_cast<std::uint8_t>(next);
+                    if (uiConfig.writeInt(UiConfigSm64DpadDeadzoneKey, next, widemelon::Sm64DpadDeadzoneMinimumPercent, widemelon::Sm64DpadDeadzoneMaximumPercent)) sm64DpadDeadzone = static_cast<std::uint8_t>(next);
                     break;
                 }
                 case MenuItem::CursorSpeed:
                 {
                     const int next = std::clamp(static_cast<int>(cursorSpeedLimit) + direction * static_cast<int>(widemelon::CursorSpeedStep), static_cast<int>(widemelon::CursorSpeedMinimum), static_cast<int>(widemelon::CursorSpeedMaximum));
-                    if (saveConfiguredCursorSpeedLimit(directory, static_cast<std::uint16_t>(next))) cursorSpeedLimit = static_cast<std::uint16_t>(next);
+                    if (uiConfig.writeInt(UiConfigCursorSpeedKey, next, widemelon::CursorSpeedMinimum, widemelon::CursorSpeedMaximum)) cursorSpeedLimit = static_cast<std::uint16_t>(next);
                     break;
                 }
                 case MenuItem::LeftStickScaleUp:
                 {
                     const int next = std::clamp(static_cast<int>(leftStickCalibration.up) + direction, static_cast<int>(widemelon::LeftStickScaleMinimumPercent), static_cast<int>(widemelon::LeftStickScaleMaximumPercent));
-                    if (saveConfiguredLeftStickScalePercent(directory, "left-stick-scale-up-percent", static_cast<std::uint8_t>(next))) leftStickCalibration.up = static_cast<std::uint8_t>(next);
+                    if (uiConfig.writeInt(UiConfigLeftStickScaleUpKey, next, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)) leftStickCalibration.up = static_cast<std::uint8_t>(next);
                     break;
                 }
                 case MenuItem::LeftStickScaleDown:
                 {
                     const int next = std::clamp(static_cast<int>(leftStickCalibration.down) + direction, static_cast<int>(widemelon::LeftStickScaleMinimumPercent), static_cast<int>(widemelon::LeftStickScaleMaximumPercent));
-                    if (saveConfiguredLeftStickScalePercent(directory, "left-stick-scale-down-percent", static_cast<std::uint8_t>(next))) leftStickCalibration.down = static_cast<std::uint8_t>(next);
+                    if (uiConfig.writeInt(UiConfigLeftStickScaleDownKey, next, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)) leftStickCalibration.down = static_cast<std::uint8_t>(next);
                     break;
                 }
                 case MenuItem::LeftStickScaleLeft:
                 {
                     const int next = std::clamp(static_cast<int>(leftStickCalibration.left) + direction, static_cast<int>(widemelon::LeftStickScaleMinimumPercent), static_cast<int>(widemelon::LeftStickScaleMaximumPercent));
-                    if (saveConfiguredLeftStickScalePercent(directory, "left-stick-scale-left-percent", static_cast<std::uint8_t>(next))) leftStickCalibration.left = static_cast<std::uint8_t>(next);
+                    if (uiConfig.writeInt(UiConfigLeftStickScaleLeftKey, next, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)) leftStickCalibration.left = static_cast<std::uint8_t>(next);
                     break;
                 }
                 case MenuItem::LeftStickScaleRight:
                 {
                     const int next = std::clamp(static_cast<int>(leftStickCalibration.right) + direction, static_cast<int>(widemelon::LeftStickScaleMinimumPercent), static_cast<int>(widemelon::LeftStickScaleMaximumPercent));
-                    if (saveConfiguredLeftStickScalePercent(directory, "left-stick-scale-right-percent", static_cast<std::uint8_t>(next))) leftStickCalibration.right = static_cast<std::uint8_t>(next);
+                    if (uiConfig.writeInt(UiConfigLeftStickScaleRightKey, next, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)) leftStickCalibration.right = static_cast<std::uint8_t>(next);
                     break;
                 }
                 default: break;
@@ -2006,22 +1615,27 @@ namespace widemelon
             {
                 executable[static_cast<std::size_t>(length)] = 0;
                 const std::string directory = std::filesystem::path(executable.data()).parent_path().string();
-                const std::string leftStickMode = configuredLeftStickMode(directory);
-                leftStickCalibration.left = configuredLeftStickScalePercent(directory, "left-stick-scale-left-percent");
-                leftStickCalibration.right = configuredLeftStickScalePercent(directory, "left-stick-scale-right-percent");
-                leftStickCalibration.up = configuredLeftStickScalePercent(directory, "left-stick-scale-up-percent");
-                leftStickCalibration.down = configuredLeftStickScalePercent(directory, "left-stick-scale-down-percent");
+                const widemelon::display::UiConfig uiConfig = uiConfigFor(directory);
+                const std::string leftStickMode = uiConfig.readValue(UiConfigLeftStickModeKey).value_or("D-pad");
+                leftStickCalibration.left = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleLeftKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent));
+                leftStickCalibration.right = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleRightKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent));
+                leftStickCalibration.up = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleUpKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent));
+                leftStickCalibration.down = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleDownKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent));
                 sm64Enabled = leftStickMode == "SM64 Auto" || leftStickMode == "SM64";
                 sm64ManualEnabled = leftStickMode == "SM64 Manual";
                 cursorEnabled = leftStickMode == "Cursor";
                 sm64DpadEnabled = leftStickMode == "SM64 D-pad";
-                sm64Stick.setCenterHoldFrames(configuredSm64AutoCenterHoldFrames(directory));
-                sm64Stick.setReleaseDelayMs(configuredSm64AutoReleaseDelayMs(directory));
+                sm64Stick.setCenterHoldFrames(static_cast<std::uint8_t>(uiConfig.readInt(UiConfigSm64AutoFramesKey, widemelon::Sm64TouchCenterHoldFramesDefault,
+                                                                                          widemelon::Sm64TouchCenterHoldFramesMinimum, widemelon::Sm64TouchCenterHoldFramesMaximum)));
+                sm64Stick.setReleaseDelayMs(static_cast<std::uint16_t>(uiConfig.readInt(UiConfigSm64AutoReleaseDelayKey, widemelon::Sm64TouchReleaseDelayDefaultMs,
+                                                                                         widemelon::Sm64TouchReleaseDelayMinimumMs, widemelon::Sm64TouchReleaseDelayMaximumMs)));
                 sm64Stick.setEnabled(sm64Enabled);
                 sm64ManualStick.setEnabled(sm64ManualEnabled);
-                cursorStick.setSpeedLimit(configuredCursorSpeedLimit(directory));
+                cursorStick.setSpeedLimit(static_cast<std::uint16_t>(uiConfig.readInt(UiConfigCursorSpeedKey, widemelon::CursorSpeedDefault,
+                                                                                       widemelon::CursorSpeedMinimum, widemelon::CursorSpeedMaximum)));
                 cursorStick.setEnabled(cursorEnabled);
-                sm64Dpad.setDeadzonePercent(configuredSm64DpadDeadzonePercent(directory));
+                sm64Dpad.setDeadzonePercent(static_cast<std::uint8_t>(uiConfig.readInt(UiConfigSm64DpadDeadzoneKey, widemelon::Sm64DpadDeadzoneDefaultPercent,
+                                                                                         widemelon::Sm64DpadDeadzoneMinimumPercent, widemelon::Sm64DpadDeadzoneMaximumPercent)));
                 sm64Dpad.setEnabled(sm64DpadEnabled);
                 exitInput.setLeftStickDpadEnabled(leftStickMode == "D-pad" || sm64DpadEnabled);
                 if (sm64DpadEnabled) exitInput.setLeftStickDpadThresholdFraction(widemelon::Sm64DpadDirectionalThreshold);
