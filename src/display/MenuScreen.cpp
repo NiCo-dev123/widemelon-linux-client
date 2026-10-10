@@ -58,14 +58,14 @@ struct MenuState
     LeftStickCalibration calibration{};
 };
 
-const PageDefinition &pageDefinition(PageId id, std::string_view leftMode, std::string_view rightMode)
+const PageDefinition &pageDefinition(PageId id, std::string_view presetName, std::string_view leftMode, std::string_view rightMode)
 {
     switch (id)
     {
     case PageId::Home: return pages::homePage();
     case PageId::Settings: return pages::settingsPage();
     case PageId::InputPresetManager: return pages::inputPresetManagerPage();
-    case PageId::InputPresetEditor: { static PageDefinition page; page = pages::inputPresetEditorPage(leftMode, rightMode); return page; }
+    case PageId::InputPresetEditor: { static PageDefinition page; page = pages::inputPresetEditorPage(presetName, leftMode, rightMode); return page; }
     case PageId::InputPresetDeleteConfirm: return pages::inputPresetDeleteConfirmPage();
     case PageId::About: return pages::aboutPage();
     case PageId::LeftStickCalibration: return pages::leftStickCalibrationPage();
@@ -248,12 +248,42 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
     const std::array<std::string, 6> modes{"Disabled", "D-pad", "SM64 Auto", "SM64 Manual", "SM64 D-pad", "Cursor"};
     InputPreset editingPreset;
     bool editing = false;
+    auto saveEditingPreset = [&]()
+    {
+        editingPreset.leftStickMode = state.mode;
+        editingPreset.rightStickMode = state.rightMode;
+        editingPreset.mphCameraSpeed = state.mphSpeed;
+        editingPreset.mphAutoReleaseDelayMs = state.mphAutoRelease;
+        editingPreset.sm64AutoCenterHoldFrames = state.autoFrames;
+        editingPreset.sm64AutoReleaseDelayMs = state.autoRelease;
+        editingPreset.sm64DpadDeadzonePercent = state.dpadDeadzone;
+        editingPreset.cursorSpeedLimit = state.cursorSpeed;
+        editingPreset.leftStickCalibration = {state.calibration.left, state.calibration.right, state.calibration.up, state.calibration.down};
+        std::string presetError;
+        if (!InputPresetStore::save(editingPreset, editingPreset.name == state.activePreset, presetError))
+        {
+            Logger::error("Cannot save input preset: " + presetError);
+            return false;
+        }
+        return true;
+    };
     PageId pageId = PageId::Settings; int selected = 0, scroll = 0; MenuNavigation navigation;
     while (true) {
-        const PageDefinition &page = pageDefinition(pageId, state.mode, state.rightMode); const std::vector<MenuEntry> entries = entriesFor(page); const auto nav = navigationItems(entries);
+        const PageDefinition &page = pageDefinition(pageId, editing ? editingPreset.name : state.activePreset, state.mode, state.rightMode); const std::vector<MenuEntry> entries = entriesFor(page); const auto nav = navigationItems(entries);
         if (selected < 0 || selected >= static_cast<int>(nav.size()) || !nav[static_cast<std::size_t>(selected)].selectable) selected = firstSelectable(nav);
         scroll = MenuNavigation::scrollOffsetForSelection(nav, selected, scroll, footerTop(height) - UiMenuItemGap - listTop()); render(renderer, width, height, page, config, state, entries, selected, scroll);
         input.pollEvent(); if (input.exitComboPressed()) return Result::Exit; const UiAction action = navigation.nextAction(input.takeUiAction(), input.heldUiDirection());
+        if (action == UiAction::Start && pageId == PageId::InputPresetEditor && editing)
+        {
+            if (saveEditingPreset())
+            {
+                pageId = PageId::InputPresetManager;
+                selected = 0;
+                scroll = 0;
+                editing = false;
+            }
+            continue;
+        }
         if (action == UiAction::Back || action == UiAction::Delete)
         {
             if (pageId == PageId::Settings) return backResult;
@@ -303,12 +333,7 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
             }
             if (field.action == ActionId::SaveInputPreset && editing)
             {
-                editingPreset.leftStickMode = state.mode; editingPreset.rightStickMode = state.rightMode; editingPreset.mphCameraSpeed = state.mphSpeed; editingPreset.mphAutoReleaseDelayMs = state.mphAutoRelease;
-                editingPreset.sm64AutoCenterHoldFrames = state.autoFrames; editingPreset.sm64AutoReleaseDelayMs = state.autoRelease; editingPreset.sm64DpadDeadzonePercent = state.dpadDeadzone; editingPreset.cursorSpeedLimit = state.cursorSpeed;
-                editingPreset.leftStickCalibration = {state.calibration.left, state.calibration.right, state.calibration.up, state.calibration.down};
-                std::string presetError;
-                if (InputPresetStore::save(editingPreset, editingPreset.name == state.activePreset, presetError)) { pageId = PageId::InputPresetManager; selected = 0; scroll = 0; editing = false; }
-                else Logger::error("Cannot save input preset: " + presetError);
+                if (saveEditingPreset()) { pageId = PageId::InputPresetManager; selected = 0; scroll = 0; editing = false; }
             }
             if (field.action == ActionId::DiscardInputPreset && editing) { pageId = PageId::InputPresetManager; selected = 0; scroll = 0; editing = false; }
             if (field.action == ActionId::RequestDeleteInputPreset && editing)

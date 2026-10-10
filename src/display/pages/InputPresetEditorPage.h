@@ -4,5 +4,5 @@
 
 namespace widemelon::display::pages
 {
-    PageDefinition inputPresetEditorPage(std::string_view leftMode, std::string_view rightMode);
+    PageDefinition inputPresetEditorPage(std::string_view presetName, std::string_view leftMode, std::string_view rightMode);
 }
