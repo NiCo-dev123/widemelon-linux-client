@@ -236,6 +236,15 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
         state.presetNames = InputPresetStore::names();
     }
     state.activePreset = InputPresetStore::activeName().value_or(state.presetNames.empty() ? std::string{} : state.presetNames.front());
+    if (const std::optional<InputPreset> activePreset = InputPresetStore::load(state.activePreset))
+    {
+        state.calibration = {
+            activePreset->leftStickCalibration[0],
+            activePreset->leftStickCalibration[1],
+            activePreset->leftStickCalibration[2],
+            activePreset->leftStickCalibration[3],
+        };
+    }
     const std::array<std::string, 6> modes{"Disabled", "D-pad", "SM64 Auto", "SM64 Manual", "SM64 D-pad", "Cursor"};
     InputPreset editingPreset;
     bool editing = false;
@@ -263,7 +272,21 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
             else if (field.value == ValueId::ActiveInputPreset && !state.presetNames.empty()) { auto it = std::find(state.presetNames.begin(), state.presetNames.end(), state.activePreset); const int index = it == state.presetNames.end() ? 0 : static_cast<int>(std::distance(state.presetNames.begin(), it)); const std::string next = state.presetNames[static_cast<std::size_t>((index + direction + static_cast<int>(state.presetNames.size())) % static_cast<int>(state.presetNames.size()))]; std::string presetError; if (InputPresetStore::setActive(next, presetError)) state.activePreset = next; else Logger::error("Cannot select input preset: " + presetError); }
             else if (field.value == ValueId::LeftStickMode) { auto it = std::find(modes.begin(), modes.end(), state.mode); const int index = it == modes.end() ? 0 : static_cast<int>(std::distance(modes.begin(), it)); state.mode = modes[static_cast<std::size_t>((index + direction + static_cast<int>(modes.size())) % static_cast<int>(modes.size()))]; if (!editing) uiConfig.writeValue(ModeKey, state.mode); }
             else if (field.value == ValueId::RightStickMode) { static const std::array<std::string, 4> rightModes{"Disabled", "Cursor", "MPH Manual", "MPH Auto"}; auto it = std::find(rightModes.begin(), rightModes.end(), state.rightMode); const int index = it == rightModes.end() ? 0 : static_cast<int>(std::distance(rightModes.begin(), it)); state.rightMode = rightModes[static_cast<std::size_t>((index + direction + static_cast<int>(rightModes.size())) % static_cast<int>(rightModes.size()))]; if (!editing) uiConfig.writeValue(RightModeKey, state.rightMode); }
-            else updateRange(field, direction, state, uiConfig, !editing);
+            else
+            {
+                updateRange(field, direction, state, uiConfig, !editing);
+                const bool isCalibration = field.value == ValueId::LeftStickScaleLeftPercent || field.value == ValueId::LeftStickScaleRightPercent
+                    || field.value == ValueId::LeftStickScaleUpPercent || field.value == ValueId::LeftStickScaleDownPercent;
+                if (isCalibration && !editing)
+                {
+                    if (std::optional<InputPreset> activePreset = InputPresetStore::load(state.activePreset))
+                    {
+                        activePreset->leftStickCalibration = {state.calibration.left, state.calibration.right, state.calibration.up, state.calibration.down};
+                        std::string presetError;
+                        if (!InputPresetStore::save(*activePreset, true, presetError)) Logger::error("Cannot save left-stick calibration: " + presetError);
+                    }
+                }
+            }
         } else if (action == UiAction::Confirm) {
             if (field.action == ActionId::Quit) return Result::Exit;
             if (field.action == ActionId::NewInputPreset)

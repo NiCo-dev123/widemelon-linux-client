@@ -14,7 +14,10 @@ namespace widemelon::display::pages
             },
             {
                 {"Theme", {}, {{FieldType::Choice, {}, ValueId::ActiveTheme}}},
-                {"Input mapping", {}, {{FieldType::NavigationButton, "Input presets", ValueId::None, PageId::InputPresetManager}}},
+                {"Input mapping", {}, {
+                    {FieldType::NavigationButton, "Input presets", ValueId::None, PageId::InputPresetManager},
+                    {FieldType::NavigationButton, "Left stick calibration", ValueId::None, PageId::LeftStickCalibration},
+                }},
                 {"Navigation", {}, {
                     {FieldType::NavigationButton, "Back", ValueId::None, PageId::Home},
                     {FieldType::ActionButton, "Quit", ValueId::None, PageId::Home, ActionId::Quit},
