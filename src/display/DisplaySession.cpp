@@ -20,6 +20,7 @@
 #include "input/MphManualStickMod.h"
 #include "input/Sm64DpadMod.h"
 #include "input/EvdevInput.h"
+#include "input/InputPreset.h"
 #include "input/Sm64ManualStickMod.h"
 #include "input/Sm64StickMod.h"
 #include "network/WebSocketClient.h"
@@ -194,6 +195,28 @@ namespace widemelon
             executable[static_cast<std::size_t>(length)] = 0;
             const std::string directory = std::filesystem::path(executable.data()).parent_path().string();
             const widemelon::display::UiConfig uiConfig = uiConfigFor(directory);
+            if (!widemelon::InputPresetStore::activeName())
+            {
+                widemelon::InputPreset migrated;
+                migrated.leftStickMode = uiConfig.readValue(UiConfigLeftStickModeKey).value_or("D-pad");
+                migrated.rightStickMode = uiConfig.readValue(UiConfigRightStickModeKey).value_or("Disabled");
+                migrated.mphCameraSpeed = static_cast<std::uint16_t>(uiConfig.readInt(UiConfigMphManualSpeedKey, widemelon::MphManualSpeedDefault, widemelon::MphManualSpeedMinimum, widemelon::MphManualSpeedMaximum));
+                migrated.mphAutoReleaseDelayMs = static_cast<std::uint16_t>(uiConfig.readInt(UiConfigMphAutoReleaseDelayKey, widemelon::MphAutoReleaseDelayMs, widemelon::MphAutoReleaseDelayMinimumMs, widemelon::MphAutoReleaseDelayMaximumMs));
+                migrated.sm64AutoCenterHoldFrames = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigSm64AutoFramesKey, widemelon::Sm64TouchCenterHoldFramesDefault, widemelon::Sm64TouchCenterHoldFramesMinimum, widemelon::Sm64TouchCenterHoldFramesMaximum));
+                migrated.sm64AutoReleaseDelayMs = static_cast<std::uint16_t>(uiConfig.readInt(UiConfigSm64AutoReleaseDelayKey, widemelon::Sm64TouchReleaseDelayDefaultMs, widemelon::Sm64TouchReleaseDelayMinimumMs, widemelon::Sm64TouchReleaseDelayMaximumMs));
+                migrated.sm64DpadDeadzonePercent = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigSm64DpadDeadzoneKey, widemelon::Sm64DpadDeadzoneDefaultPercent, widemelon::Sm64DpadDeadzoneMinimumPercent, widemelon::Sm64DpadDeadzoneMaximumPercent));
+                migrated.cursorSpeedLimit = static_cast<std::uint16_t>(uiConfig.readInt(UiConfigCursorSpeedKey, widemelon::CursorSpeedDefault, widemelon::CursorSpeedMinimum, widemelon::CursorSpeedMaximum));
+                migrated.leftStickCalibration = {
+                    static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleLeftKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)),
+                    static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleRightKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)),
+                    static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleUpKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)),
+                    static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleDownKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent))};
+                std::string migrationError;
+                if (widemelon::InputPresetStore::save(migrated, true, migrationError))
+                    Logger::info("Migrated legacy stick settings to input preset Config 1");
+                else
+                    Logger::error("Input preset migration warning: " + migrationError);
+            }
             const std::string leftStickMode = uiConfig.readValue(UiConfigLeftStickModeKey).value_or("D-pad");
             const std::string rightStickMode = uiConfig.readValue(UiConfigRightStickModeKey).value_or("Disabled");
             leftStickCalibration.left = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleLeftKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent));

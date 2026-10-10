@@ -10,6 +10,7 @@ namespace widemelon::display
     {
         Home,
         Settings,
+        InputPresetManager,
         About,
         LeftStickMod,
         RightStickMod,

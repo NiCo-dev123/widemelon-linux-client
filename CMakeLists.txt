@@ -28,12 +28,14 @@ add_executable(widemelon-client
     src/display/UiTheme.cpp
     src/display/pages/HomePage.cpp
     src/display/pages/AboutPage.cpp
+    src/display/pages/InputPresetManagerPage.cpp
     src/display/pages/LeftStickCalibrationPage.cpp
     src/display/pages/LeftStickModPage.cpp
     src/display/pages/RightStickModPage.cpp
     src/display/pages/NumpadPage.cpp
     src/display/pages/SettingsPage.cpp
     src/input/EvdevInput.cpp
+    src/input/InputPreset.cpp
     src/input/LeftStickCalibration.cpp
     src/input/MphAutoStickMod.cpp
     src/input/MphManualStickMod.cpp

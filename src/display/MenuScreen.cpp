@@ -10,6 +10,7 @@
 #include "display/UiTheme.h"
 #include "display/pages/HomePage.h"
 #include "display/pages/AboutPage.h"
+#include "display/pages/InputPresetManagerPage.h"
 #include "display/pages/LeftStickCalibrationPage.h"
 #include "display/pages/LeftStickModPage.h"
 #include "display/pages/RightStickModPage.h"
@@ -58,6 +59,7 @@ const PageDefinition &pageDefinition(PageId id, std::string_view leftMode, std::
     {
     case PageId::Home: return pages::homePage();
     case PageId::Settings: return pages::settingsPage();
+    case PageId::InputPresetManager: return pages::inputPresetManagerPage();
     case PageId::About: return pages::aboutPage();
     case PageId::LeftStickCalibration: return pages::leftStickCalibrationPage();
     case PageId::LeftStickMod: { static PageDefinition page; page = pages::leftStickModPage(leftMode); return page; }
