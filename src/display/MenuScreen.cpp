@@ -238,6 +238,9 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
 
 bool MenuScreen::editInGameSettings(SDL_Renderer *renderer, int width, int height, const Config &config, EvdevInput &input)
 {
+    // Gameplay does not consume UI navigation actions. Discard the last
+    // direction before opening Settings so it cannot alter the first field.
+    input.takeUiAction();
     return editSettings(renderer, width, height, config, input, true) == Result::Exit;
 }
 
