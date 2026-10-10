@@ -32,6 +32,7 @@ namespace widemelon
         static std::optional<std::string> activeName();
         static std::vector<std::string> names();
         static bool save(const InputPreset &preset, bool makeActive, std::string &error);
+        static bool rename(std::string_view previousName, std::string_view nextName, std::string &error);
         static bool setActive(std::string_view name, std::string &error);
         static bool remove(std::string_view name, std::string &error);
         static bool isValidName(std::string_view name);

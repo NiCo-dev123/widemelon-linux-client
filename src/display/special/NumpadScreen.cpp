@@ -1,4 +1,4 @@
-#include "display/NumpadScreen.h"
+#include "display/special/NumpadScreen.h"
 
 #include "display/ConfigScreen.h"
 #include "display/MenuNavigation.h"

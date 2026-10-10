@@ -79,6 +79,7 @@ namespace widemelon::display
         None,
         Connect,
         NewInputPreset,
+        RenameInputPreset,
         SaveInputPreset,
         DiscardInputPreset,
         RequestDeleteInputPreset,

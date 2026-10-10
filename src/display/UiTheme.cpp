@@ -157,6 +157,7 @@ namespace
         SDL_DestroyTexture(textures.background); SDL_DestroyTexture(textures.gameplayBackground);
         SDL_DestroyTexture(textures.fieldSelected); SDL_DestroyTexture(textures.fieldUnselected);
         SDL_DestroyTexture(textures.numpadSelected); SDL_DestroyTexture(textures.numpadUnselected);
+        SDL_DestroyTexture(textures.keyboardSelected); SDL_DestroyTexture(textures.keyboardUnselected);
         SDL_DestroyTexture(textures.hintA); SDL_DestroyTexture(textures.hintB); SDL_DestroyTexture(textures.hintX);
         SDL_DestroyTexture(textures.hintStart); SDL_DestroyTexture(textures.hintL); SDL_DestroyTexture(textures.hintR);
         SDL_DestroyTexture(textures.cursor);
@@ -262,6 +263,8 @@ void loadUiResources(SDL_Renderer *renderer)
     loadTexture(renderer, textures.fieldUnselected, assets + "icons/field-input-unselected.png");
     loadTexture(renderer, textures.numpadSelected, assets + "icons/numpad-selected.png");
     loadTexture(renderer, textures.numpadUnselected, assets + "icons/numpad-unselected.png");
+    loadTexture(renderer, textures.keyboardSelected, assets + "icons/keyboard-selected.png");
+    loadTexture(renderer, textures.keyboardUnselected, assets + "icons/keyboard-unselected.png");
     loadTexture(renderer, textures.hintA, assets + "icons/hint-A.png"); loadTexture(renderer, textures.hintB, assets + "icons/hint-B.png");
     loadTexture(renderer, textures.hintX, assets + "icons/hint-X.png"); loadTexture(renderer, textures.hintStart, assets + "icons/hint-START.png");
     loadTexture(renderer, textures.hintL, assets + "icons/hint-L.png"); loadTexture(renderer, textures.hintR, assets + "icons/hint-R.png");
@@ -331,6 +334,27 @@ void drawPill(SDL_Renderer *renderer, const SDL_Rect &rect, bool selected, bool 
     if (selected) { SDL_SetRenderDrawColor(renderer, palette.buttonFill.r, palette.buttonFill.g, palette.buttonFill.b, 255); SDL_RenderFillRect(renderer, &rect); }
     SDL_SetRenderDrawColor(renderer, palette.buttonOutline.r, palette.buttonOutline.g, palette.buttonOutline.b, 255);
     for (int thickness = 0; thickness < palette.buttonOutlineWidth; ++thickness)
+    {
+        SDL_Rect outline{rect.x + thickness, rect.y + thickness, rect.w - thickness * 2, rect.h - thickness * 2};
+        if (outline.w <= 0 || outline.h <= 0) break;
+        SDL_RenderDrawRect(renderer, &outline);
+    }
+}
+
+void drawKeyboardKey(SDL_Renderer *renderer, const SDL_Rect &rect, bool selected)
+{
+#ifdef WIDEMELON_HAVE_SDL_IMAGE
+    SDL_Texture *texture = selected ? textures.keyboardSelected : textures.keyboardUnselected;
+    if (texture)
+    {
+        SDL_RenderCopy(renderer, texture, nullptr, &rect);
+        return;
+    }
+#endif
+    if (!selected) return;
+    SDL_SetRenderDrawColor(renderer, palette.buttonOutline.r, palette.buttonOutline.g, palette.buttonOutline.b, 255);
+    constexpr int outlineWidth = 4;
+    for (int thickness = 0; thickness < outlineWidth; ++thickness)
     {
         SDL_Rect outline{rect.x + thickness, rect.y + thickness, rect.w - thickness * 2, rect.h - thickness * 2};
         if (outline.w <= 0 || outline.h <= 0) break;

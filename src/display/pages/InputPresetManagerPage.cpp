@@ -15,6 +15,7 @@ namespace widemelon::display::pages
                 {"", {"Select a configuration file"}, {{FieldType::Choice, {}, ValueId::ActiveInputPreset}}},
                 {"Options", {}, {
                     {FieldType::NavigationButton, "Edit", ValueId::None, PageId::InputPresetEditor},
+                    {FieldType::ActionButton, "Rename", ValueId::None, PageId::Home, ActionId::RenameInputPreset},
                     {FieldType::ActionButton, "New", ValueId::None, PageId::Home, ActionId::NewInputPreset},
                 }},
                 {"Navigation", {}, {{FieldType::NavigationButton, "Back", ValueId::None, PageId::Settings}}},

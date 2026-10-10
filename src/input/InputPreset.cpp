@@ -235,6 +235,33 @@ bool InputPresetStore::save(const InputPreset &preset, bool makeActive, std::str
     return false;
 }
 
+bool InputPresetStore::rename(std::string_view previousName, std::string_view nextName, std::string &error)
+{
+    if (!isValidName(nextName))
+    {
+        error = "Invalid preset name";
+        return false;
+    }
+    if (previousName == nextName) return true;
+    if (load(nextName))
+    {
+        error = "A preset already uses this name";
+        return false;
+    }
+    std::optional<InputPreset> preset = load(previousName);
+    if (!preset)
+    {
+        error = "Preset does not exist";
+        return false;
+    }
+
+    const bool wasActive = activeName() == previousName;
+    preset->name = std::string(nextName);
+    if (!save(*preset, wasActive, error)) return false;
+    if (!remove(previousName, error)) return false;
+    return true;
+}
+
 bool InputPresetStore::setActive(std::string_view name, std::string &error)
 {
     if (!isValidName(name) || !load(name))

@@ -2,9 +2,10 @@
 
 #include "common/Logger.h"
 #include "display/ConfigScreen.h"
+#include "display/special/KeyboardScreen.h"
 #include "display/MenuEntry.h"
 #include "display/MenuNavigation.h"
-#include "display/NumpadScreen.h"
+#include "display/special/NumpadScreen.h"
 #include "display/PageRenderer.h"
 #include "display/UiConfig.h"
 #include "display/UiTheme.h"
@@ -330,6 +331,22 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
                 std::string presetError;
                 if (InputPresetStore::save(preset, true, presetError)) { state.presetNames = InputPresetStore::names(); state.activePreset = preset.name; }
                 else Logger::error("Cannot create input preset: " + presetError);
+            }
+            if (field.action == ActionId::RenameInputPreset)
+            {
+                std::string nextName = state.activePreset;
+                const KeyboardScreen::Result result = KeyboardScreen::edit(renderer, width, height, input, "RENAME PRESET", nextName, 48);
+                if (result == KeyboardScreen::Result::Exit) return Result::Exit;
+                if (result == KeyboardScreen::Result::Accepted)
+                {
+                    std::string presetError;
+                    if (InputPresetStore::rename(state.activePreset, nextName, presetError))
+                    {
+                        state.activePreset = nextName;
+                        state.presetNames = InputPresetStore::names();
+                    }
+                    else Logger::error("Cannot rename input preset: " + presetError);
+                }
             }
             if (field.action == ActionId::SaveInputPreset && editing)
             {

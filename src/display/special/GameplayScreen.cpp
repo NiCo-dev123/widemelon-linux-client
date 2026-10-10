@@ -1,4 +1,4 @@
-#include "display/GameplayScreen.h"
+#include "display/special/GameplayScreen.h"
 
 #include "common/Logger.h"
 #include "display/UiTheme.h"
