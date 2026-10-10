@@ -6,6 +6,7 @@
 #include "display/MenuEntry.h"
 #include "display/MenuNavigation.h"
 #include "display/special/NumpadScreen.h"
+#include "display/special/PopupScreen.h"
 #include "display/PageRenderer.h"
 #include "display/UiConfig.h"
 #include "display/UiTheme.h"
@@ -268,6 +269,18 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
         }
         return true;
     };
+    const auto hasUnsavedChanges = [&]()
+    {
+        return editingPreset.leftStickMode != state.mode
+            || editingPreset.rightStickMode != state.rightMode
+            || editingPreset.mphCameraSpeed != state.mphSpeed
+            || editingPreset.mphAutoReleaseDelayMs != state.mphAutoRelease
+            || editingPreset.sm64AutoCenterHoldFrames != state.autoFrames
+            || editingPreset.sm64AutoReleaseDelayMs != state.autoRelease
+            || editingPreset.sm64DpadDeadzonePercent != state.dpadDeadzone
+            || editingPreset.cursorSpeedLimit != state.cursorSpeed
+            || editingPreset.leftStickCalibration != std::array<std::uint8_t, 4>{state.calibration.left, state.calibration.right, state.calibration.up, state.calibration.down};
+    };
     PageId pageId = PageId::Settings; int selected = 0, scroll = 0; MenuNavigation navigation;
     while (true) {
         const PageDefinition &page = pageDefinition(pageId, editing ? editingPreset.name : state.activePreset, state.mode, state.rightMode); const std::vector<MenuEntry> entries = entriesFor(page); const auto nav = navigationItems(entries);
@@ -287,6 +300,18 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
         }
         if (action == UiAction::Back || action == UiAction::Delete)
         {
+            if (pageId == PageId::InputPresetEditor && editing && hasUnsavedChanges())
+            {
+                const PopupScreen::Result popupResult = PopupScreen::saveChanges(renderer, width, height, input);
+                if (popupResult == PopupScreen::Result::Exit) return Result::Exit;
+                if (popupResult == PopupScreen::Result::Cancel) continue;
+                if (popupResult == PopupScreen::Result::Save && !saveEditingPreset()) continue;
+                pageId = PageId::InputPresetManager;
+                selected = 0;
+                scroll = 0;
+                editing = false;
+                continue;
+            }
             if (pageId == PageId::Settings) return backResult;
             pageId = (pageId == PageId::InputPresetEditor || pageId == PageId::InputPresetDeleteConfirm) ? PageId::InputPresetManager : PageId::Settings;
             selected = 0;

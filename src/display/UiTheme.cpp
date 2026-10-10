@@ -183,7 +183,7 @@ namespace
 
     void closeTextures()
     {
-        SDL_DestroyTexture(textures.background); SDL_DestroyTexture(textures.gameplayBackground);
+        SDL_DestroyTexture(textures.background); SDL_DestroyTexture(textures.gameplayBackground); SDL_DestroyTexture(textures.popupBackground);
         SDL_DestroyTexture(textures.fieldSelected); SDL_DestroyTexture(textures.fieldUnselected);
         SDL_DestroyTexture(textures.numpadSelected); SDL_DestroyTexture(textures.numpadUnselected);
         SDL_DestroyTexture(textures.keyboardSelected); SDL_DestroyTexture(textures.keyboardUnselected);
@@ -289,6 +289,7 @@ void loadUiResources(SDL_Renderer *renderer)
     const std::string assets = theme.string() + "/";
     loadTexture(renderer, textures.background, assets + "backgrounds/background.png");
     loadTexture(renderer, textures.gameplayBackground, assets + "backgrounds/background-gameplay.png");
+    loadOptionalTexture(renderer, textures.popupBackground, assets + "backgrounds/popup-background.png");
     loadTexture(renderer, textures.fieldSelected, assets + "icons/field-input-selected.png");
     loadTexture(renderer, textures.fieldUnselected, assets + "icons/field-input-unselected.png");
     loadTexture(renderer, textures.numpadSelected, assets + "icons/numpad-selected.png");
@@ -353,6 +354,31 @@ void drawBackground(SDL_Renderer *renderer, int width, int height, bool gameplay
 }
 
 void drawGradientBackground(SDL_Renderer *renderer, int width, int height) { drawBackground(renderer, width, height, false); }
+
+void drawPopupBackground(SDL_Renderer *renderer, const SDL_Rect &rect)
+{
+    if (textures.popupBackground)
+    {
+        SDL_RenderCopy(renderer, textures.popupBackground, nullptr, &rect);
+        return;
+    }
+    for (int offset = 0; offset < rect.h; ++offset)
+    {
+        const int ratio = rect.h > 1 ? offset * 255 / (rect.h - 1) : 0;
+        const auto blend = [ratio](Uint8 light, Uint8 dark) { return static_cast<Uint8>((light * (255 - ratio) + dark * ratio) / 255); };
+        SDL_SetRenderDrawColor(renderer, blend(palette.backgroundLight.r, palette.backgroundDark.r),
+            blend(palette.backgroundLight.g, palette.backgroundDark.g), blend(palette.backgroundLight.b, palette.backgroundDark.b), 255);
+        SDL_RenderDrawLine(renderer, rect.x, rect.y + offset, rect.x + rect.w - 1, rect.y + offset);
+    }
+    SDL_SetRenderDrawColor(renderer, palette.hint.r, palette.hint.g, palette.hint.b, 255);
+    constexpr int outlineWidth = 4;
+    for (int thickness = 0; thickness < outlineWidth; ++thickness)
+    {
+        SDL_Rect outline{rect.x + thickness, rect.y + thickness, rect.w - thickness * 2, rect.h - thickness * 2};
+        if (outline.w <= 0 || outline.h <= 0) break;
+        SDL_RenderDrawRect(renderer, &outline);
+    }
+}
 
 void drawPill(SDL_Renderer *renderer, const SDL_Rect &rect, bool selected, bool numpad)
 {

@@ -34,6 +34,7 @@ namespace widemelon::display
     {
         SDL_Texture *background = nullptr;
         SDL_Texture *gameplayBackground = nullptr;
+        SDL_Texture *popupBackground = nullptr;
         SDL_Texture *fieldSelected = nullptr;
         SDL_Texture *fieldUnselected = nullptr;
         SDL_Texture *numpadSelected = nullptr;
@@ -62,6 +63,7 @@ namespace widemelon::display
 
     void drawBackground(SDL_Renderer *renderer, int width, int height, bool gameplay);
     void drawGradientBackground(SDL_Renderer *renderer, int width, int height);
+    void drawPopupBackground(SDL_Renderer *renderer, const SDL_Rect &rect);
     void drawPill(SDL_Renderer *renderer, const SDL_Rect &rect, bool selected, bool numpad = false);
     void drawKeyboardKey(SDL_Renderer *renderer, const SDL_Rect &rect, bool selected);
     int textWidth(std::string_view text, int fontSize);
