@@ -1,11 +1,13 @@
 #include "display/pages/RightStickModPage.h"
 
+#include "input/MphManualStickMod.h"
+
 namespace widemelon::display::pages
 {
 
-    const PageDefinition &rightStickModPage()
+    PageDefinition rightStickModPage(std::string_view mode)
     {
-        static const PageDefinition page{
+        PageDefinition page{
             PageId::RightStickMod,
             "Right stick mod",
             {
@@ -18,6 +20,8 @@ namespace widemelon::display::pages
                 {"Navigation", {}, {{FieldType::NavigationButton, "Back", ValueId::None, PageId::Settings}}},
             },
         };
+        if (mode == "MPH Manual")
+            page.sections.insert(page.sections.end() - 1, {"", {}, {{FieldType::Range, "MPH camera speed", ValueId::MphManualSpeed, PageId::Home, ActionId::None, MphManualSpeedMinimum, MphManualSpeedMaximum, MphManualSpeedStep}}});
         return page;
     }
 

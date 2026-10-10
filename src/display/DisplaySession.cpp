@@ -16,6 +16,7 @@
 #include "common/Logger.h"
 #include "input/CursorStickMod.h"
 #include "input/LeftStickCalibration.h"
+#include "input/MphManualStickMod.h"
 #include "input/Sm64DpadMod.h"
 #include "input/EvdevInput.h"
 #include "input/Sm64ManualStickMod.h"
@@ -53,6 +54,7 @@ namespace
 
     constexpr std::string_view UiConfigLeftStickModeKey{"left-stick-mod"};
     constexpr std::string_view UiConfigRightStickModeKey{"right-stick-mod"};
+    constexpr std::string_view UiConfigMphManualSpeedKey{"mph-manual-speed"};
     constexpr std::string_view UiConfigSm64AutoFramesKey{"sm64-auto-center-hold-frames"};
     constexpr std::string_view UiConfigSm64AutoReleaseDelayKey{"sm64-auto-release-delay-ms"};
     constexpr std::string_view UiConfigCursorSpeedKey{"cursor-speed-limit"};
@@ -163,16 +165,18 @@ namespace widemelon
         widemelon::Sm64StickMod sm64Stick;
         widemelon::Sm64ManualStickMod sm64ManualStick;
         widemelon::CursorStickMod cursorStick;
+        widemelon::MphManualStickMod mphManualStick;
         widemelon::Sm64DpadMod sm64Dpad;
         bool sm64Enabled = false;
         bool sm64ManualEnabled = false;
         bool cursorEnabled = false;
         bool rightCursorEnabled = false;
+        bool mphManualEnabled = false;
         bool sm64DpadEnabled = false;
         widemelon::LeftStickCalibration leftStickCalibration;
-        auto sm64ModeEnabled = [&] { return sm64Enabled || sm64ManualEnabled || cursorEnabled || rightCursorEnabled; };
+        auto sm64ModeEnabled = [&] { return sm64Enabled || sm64ManualEnabled || cursorEnabled || rightCursorEnabled || mphManualEnabled; };
         auto sm64TouchState = [&]() -> const Sm64TouchState&
-        { return (cursorEnabled || rightCursorEnabled) ? cursorStick.touchState() : (sm64ManualEnabled ? sm64ManualStick.touchState() : sm64Stick.touchState()); };
+        { return mphManualEnabled ? mphManualStick.touchState() : ((cursorEnabled || rightCursorEnabled) ? cursorStick.touchState() : (sm64ManualEnabled ? sm64ManualStick.touchState() : sm64Stick.touchState())); };
         std::future<std::string> connection;
         if (!inputTest)
         {
@@ -232,6 +236,7 @@ namespace widemelon
                 sm64ManualEnabled = leftStickMode == "SM64 Manual";
                 cursorEnabled = leftStickMode == "Cursor";
                 rightCursorEnabled = rightStickMode == "Cursor";
+                mphManualEnabled = rightStickMode == "MPH Manual";
                 sm64DpadEnabled = leftStickMode == "SM64 D-pad";
                 sm64Stick.setCenterHoldFrames(static_cast<std::uint8_t>(uiConfig.readInt(UiConfigSm64AutoFramesKey, widemelon::Sm64TouchCenterHoldFramesDefault,
                                                                                           widemelon::Sm64TouchCenterHoldFramesMinimum, widemelon::Sm64TouchCenterHoldFramesMaximum)));
@@ -242,6 +247,8 @@ namespace widemelon
                 cursorStick.setSpeedLimit(static_cast<std::uint16_t>(uiConfig.readInt(UiConfigCursorSpeedKey, widemelon::CursorSpeedDefault,
                                                                                        widemelon::CursorSpeedMinimum, widemelon::CursorSpeedMaximum)));
                 cursorStick.setEnabled(cursorEnabled || rightCursorEnabled);
+                mphManualStick.setSpeed(static_cast<std::uint16_t>(uiConfig.readInt(UiConfigMphManualSpeedKey, widemelon::MphManualSpeedDefault, widemelon::MphManualSpeedMinimum, widemelon::MphManualSpeedMaximum)));
+                mphManualStick.setEnabled(mphManualEnabled);
                 sm64Dpad.setDeadzonePercent(static_cast<std::uint8_t>(uiConfig.readInt(UiConfigSm64DpadDeadzoneKey, widemelon::Sm64DpadDeadzoneDefaultPercent,
                                                                                          widemelon::Sm64DpadDeadzoneMinimumPercent, widemelon::Sm64DpadDeadzoneMaximumPercent)));
                 sm64Dpad.setEnabled(sm64DpadEnabled);
@@ -251,6 +258,7 @@ namespace widemelon
                 if (sm64ManualEnabled) Logger::info("SM64 Manual stick mod enabled");
                 if (cursorEnabled) Logger::info("Cursor stick mod enabled");
                 if (rightCursorEnabled) Logger::info("Right cursor stick mod enabled");
+                if (mphManualEnabled) Logger::info("MPH Manual stick mod enabled");
                 if (sm64DpadEnabled) Logger::info("SM64 D-pad stick mod enabled");
                 if (leftStickMode == "Disabled") Logger::info("Left stick disabled");
             }
@@ -317,9 +325,10 @@ namespace widemelon
                 ? rightStick
                 : calibratedStick;
             const bool cursorTouchChanged = cursorStick.update(cursorStickInput, exitInput.r2Pressed());
+            const bool mphManualTouchChanged = mphManualStick.update(rightStick, exitInput.r2Pressed());
             const bool sm64DpadChanged = sm64Dpad.update(calibratedStick);
-            inputDirty = exitInput.takeStateChanged() || sm64TouchChanged || sm64ManualTouchChanged || cursorTouchChanged || sm64DpadChanged || inputDirty;
-            if ((sm64TouchChanged || sm64ManualTouchChanged || cursorTouchChanged) && !inputTest)
+            inputDirty = exitInput.takeStateChanged() || sm64TouchChanged || sm64ManualTouchChanged || cursorTouchChanged || mphManualTouchChanged || sm64DpadChanged || inputDirty;
+            if ((sm64TouchChanged || sm64ManualTouchChanged || cursorTouchChanged || mphManualTouchChanged) && !inputTest)
                 widemelon::display::GameplayScreen::render(renderer, width, height, status, videoTexture, &sm64TouchState());
             if (inputTest && !inputEvent.empty())
             {

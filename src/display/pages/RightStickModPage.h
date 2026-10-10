@@ -2,7 +2,9 @@
 
 #include "display/PageDefinition.h"
 
+#include <string_view>
+
 namespace widemelon::display::pages
 {
-    const PageDefinition &rightStickModPage();
+    PageDefinition rightStickModPage(std::string_view mode);
 }

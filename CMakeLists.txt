@@ -35,6 +35,7 @@ add_executable(widemelon-client
     src/display/pages/SettingsPage.cpp
     src/input/EvdevInput.cpp
     src/input/LeftStickCalibration.cpp
+    src/input/MphManualStickMod.cpp
     src/input/CursorStickMod.cpp
     src/input/Sm64DpadMod.cpp
     src/input/Sm64ManualStickMod.cpp
