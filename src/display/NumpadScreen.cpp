@@ -51,8 +51,8 @@ namespace
     }
 }
 
-bool NumpadScreen::edit(SDL_Renderer *renderer, int width, int height, EvdevInput &input,
-                        const std::string &title, std::string &value, std::size_t maximumLength, bool allowDot)
+NumpadScreen::Result NumpadScreen::edit(SDL_Renderer *renderer, int width, int height, EvdevInput &input,
+                                         const std::string &title, std::string &value, std::size_t maximumLength, bool allowDot)
 {
     const std::string original = value;
     int selectedKey = 0;
@@ -61,7 +61,7 @@ bool NumpadScreen::edit(SDL_Renderer *renderer, int width, int height, EvdevInpu
     {
         render(renderer, width, height, title, value, selectedKey);
         input.pollEvent();
-        if (input.exitComboPressed()) return false;
+        if (input.exitComboPressed()) return Result::Exit;
         switch (navigation.nextAction(input.takeUiAction(), input.heldUiDirection()))
         {
         case UiAction::Up: selectedKey = (selectedKey + KeyCount - ColumnCount) % KeyCount; break;
@@ -69,12 +69,12 @@ bool NumpadScreen::edit(SDL_Renderer *renderer, int width, int height, EvdevInpu
         case UiAction::Left: selectedKey = (selectedKey + KeyCount - 1) % KeyCount; break;
         case UiAction::Right: selectedKey = (selectedKey + 1) % KeyCount; break;
         case UiAction::Delete: if (!value.empty()) value.pop_back(); break;
-        case UiAction::Back: value = original; return false;
-        case UiAction::Start: return true;
+        case UiAction::Back: value = original; return Result::Cancelled;
+        case UiAction::Start: return Result::Accepted;
         case UiAction::Confirm:
         {
             const std::string_view key = Keys[static_cast<std::size_t>(selectedKey)];
-            if (key == "OK") return true;
+            if (key == "OK") return Result::Accepted;
             if (key == "DEL") { if (!value.empty()) value.pop_back(); }
             else if (value.size() < maximumLength && (key != "." || allowDot)) value.append(key);
             break;

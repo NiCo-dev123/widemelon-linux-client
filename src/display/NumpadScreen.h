@@ -16,8 +16,10 @@ namespace widemelon::display
     class NumpadScreen
     {
     public:
-        static bool edit(SDL_Renderer *renderer, int width, int height, EvdevInput &input,
-                         const std::string &title, std::string &value, std::size_t maximumLength, bool allowDot);
+        enum class Result { Cancelled, Accepted, Exit };
+
+        static Result edit(SDL_Renderer *renderer, int width, int height, EvdevInput &input,
+                           const std::string &title, std::string &value, std::size_t maximumLength, bool allowDot);
     };
 
 }

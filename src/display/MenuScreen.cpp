@@ -194,11 +194,12 @@ void updateRange(const FieldDefinition &field, int direction, MenuState &state, 
     default: break; }
 }
 
-enum class Result { Home, Exit };
-Result editSettings(SDL_Renderer *renderer, int width, int height, const Config &config, EvdevInput &input)
+enum class Result { Home, Game, Exit };
+Result editSettings(SDL_Renderer *renderer, int width, int height, const Config &config, EvdevInput &input, bool returnToGame)
 {
-    const std::string directory = executableDirectory(); if (directory.empty()) return Result::Home;
-    const UiConfig uiConfig = configFor(directory); std::vector<std::string> availableThemes = themes(directory); if (availableThemes.empty()) return Result::Home;
+    const Result backResult = returnToGame ? Result::Game : Result::Home;
+    const std::string directory = executableDirectory(); if (directory.empty()) return backResult;
+    const UiConfig uiConfig = configFor(directory); std::vector<std::string> availableThemes = themes(directory); if (availableThemes.empty()) return backResult;
     MenuState state; state.theme = uiConfig.readValue(ThemeKey).value_or("DukuSlice"); state.mode = uiConfig.readValue(ModeKey).value_or("D-pad"); state.rightMode = uiConfig.readValue(RightModeKey).value_or("Disabled"); state.mphSpeed = static_cast<std::uint16_t>(uiConfig.readInt(MphSpeedKey, MphManualSpeedDefault, MphManualSpeedMinimum, MphManualSpeedMaximum));
     state.autoFrames = static_cast<std::uint8_t>(uiConfig.readInt(AutoFramesKey, Sm64TouchCenterHoldFramesDefault, Sm64TouchCenterHoldFramesMinimum, Sm64TouchCenterHoldFramesMaximum));
     state.autoRelease = static_cast<std::uint16_t>(uiConfig.readInt(AutoReleaseKey, Sm64TouchReleaseDelayDefaultMs, Sm64TouchReleaseDelayMinimumMs, Sm64TouchReleaseDelayMaximumMs));
@@ -212,7 +213,7 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
         if (selected < 0 || selected >= static_cast<int>(nav.size()) || !nav[static_cast<std::size_t>(selected)].selectable) selected = firstSelectable(nav);
         scroll = MenuNavigation::scrollOffsetForSelection(nav, selected, scroll, footerTop(height) - UiMenuItemGap - listTop()); render(renderer, width, height, page, config, state, entries, selected, scroll);
         input.pollEvent(); if (input.exitComboPressed()) return Result::Exit; const UiAction action = navigation.nextAction(input.takeUiAction(), input.heldUiDirection());
-        if (action == UiAction::Back || action == UiAction::Delete) { if (pageId == PageId::Settings) return Result::Home; pageId = PageId::Settings; selected = 0; scroll = 0; continue; }
+        if (action == UiAction::Back || action == UiAction::Delete) { if (pageId == PageId::Settings) return backResult; pageId = PageId::Settings; selected = 0; scroll = 0; continue; }
         if (action == UiAction::Up || action == UiAction::Down) { selected = MenuNavigation::nextSelection(nav, selected, action == UiAction::Up ? -1 : 1); SDL_Delay(10); continue; }
         if (selected < 0 || selected >= static_cast<int>(entries.size())) { SDL_Delay(10); continue; }
         const FieldDefinition &field = *entries[static_cast<std::size_t>(selected)].field;
@@ -226,13 +227,18 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
             if (field.action == ActionId::Quit) return Result::Exit;
             if (field.type == FieldType::NavigationButton)
             {
-                if (field.destination == PageId::Home) { if (pageId == PageId::Settings) return Result::Home; pageId = PageId::Settings; }
+                if (field.destination == PageId::Home) { if (pageId == PageId::Settings) return backResult; pageId = PageId::Settings; }
                 else if (field.destination != pageId) { pageId = field.destination; selected = 0; scroll = 0; }
             }
         }
         SDL_Delay(10);
     }
 }
+}
+
+bool MenuScreen::editInGameSettings(SDL_Renderer *renderer, int width, int height, const Config &config, EvdevInput &input)
+{
+    return editSettings(renderer, width, height, config, input, true) == Result::Exit;
 }
 
 bool MenuScreen::editConfiguration(SDL_Renderer *renderer, int width, int height, Config &config, EvdevInput &input)
@@ -245,7 +251,47 @@ bool MenuScreen::editConfiguration(SDL_Renderer *renderer, int width, int height
         input.pollEvent(); if (input.exitComboPressed()) return false; const UiAction action = navigation.nextAction(input.takeUiAction(), input.heldUiDirection());
         if (action == UiAction::Up || action == UiAction::Down) { selected = MenuNavigation::nextSelection(nav, selected, action == UiAction::Up ? -1 : 1); SDL_Delay(10); continue; }
         if (action == UiAction::Start) { for (std::size_t i = 0; i < entries.size(); ++i) if (entries[i].field && entries[i].field->action == ActionId::Connect) { selected = static_cast<int>(i); break; } }
-        if (action == UiAction::Confirm || action == UiAction::Start) { const FieldDefinition &field = *entries[static_cast<std::size_t>(selected)].field; if (field.value == ValueId::Host) NumpadScreen::edit(renderer, width, height, input, "HOST ADDRESS", config.host, 15, true); else if (field.value == ValueId::Port) { std::string port = std::to_string(config.port); if (NumpadScreen::edit(renderer, width, height, input, "PORT", port, 5, false)) { unsigned int parsed = 0; const auto result = std::from_chars(port.data(), port.data() + port.size(), parsed); if (result.ec == std::errc{} && result.ptr == port.data() + port.size() && parsed <= 65535) config.port = static_cast<std::uint16_t>(parsed); else Logger::error("Configuration form error: invalid port"); } } else if (field.value == ValueId::PairingCode) NumpadScreen::edit(renderer, width, height, input, "SESSION CODE", config.pairingCode, 16, false); else if (field.destination == PageId::Settings) { if (editSettings(renderer, width, height, config, input) == Result::Exit) return false; } else if (field.action == ActionId::Connect) { const ConfigLoadResult checked = ConfigLoader::validate(config); if (!checked.ok) { Logger::error("Configuration form error: " + checked.error); } else { std::string error; if (!ConfigLoader::saveConfiguration(config, error)) Logger::error("Configuration save warning: " + error); else Logger::info("Configuration saved from setup form"); return true; } } }
+        if (action == UiAction::Confirm || action == UiAction::Start)
+        {
+            const FieldDefinition &field = *entries[static_cast<std::size_t>(selected)].field;
+            if (field.value == ValueId::Host)
+            {
+                if (NumpadScreen::edit(renderer, width, height, input, "HOST ADDRESS", config.host, 15, true) == NumpadScreen::Result::Exit) return false;
+            }
+            else if (field.value == ValueId::Port)
+            {
+                std::string port = std::to_string(config.port);
+                const NumpadScreen::Result result = NumpadScreen::edit(renderer, width, height, input, "PORT", port, 5, false);
+                if (result == NumpadScreen::Result::Exit) return false;
+                if (result == NumpadScreen::Result::Accepted)
+                {
+                    unsigned int parsed = 0;
+                    const auto parsedResult = std::from_chars(port.data(), port.data() + port.size(), parsed);
+                    if (parsedResult.ec == std::errc{} && parsedResult.ptr == port.data() + port.size() && parsed <= 65535) config.port = static_cast<std::uint16_t>(parsed);
+                    else Logger::error("Configuration form error: invalid port");
+                }
+            }
+            else if (field.value == ValueId::PairingCode)
+            {
+                if (NumpadScreen::edit(renderer, width, height, input, "SESSION CODE", config.pairingCode, 16, false) == NumpadScreen::Result::Exit) return false;
+            }
+            else if (field.destination == PageId::Settings)
+            {
+                if (editSettings(renderer, width, height, config, input, false) == Result::Exit) return false;
+            }
+            else if (field.action == ActionId::Connect)
+            {
+                const ConfigLoadResult checked = ConfigLoader::validate(config);
+                if (!checked.ok) Logger::error("Configuration form error: " + checked.error);
+                else
+                {
+                    std::string error;
+                    if (!ConfigLoader::saveConfiguration(config, error)) Logger::error("Configuration save warning: " + error);
+                    else Logger::info("Configuration saved from setup form");
+                    return true;
+                }
+            }
+        }
         SDL_Delay(10);
     }
 }

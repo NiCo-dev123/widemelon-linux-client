@@ -306,6 +306,21 @@ namespace widemelon
                 }
             }
             const std::string inputEvent = exitInput.pollEvent();
+            if (exitInput.exitComboPressed())
+            {
+                Logger::info("Opening in-game settings with Start + L + R");
+                if (widemelon::display::MenuScreen::editInGameSettings(renderer, width, height, config, exitInput))
+                {
+                    Logger::info("Exit requested from in-game settings; stopping network connection");
+                    client->requestStop();
+                    running = false;
+                }
+                else
+                {
+                    widemelon::display::GameplayScreen::render(renderer, width, height, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
+                }
+                continue;
+            }
             const widemelon::LeftStickState calibratedStick = widemelon::applyLeftStickCalibration(exitInput.leftStickState(), leftStickCalibration);
             const bool sm64TouchChanged = sm64Stick.update(calibratedStick);
             const bool sm64ManualTouchChanged = sm64ManualStick.update(calibratedStick, exitInput.r2Pressed());
@@ -394,12 +409,6 @@ namespace widemelon
                     displayedVideoSequence = decodedFrame.sequence;
                     widemelon::display::GameplayScreen::render(renderer, width, height, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
                 }
-            }
-            if (exitInput.exitComboPressed())
-            {
-                Logger::info("Exit requested by Start + L + R; stopping network connection");
-                client->requestStop();
-                running = false;
             }
             SDL_Delay(10);
         }
