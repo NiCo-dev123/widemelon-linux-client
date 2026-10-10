@@ -177,7 +177,13 @@ namespace widemelon::display
                     value.pop_back();
                 break;
             case UiAction::L:
-                shift = !shift;
+                if (shift || shiftLock)
+                {
+                    shift = false;
+                    shiftLock = false;
+                }
+                else
+                    shift = true;
                 break;
             case UiAction::Back:
                 break;
@@ -186,10 +192,18 @@ namespace widemelon::display
             case UiAction::Confirm:
             {
                 const Key &key = Keys[static_cast<std::size_t>(selectedKey)];
-                if (key.type == KeyType::Shift)
-                    shift = true;
-                else if (key.type == KeyType::ShiftLock)
-                    shiftLock = !shiftLock;
+                if (key.type == KeyType::Shift || key.type == KeyType::ShiftLock)
+                {
+                    if (shift || shiftLock)
+                    {
+                        shift = false;
+                        shiftLock = false;
+                    }
+                    else if (key.type == KeyType::Shift)
+                        shift = true;
+                    else
+                        shiftLock = true;
+                }
                 else if (value.size() < maximumLength)
                 {
                     if (key.type == KeyType::Space)
