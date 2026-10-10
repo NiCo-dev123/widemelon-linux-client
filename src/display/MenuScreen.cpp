@@ -17,6 +17,7 @@
 #include "input/CursorStickMod.h"
 #include "input/EvdevInput.h"
 #include "input/LeftStickCalibration.h"
+#include "input/MphAutoStickMod.h"
 #include "input/MphManualStickMod.h"
 #include "input/Sm64DpadMod.h"
 #include "input/Sm64StickMod.h"
@@ -32,7 +33,7 @@ namespace widemelon::display
 namespace
 {
 constexpr std::string_view ThemeKey{"active-theme"}, ModeKey{"left-stick-mod"}, RightModeKey{"right-stick-mod"}, MphSpeedKey{"mph-manual-speed"};
-constexpr std::string_view AutoFramesKey{"sm64-auto-center-hold-frames"}, AutoReleaseKey{"sm64-auto-release-delay-ms"};
+constexpr std::string_view AutoFramesKey{"sm64-auto-center-hold-frames"}, AutoReleaseKey{"sm64-auto-release-delay-ms"}, MphAutoReleaseKey{"mph-auto-release-delay-ms"};
 constexpr std::string_view CursorSpeedKey{"cursor-speed-limit"}, DpadDeadzoneKey{"sm64-dpad-deadzone-percent"};
 constexpr std::array<std::string_view, 4> CalibrationKeys{
     "left-stick-scale-left-percent", "left-stick-scale-right-percent", "left-stick-scale-up-percent", "left-stick-scale-down-percent"};
@@ -43,6 +44,7 @@ struct MenuState
     std::string mode;
     std::string rightMode{"Disabled"};
     std::uint16_t mphSpeed{MphManualSpeedDefault};
+    std::uint16_t mphAutoRelease{MphAutoReleaseDelayMs};
     std::uint8_t autoFrames{Sm64TouchCenterHoldFramesDefault};
     std::uint16_t autoRelease{Sm64TouchReleaseDelayDefaultMs};
     std::uint8_t dpadDeadzone{Sm64DpadDeadzoneDefaultPercent};
@@ -117,6 +119,7 @@ std::string fieldValue(const FieldDefinition &field, const Config &config, const
     case ValueId::LeftStickMode: return state.mode;
     case ValueId::RightStickMode: return state.rightMode;
     case ValueId::MphManualSpeed: return std::to_string(state.mphSpeed) + " px/s";
+    case ValueId::MphAutoReleaseDelayMs: return std::to_string(state.mphAutoRelease) + " ms";
     case ValueId::Sm64AutoDelayFrames: return std::to_string(state.autoFrames) + " frames";
     case ValueId::Sm64AutoReleaseDelayMs: return std::to_string(state.autoRelease) + " ms";
     case ValueId::Sm64DpadDeadzonePercent: return std::to_string(state.dpadDeadzone) + " %";
@@ -187,6 +190,7 @@ void updateRange(const FieldDefinition &field, int direction, MenuState &state, 
     case ValueId::Sm64DpadDeadzonePercent: update(DpadDeadzoneKey, state.dpadDeadzone); break;
     case ValueId::CursorSpeedLimit: update(CursorSpeedKey, state.cursorSpeed); break;
     case ValueId::MphManualSpeed: update(MphSpeedKey, state.mphSpeed); break;
+    case ValueId::MphAutoReleaseDelayMs: update(MphAutoReleaseKey, state.mphAutoRelease); break;
     case ValueId::LeftStickScaleLeftPercent: update(CalibrationKeys[0], state.calibration.left); break;
     case ValueId::LeftStickScaleRightPercent: update(CalibrationKeys[1], state.calibration.right); break;
     case ValueId::LeftStickScaleUpPercent: update(CalibrationKeys[2], state.calibration.up); break;
@@ -200,7 +204,7 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
     const Result backResult = returnToGame ? Result::Game : Result::Home;
     const std::string directory = executableDirectory(); if (directory.empty()) return backResult;
     const UiConfig uiConfig = configFor(directory); std::vector<std::string> availableThemes = themes(directory); if (availableThemes.empty()) return backResult;
-    MenuState state; state.theme = uiConfig.readValue(ThemeKey).value_or("DukuSlice"); state.mode = uiConfig.readValue(ModeKey).value_or("D-pad"); state.rightMode = uiConfig.readValue(RightModeKey).value_or("Disabled"); state.mphSpeed = static_cast<std::uint16_t>(uiConfig.readInt(MphSpeedKey, MphManualSpeedDefault, MphManualSpeedMinimum, MphManualSpeedMaximum));
+    MenuState state; state.theme = uiConfig.readValue(ThemeKey).value_or("DukuSlice"); state.mode = uiConfig.readValue(ModeKey).value_or("D-pad"); state.rightMode = uiConfig.readValue(RightModeKey).value_or("Disabled"); state.mphSpeed = static_cast<std::uint16_t>(uiConfig.readInt(MphSpeedKey, MphManualSpeedDefault, MphManualSpeedMinimum, MphManualSpeedMaximum)); state.mphAutoRelease = static_cast<std::uint16_t>(uiConfig.readInt(MphAutoReleaseKey, MphAutoReleaseDelayMs, MphAutoReleaseDelayMinimumMs, MphAutoReleaseDelayMaximumMs));
     state.autoFrames = static_cast<std::uint8_t>(uiConfig.readInt(AutoFramesKey, Sm64TouchCenterHoldFramesDefault, Sm64TouchCenterHoldFramesMinimum, Sm64TouchCenterHoldFramesMaximum));
     state.autoRelease = static_cast<std::uint16_t>(uiConfig.readInt(AutoReleaseKey, Sm64TouchReleaseDelayDefaultMs, Sm64TouchReleaseDelayMinimumMs, Sm64TouchReleaseDelayMaximumMs));
     state.dpadDeadzone = static_cast<std::uint8_t>(uiConfig.readInt(DpadDeadzoneKey, Sm64DpadDeadzoneDefaultPercent, Sm64DpadDeadzoneMinimumPercent, Sm64DpadDeadzoneMaximumPercent));

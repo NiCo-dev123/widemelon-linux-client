@@ -56,6 +56,7 @@ namespace
     constexpr std::string_view UiConfigLeftStickModeKey{"left-stick-mod"};
     constexpr std::string_view UiConfigRightStickModeKey{"right-stick-mod"};
     constexpr std::string_view UiConfigMphManualSpeedKey{"mph-manual-speed"};
+    constexpr std::string_view UiConfigMphAutoReleaseDelayKey{"mph-auto-release-delay-ms"};
     constexpr std::string_view UiConfigSm64AutoFramesKey{"sm64-auto-center-hold-frames"};
     constexpr std::string_view UiConfigSm64AutoReleaseDelayKey{"sm64-auto-release-delay-ms"};
     constexpr std::string_view UiConfigCursorSpeedKey{"cursor-speed-limit"};
@@ -218,6 +219,7 @@ namespace widemelon
             mphManualStick.setSpeed(static_cast<std::uint16_t>(uiConfig.readInt(UiConfigMphManualSpeedKey, widemelon::MphManualSpeedDefault, widemelon::MphManualSpeedMinimum, widemelon::MphManualSpeedMaximum)));
             mphManualStick.setEnabled(mphManualEnabled);
             mphAutoStick.setSpeed(static_cast<std::uint16_t>(uiConfig.readInt(UiConfigMphManualSpeedKey, widemelon::MphManualSpeedDefault, widemelon::MphManualSpeedMinimum, widemelon::MphManualSpeedMaximum)));
+            mphAutoStick.setReleaseDelayMs(static_cast<std::uint16_t>(uiConfig.readInt(UiConfigMphAutoReleaseDelayKey, widemelon::MphAutoReleaseDelayMs, widemelon::MphAutoReleaseDelayMinimumMs, widemelon::MphAutoReleaseDelayMaximumMs)));
             mphAutoStick.setEnabled(mphAutoEnabled);
             sm64Dpad.setDeadzonePercent(static_cast<std::uint8_t>(uiConfig.readInt(UiConfigSm64DpadDeadzoneKey, widemelon::Sm64DpadDeadzoneDefaultPercent,
                                                                                      widemelon::Sm64DpadDeadzoneMinimumPercent, widemelon::Sm64DpadDeadzoneMaximumPercent)));

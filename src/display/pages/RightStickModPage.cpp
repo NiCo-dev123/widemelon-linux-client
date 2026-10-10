@@ -1,5 +1,6 @@
 #include "display/pages/RightStickModPage.h"
 
+#include "input/MphAutoStickMod.h"
 #include "input/MphManualStickMod.h"
 
 namespace widemelon::display::pages
@@ -22,6 +23,8 @@ namespace widemelon::display::pages
         };
         if (mode == "MPH Manual" || mode == "MPH Auto")
             page.sections.insert(page.sections.end() - 1, {"", {}, {{FieldType::Range, "MPH camera speed", ValueId::MphManualSpeed, PageId::Home, ActionId::None, MphManualSpeedMinimum, MphManualSpeedMaximum, MphManualSpeedStep}}});
+        if (mode == "MPH Auto")
+            page.sections.insert(page.sections.end() - 1, {"", {}, {{FieldType::Range, "Stylus cooldown", ValueId::MphAutoReleaseDelayMs, PageId::Home, ActionId::None, MphAutoReleaseDelayMinimumMs, MphAutoReleaseDelayMaximumMs, MphAutoReleaseDelayStepMs}}});
         return page;
     }
 

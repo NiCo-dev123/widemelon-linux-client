@@ -21,6 +21,11 @@ void MphAutoStickMod::setSpeed(std::uint16_t value)
     speed = std::clamp(value, MphManualSpeedMinimum, MphManualSpeedMaximum);
 }
 
+void MphAutoStickMod::setReleaseDelayMs(std::uint16_t milliseconds)
+{
+    releaseDelay = std::chrono::milliseconds(std::clamp(milliseconds, MphAutoReleaseDelayMinimumMs, MphAutoReleaseDelayMaximumMs));
+}
+
 float MphAutoStickMod::normalizeAxis(int value, int center, int minimum, int maximum)
 {
     const int distance = value < center ? center - minimum : maximum - center;
@@ -72,7 +77,7 @@ bool MphAutoStickMod::update(const LeftStickState &stick)
     {
         reactivateAfterWrap = false;
         if (releaseStartedAt == std::chrono::steady_clock::time_point{}) releaseStartedAt = now;
-        if (now - releaseStartedAt >= std::chrono::milliseconds(MphAutoReleaseDelayMs))
+        if (now - releaseStartedAt >= releaseDelay)
         {
             cursorX = Sm64TouchCenterX;
             cursorY = Sm64TouchCenterY;

@@ -59,6 +59,7 @@ namespace widemelon::display
         LeftStickMode,
         RightStickMode,
         MphManualSpeed,
+        MphAutoReleaseDelayMs,
         Sm64AutoDelayFrames,
         Sm64AutoReleaseDelayMs,
         Sm64DpadDeadzonePercent,
