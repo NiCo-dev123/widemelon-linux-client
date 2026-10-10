@@ -373,6 +373,14 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
                 if (result == KeyboardScreen::Result::Exit) return Result::Exit;
                 if (result == KeyboardScreen::Result::Accepted)
                 {
+                    if (nextName != state.activePreset
+                        && std::find(state.presetNames.begin(), state.presetNames.end(), nextName) != state.presetNames.end())
+                    {
+                        const std::string message = "A preset named \"" + nextName + "\" already exists.";
+                        if (PopupScreen::acknowledge(renderer, width, height, input, message) == PopupScreen::Result::Exit)
+                            return Result::Exit;
+                        continue;
+                    }
                     std::string presetError;
                     if (InputPresetStore::rename(state.activePreset, nextName, presetError))
                     {

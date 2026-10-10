@@ -199,6 +199,7 @@ std::string EvdevInput::pollEvent()
                 else if (event.code == 307) uiAction = UiAction::Y;
                 else if (event.code == 308) uiAction = UiAction::Back;
                 else if (event.code == BTN_START) uiAction = UiAction::Start;
+                else if (event.code == BTN_TL) uiAction = UiAction::L;
             }
         }
         else if (event.type == EV_ABS && (event.code == ABS_HAT0X || event.code == ABS_HAT0Y))

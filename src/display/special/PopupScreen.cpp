@@ -97,8 +97,14 @@ PopupScreen::Result PopupScreen::confirmDelete(SDL_Renderer *renderer, int width
                 {{"Cancel", Result::Cancel}, {"Delete", Result::Delete}}, 0);
 }
 
+PopupScreen::Result PopupScreen::acknowledge(SDL_Renderer *renderer, int width, int height, EvdevInput &input,
+                                             std::string_view message)
+{
+    return show(renderer, width, height, input, message, {{"OK", Result::Acknowledge}}, 0);
+}
+
 PopupScreen::Result PopupScreen::cannotDeleteLastPreset(SDL_Renderer *renderer, int width, int height, EvdevInput &input)
 {
-    return show(renderer, width, height, input, "Cannot delete the last preset.", {{"OK", Result::Acknowledge}}, 0);
+    return acknowledge(renderer, width, height, input, "Cannot delete the last preset.");
 }
 }

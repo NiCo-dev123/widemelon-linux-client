@@ -30,6 +30,7 @@ enum class UiAction
     Back,
     Start,
     Y,
+    L,
 };
 
 class EvdevInput
