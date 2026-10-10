@@ -8,10 +8,10 @@
 
 namespace widemelon
 {
-    inline constexpr std::uint16_t MphManualSpeedMinimum{100};
+    inline constexpr std::uint16_t MphManualSpeedMinimum{50};
     inline constexpr std::uint16_t MphManualSpeedDefault{100};
-    inline constexpr std::uint16_t MphManualSpeedMaximum{1000};
-    inline constexpr std::uint16_t MphManualSpeedStep{25};
+    inline constexpr std::uint16_t MphManualSpeedMaximum{500};
+    inline constexpr std::uint16_t MphManualSpeedStep{10};
 
     class MphManualStickMod
     {
