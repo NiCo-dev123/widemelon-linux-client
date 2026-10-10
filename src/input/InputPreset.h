@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace widemelon
 {
@@ -29,6 +30,7 @@ namespace widemelon
         static std::optional<InputPreset> load(std::string_view name);
         static std::optional<InputPreset> loadActive();
         static std::optional<std::string> activeName();
+        static std::vector<std::string> names();
         static bool save(const InputPreset &preset, bool makeActive, std::string &error);
         static bool setActive(std::string_view name, std::string &error);
         static bool isValidName(std::string_view name);

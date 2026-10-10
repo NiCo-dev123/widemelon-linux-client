@@ -187,6 +187,25 @@ std::optional<std::string> InputPresetStore::activeName()
     return std::nullopt;
 }
 
+std::vector<std::string> InputPresetStore::names()
+{
+    std::vector<std::string> result;
+    for (const std::filesystem::path &root : StorageRoots)
+    {
+        std::error_code error;
+        const std::filesystem::path directory = root / "input-presets";
+        for (const std::filesystem::directory_entry &entry : std::filesystem::directory_iterator(directory, error))
+        {
+            if (error || !entry.is_regular_file(error) || entry.path().extension() != ".json") continue;
+            const std::string name = entry.path().stem().string();
+            if (isValidName(name)) result.push_back(name);
+        }
+    }
+    std::sort(result.begin(), result.end());
+    result.erase(std::unique(result.begin(), result.end()), result.end());
+    return result;
+}
+
 std::optional<InputPreset> InputPresetStore::loadActive()
 {
     const std::optional<std::string> name = activeName();

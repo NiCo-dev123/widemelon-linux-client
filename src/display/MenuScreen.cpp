@@ -11,6 +11,7 @@
 #include "display/pages/HomePage.h"
 #include "display/pages/AboutPage.h"
 #include "display/pages/InputPresetManagerPage.h"
+#include "display/pages/InputPresetEditorPage.h"
 #include "display/pages/LeftStickCalibrationPage.h"
 #include "display/pages/LeftStickModPage.h"
 #include "display/pages/RightStickModPage.h"
@@ -18,6 +19,7 @@
 #include "input/CursorStickMod.h"
 #include "input/EvdevInput.h"
 #include "input/LeftStickCalibration.h"
+#include "input/InputPreset.h"
 #include "input/MphAutoStickMod.h"
 #include "input/MphManualStickMod.h"
 #include "input/Sm64DpadMod.h"
@@ -42,6 +44,8 @@ constexpr std::array<std::string_view, 4> CalibrationKeys{
 struct MenuState
 {
     std::string theme;
+    std::string activePreset;
+    std::vector<std::string> presetNames;
     std::string mode;
     std::string rightMode{"Disabled"};
     std::uint16_t mphSpeed{MphManualSpeedDefault};
@@ -60,6 +64,7 @@ const PageDefinition &pageDefinition(PageId id, std::string_view leftMode, std::
     case PageId::Home: return pages::homePage();
     case PageId::Settings: return pages::settingsPage();
     case PageId::InputPresetManager: return pages::inputPresetManagerPage();
+    case PageId::InputPresetEditor: return pages::inputPresetEditorPage();
     case PageId::About: return pages::aboutPage();
     case PageId::LeftStickCalibration: return pages::leftStickCalibrationPage();
     case PageId::LeftStickMod: { static PageDefinition page; page = pages::leftStickModPage(leftMode); return page; }
@@ -118,6 +123,7 @@ std::string fieldValue(const FieldDefinition &field, const Config &config, const
     case ValueId::Port: return std::to_string(config.port);
     case ValueId::PairingCode: return config.pairingCode;
     case ValueId::ActiveTheme: return state.theme;
+    case ValueId::ActiveInputPreset: return state.activePreset.empty() ? "No preset" : state.activePreset;
     case ValueId::LeftStickMode: return state.mode;
     case ValueId::RightStickMode: return state.rightMode;
     case ValueId::MphManualSpeed: return std::to_string(state.mphSpeed) + " px/s";
@@ -212,6 +218,18 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
     state.dpadDeadzone = static_cast<std::uint8_t>(uiConfig.readInt(DpadDeadzoneKey, Sm64DpadDeadzoneDefaultPercent, Sm64DpadDeadzoneMinimumPercent, Sm64DpadDeadzoneMaximumPercent));
     state.cursorSpeed = static_cast<std::uint16_t>(uiConfig.readInt(CursorSpeedKey, CursorSpeedDefault, CursorSpeedMinimum, CursorSpeedMaximum));
     state.calibration = {static_cast<std::uint8_t>(uiConfig.readInt(CalibrationKeys[0], LeftStickScaleDefaultPercent, LeftStickScaleMinimumPercent, LeftStickScaleMaximumPercent)), static_cast<std::uint8_t>(uiConfig.readInt(CalibrationKeys[1], LeftStickScaleDefaultPercent, LeftStickScaleMinimumPercent, LeftStickScaleMaximumPercent)), static_cast<std::uint8_t>(uiConfig.readInt(CalibrationKeys[2], LeftStickScaleDefaultPercent, LeftStickScaleMinimumPercent, LeftStickScaleMaximumPercent)), static_cast<std::uint8_t>(uiConfig.readInt(CalibrationKeys[3], LeftStickScaleDefaultPercent, LeftStickScaleMinimumPercent, LeftStickScaleMaximumPercent))};
+    state.presetNames = InputPresetStore::names();
+    if (state.presetNames.empty())
+    {
+        InputPreset preset;
+        preset.leftStickMode = state.mode; preset.rightStickMode = state.rightMode; preset.mphCameraSpeed = state.mphSpeed; preset.mphAutoReleaseDelayMs = state.mphAutoRelease;
+        preset.sm64AutoCenterHoldFrames = state.autoFrames; preset.sm64AutoReleaseDelayMs = state.autoRelease; preset.sm64DpadDeadzonePercent = state.dpadDeadzone; preset.cursorSpeedLimit = state.cursorSpeed;
+        preset.leftStickCalibration = {state.calibration.left, state.calibration.right, state.calibration.up, state.calibration.down};
+        std::string migrationError;
+        if (!InputPresetStore::save(preset, true, migrationError)) Logger::error("Input preset migration warning: " + migrationError);
+        state.presetNames = InputPresetStore::names();
+    }
+    state.activePreset = InputPresetStore::activeName().value_or(state.presetNames.empty() ? std::string{} : state.presetNames.front());
     const std::array<std::string, 6> modes{"Disabled", "D-pad", "SM64 Auto", "SM64 Manual", "SM64 D-pad", "Cursor"};
     PageId pageId = PageId::Settings; int selected = 0, scroll = 0; MenuNavigation navigation;
     while (true) {
@@ -226,11 +244,24 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
         if ((action == UiAction::Left || action == UiAction::Right) && isAdjustable(field)) {
             const int direction = action == UiAction::Left ? -1 : 1;
             if (field.value == ValueId::ActiveTheme) { auto it = std::find(availableThemes.begin(), availableThemes.end(), state.theme); const int index = it == availableThemes.end() ? 0 : static_cast<int>(std::distance(availableThemes.begin(), it)); state.theme = availableThemes[static_cast<std::size_t>((index + direction + static_cast<int>(availableThemes.size())) % static_cast<int>(availableThemes.size()))]; if (uiConfig.writeValue(ThemeKey, state.theme)) reloadUiResources(renderer); }
+            else if (field.value == ValueId::ActiveInputPreset && !state.presetNames.empty()) { auto it = std::find(state.presetNames.begin(), state.presetNames.end(), state.activePreset); const int index = it == state.presetNames.end() ? 0 : static_cast<int>(std::distance(state.presetNames.begin(), it)); const std::string next = state.presetNames[static_cast<std::size_t>((index + direction + static_cast<int>(state.presetNames.size())) % static_cast<int>(state.presetNames.size()))]; std::string presetError; if (InputPresetStore::setActive(next, presetError)) state.activePreset = next; else Logger::error("Cannot select input preset: " + presetError); }
             else if (field.value == ValueId::LeftStickMode) { auto it = std::find(modes.begin(), modes.end(), state.mode); const int index = it == modes.end() ? 0 : static_cast<int>(std::distance(modes.begin(), it)); state.mode = modes[static_cast<std::size_t>((index + direction + static_cast<int>(modes.size())) % static_cast<int>(modes.size()))]; uiConfig.writeValue(ModeKey, state.mode); }
             else if (field.value == ValueId::RightStickMode) { static const std::array<std::string, 4> rightModes{"Disabled", "Cursor", "MPH Manual", "MPH Auto"}; auto it = std::find(rightModes.begin(), rightModes.end(), state.rightMode); const int index = it == rightModes.end() ? 0 : static_cast<int>(std::distance(rightModes.begin(), it)); state.rightMode = rightModes[static_cast<std::size_t>((index + direction + static_cast<int>(rightModes.size())) % static_cast<int>(rightModes.size()))]; uiConfig.writeValue(RightModeKey, state.rightMode); }
             else updateRange(field, direction, state, uiConfig);
         } else if (action == UiAction::Confirm) {
             if (field.action == ActionId::Quit) return Result::Exit;
+            if (field.action == ActionId::NewInputPreset)
+            {
+                InputPreset preset;
+                for (unsigned int number = 1;; ++number)
+                {
+                    preset.name = "Config " + std::to_string(number);
+                    if (std::find(state.presetNames.begin(), state.presetNames.end(), preset.name) == state.presetNames.end()) break;
+                }
+                std::string presetError;
+                if (InputPresetStore::save(preset, true, presetError)) { state.presetNames = InputPresetStore::names(); state.activePreset = preset.name; }
+                else Logger::error("Cannot create input preset: " + presetError);
+            }
             if (field.type == FieldType::NavigationButton)
             {
                 if (field.destination == PageId::Home) { if (pageId == PageId::Settings) return backResult; pageId = PageId::Settings; }

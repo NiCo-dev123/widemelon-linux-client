@@ -15,11 +15,6 @@ namespace widemelon::display::pages
             {
                 {"Theme", {}, {{FieldType::Choice, {}, ValueId::ActiveTheme}}},
                 {"Input mapping", {}, {{FieldType::NavigationButton, "Input presets", ValueId::None, PageId::InputPresetManager}}},
-                {"Analog sticks", {}, {
-                    {FieldType::NavigationButton, "Left stick mod", ValueId::None, PageId::LeftStickMod},
-                    {FieldType::NavigationButton, "Left stick calibration", ValueId::None, PageId::LeftStickCalibration},
-                    {FieldType::NavigationButton, "Right stick mod", ValueId::None, PageId::RightStickMod},
-                }},
                 {"Navigation", {}, {
                     {FieldType::NavigationButton, "Back", ValueId::None, PageId::Home},
                     {FieldType::ActionButton, "Quit", ValueId::None, PageId::Home, ActionId::Quit},

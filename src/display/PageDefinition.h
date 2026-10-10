@@ -11,6 +11,7 @@ namespace widemelon::display
         Home,
         Settings,
         InputPresetManager,
+        InputPresetEditor,
         About,
         LeftStickMod,
         RightStickMod,
@@ -57,6 +58,7 @@ namespace widemelon::display
         Port,
         PairingCode,
         ActiveTheme,
+        ActiveInputPreset,
         LeftStickMode,
         RightStickMode,
         MphManualSpeed,
@@ -75,6 +77,8 @@ namespace widemelon::display
     {
         None,
         Connect,
+        NewInputPreset,
+        EditInputPreset,
         Quit
     };
 
