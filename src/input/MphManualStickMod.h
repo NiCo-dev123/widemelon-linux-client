@@ -25,6 +25,8 @@ namespace widemelon
         static float normalizeAxis(int value, int center, int minimum, int maximum);
         bool enabled{false};
         bool previousR2Pressed{false};
+        bool contactRequested{false};
+        bool reactivateAfterWrap{false};
         std::uint16_t speed{MphManualSpeedDefault};
         float cursorX{Sm64TouchCenterX};
         float cursorY{Sm64TouchCenterY};
