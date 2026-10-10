@@ -14,7 +14,6 @@
 #include "display/pages/AboutPage.h"
 #include "display/pages/InputPresetManagerPage.h"
 #include "display/pages/InputPresetEditorPage.h"
-#include "display/pages/InputPresetDeleteConfirmPage.h"
 #include "display/pages/LeftStickCalibrationPage.h"
 #include "display/pages/LeftStickModPage.h"
 #include "display/pages/RightStickModPage.h"
@@ -68,7 +67,6 @@ const PageDefinition &pageDefinition(PageId id, std::string_view presetName, std
     case PageId::Settings: return pages::settingsPage();
     case PageId::InputPresetManager: return pages::inputPresetManagerPage();
     case PageId::InputPresetEditor: { static PageDefinition page; page = pages::inputPresetEditorPage(presetName, leftMode, rightMode); return page; }
-    case PageId::InputPresetDeleteConfirm: return pages::inputPresetDeleteConfirmPage();
     case PageId::About: return pages::aboutPage();
     case PageId::LeftStickCalibration: return pages::leftStickCalibrationPage();
     case PageId::LeftStickMod: { static PageDefinition page; page = pages::leftStickModPage(leftMode); return page; }
@@ -227,9 +225,10 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
     state.cursorSpeed = static_cast<std::uint16_t>(uiConfig.readInt(CursorSpeedKey, CursorSpeedDefault, CursorSpeedMinimum, CursorSpeedMaximum));
     state.calibration = {static_cast<std::uint8_t>(uiConfig.readInt(CalibrationKeys[0], LeftStickScaleDefaultPercent, LeftStickScaleMinimumPercent, LeftStickScaleMaximumPercent)), static_cast<std::uint8_t>(uiConfig.readInt(CalibrationKeys[1], LeftStickScaleDefaultPercent, LeftStickScaleMinimumPercent, LeftStickScaleMaximumPercent)), static_cast<std::uint8_t>(uiConfig.readInt(CalibrationKeys[2], LeftStickScaleDefaultPercent, LeftStickScaleMinimumPercent, LeftStickScaleMaximumPercent)), static_cast<std::uint8_t>(uiConfig.readInt(CalibrationKeys[3], LeftStickScaleDefaultPercent, LeftStickScaleMinimumPercent, LeftStickScaleMaximumPercent))};
     state.presetNames = InputPresetStore::names();
-    if (state.presetNames.empty())
+    if (!InputPresetStore::activeName())
     {
         InputPreset preset;
+        preset.name = "Config 1";
         preset.leftStickMode = state.mode; preset.rightStickMode = state.rightMode; preset.mphCameraSpeed = state.mphSpeed; preset.mphAutoReleaseDelayMs = state.mphAutoRelease;
         preset.sm64AutoCenterHoldFrames = state.autoFrames; preset.sm64AutoReleaseDelayMs = state.autoRelease; preset.sm64DpadDeadzonePercent = state.dpadDeadzone; preset.cursorSpeedLimit = state.cursorSpeed;
         preset.leftStickCalibration = {state.calibration.left, state.calibration.right, state.calibration.up, state.calibration.down};
@@ -238,7 +237,17 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
         state.presetNames = InputPresetStore::names();
     }
     state.activePreset = InputPresetStore::activeName().value_or(state.presetNames.empty() ? std::string{} : state.presetNames.front());
-    if (const std::optional<InputPreset> activePreset = InputPresetStore::load(state.activePreset))
+    std::optional<InputPreset> activePreset = InputPresetStore::load(state.activePreset);
+    if (!activePreset)
+    {
+        activePreset = InputPresetStore::defaultPreset();
+        std::string fallbackError;
+        if (!InputPresetStore::save(*activePreset, true, fallbackError))
+            Logger::error("Cannot restore Default input preset; continuing with built-in defaults: " + fallbackError);
+        state.activePreset = activePreset->name;
+        state.presetNames = InputPresetStore::names();
+    }
+    if (activePreset)
     {
         state.calibration = {
             activePreset->leftStickCalibration[0],
@@ -313,7 +322,7 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
                 continue;
             }
             if (pageId == PageId::Settings) return backResult;
-            pageId = (pageId == PageId::InputPresetEditor || pageId == PageId::InputPresetDeleteConfirm) ? PageId::InputPresetManager : PageId::Settings;
+            pageId = pageId == PageId::InputPresetEditor ? PageId::InputPresetManager : PageId::Settings;
             selected = 0;
             scroll = 0;
             editing = false;
@@ -380,26 +389,31 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
             if (field.action == ActionId::DiscardInputPreset && editing) { pageId = PageId::InputPresetManager; selected = 0; scroll = 0; editing = false; }
             if (field.action == ActionId::RequestDeleteInputPreset && editing)
             {
-                if (state.presetNames.size() <= 1) Logger::error("Cannot delete the last input preset");
-                else { pageId = PageId::InputPresetDeleteConfirm; selected = 0; scroll = 0; }
-            }
-            if (field.action == ActionId::ConfirmDeleteInputPreset && editing)
-            {
-                std::string presetError;
-                if (InputPresetStore::remove(editingPreset.name, presetError))
+                if (state.presetNames.size() <= 1)
                 {
-                    state.presetNames = InputPresetStore::names();
-                    if (state.activePreset == editingPreset.name && !state.presetNames.empty())
-                    {
-                        if (!InputPresetStore::setActive(state.presetNames.front(), presetError)) Logger::error("Cannot select fallback input preset: " + presetError);
-                        else state.activePreset = state.presetNames.front();
-                    }
-                    pageId = PageId::InputPresetManager;
-                    selected = 0;
-                    scroll = 0;
-                    editing = false;
+                    if (PopupScreen::cannotDeleteLastPreset(renderer, width, height, input) == PopupScreen::Result::Exit) return Result::Exit;
                 }
-                else Logger::error("Cannot delete input preset: " + presetError);
+                else
+                {
+                    const PopupScreen::Result popupResult = PopupScreen::confirmDelete(renderer, width, height, input);
+                    if (popupResult == PopupScreen::Result::Exit) return Result::Exit;
+                    if (popupResult != PopupScreen::Result::Delete) continue;
+                    std::string presetError;
+                    if (InputPresetStore::remove(editingPreset.name, presetError))
+                    {
+                        state.presetNames = InputPresetStore::names();
+                        if (state.activePreset == editingPreset.name && !state.presetNames.empty())
+                        {
+                            if (!InputPresetStore::setActive(state.presetNames.front(), presetError)) Logger::error("Cannot select fallback input preset: " + presetError);
+                            else state.activePreset = state.presetNames.front();
+                        }
+                        pageId = PageId::InputPresetManager;
+                        selected = 0;
+                        scroll = 0;
+                        editing = false;
+                    }
+                    else Logger::error("Cannot delete input preset: " + presetError);
+                }
             }
             if (field.type == FieldType::NavigationButton)
             {

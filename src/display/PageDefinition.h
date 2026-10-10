@@ -12,7 +12,6 @@ namespace widemelon::display
         Settings,
         InputPresetManager,
         InputPresetEditor,
-        InputPresetDeleteConfirm,
         About,
         LeftStickMod,
         RightStickMod,
@@ -84,7 +83,6 @@ namespace widemelon::display
         SaveInputPreset,
         DiscardInputPreset,
         RequestDeleteInputPreset,
-        ConfirmDeleteInputPreset,
         EditInputPreset,
         Quit
     };

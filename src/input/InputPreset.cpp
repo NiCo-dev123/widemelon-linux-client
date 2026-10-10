@@ -159,6 +159,13 @@ bool InputPresetStore::isValidName(std::string_view name)
     });
 }
 
+InputPreset InputPresetStore::defaultPreset()
+{
+    InputPreset preset;
+    preset.name = std::string(DefaultPresetName);
+    return preset;
+}
+
 std::optional<InputPreset> InputPresetStore::load(std::string_view name)
 {
     if (!isValidName(name)) return std::nullopt;
@@ -166,9 +173,12 @@ std::optional<InputPreset> InputPresetStore::load(std::string_view name)
     {
         const std::optional<std::string> document = readFile(presetPath(root, name));
         if (!document) continue;
-        return parse(*document);
+        const std::optional<InputPreset> preset = parse(*document);
+        if (preset && preset->name == name) return preset;
+        if (name == DefaultPresetName) return defaultPreset();
+        return std::nullopt;
     }
-    return std::nullopt;
+    return name == DefaultPresetName ? std::optional<InputPreset>(defaultPreset()) : std::nullopt;
 }
 
 std::optional<std::string> InputPresetStore::activeName()
@@ -189,7 +199,7 @@ std::optional<std::string> InputPresetStore::activeName()
 
 std::vector<std::string> InputPresetStore::names()
 {
-    std::vector<std::string> result;
+    std::vector<std::string> result{std::string(DefaultPresetName)};
     for (const std::filesystem::path &root : StorageRoots)
     {
         std::error_code error;
@@ -209,7 +219,13 @@ std::vector<std::string> InputPresetStore::names()
 std::optional<InputPreset> InputPresetStore::loadActive()
 {
     const std::optional<std::string> name = activeName();
-    return name ? load(*name) : std::nullopt;
+    if (!name) return std::nullopt;
+    if (const std::optional<InputPreset> preset = load(*name)) return preset;
+
+    InputPreset fallback = defaultPreset();
+    std::string error;
+    save(fallback, true, error);
+    return fallback;
 }
 
 bool InputPresetStore::save(const InputPreset &preset, bool makeActive, std::string &error)
@@ -237,6 +253,11 @@ bool InputPresetStore::save(const InputPreset &preset, bool makeActive, std::str
 
 bool InputPresetStore::rename(std::string_view previousName, std::string_view nextName, std::string &error)
 {
+    if (previousName == DefaultPresetName)
+    {
+        error = "The Default preset cannot be renamed";
+        return false;
+    }
     if (!isValidName(nextName))
     {
         error = "Invalid preset name";
@@ -283,6 +304,11 @@ bool InputPresetStore::remove(std::string_view name, std::string &error)
     if (!isValidName(name))
     {
         error = "Invalid preset name";
+        return false;
+    }
+    if (name == DefaultPresetName)
+    {
+        error = "The Default preset cannot be deleted";
         return false;
     }
 

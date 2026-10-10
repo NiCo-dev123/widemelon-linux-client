@@ -14,9 +14,12 @@ namespace widemelon::display
     class PopupScreen
     {
     public:
-        enum class Result { Save, Discard, Cancel, Exit };
+        enum class Result { Save, Discard, Delete, Cancel, Acknowledge, Exit };
 
         static Result saveChanges(SDL_Renderer *renderer, int width, int height, EvdevInput &input,
                                   std::string_view message = "Save changes?");
+        static Result confirmDelete(SDL_Renderer *renderer, int width, int height, EvdevInput &input,
+                                    std::string_view message = "Delete this preset?");
+        static Result cannotDeleteLastPreset(SDL_Renderer *renderer, int width, int height, EvdevInput &input);
     };
 }

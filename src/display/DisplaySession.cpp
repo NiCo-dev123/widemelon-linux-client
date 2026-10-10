@@ -195,10 +195,13 @@ namespace widemelon
             executable[static_cast<std::size_t>(length)] = 0;
             const std::string directory = std::filesystem::path(executable.data()).parent_path().string();
             const widemelon::display::UiConfig uiConfig = uiConfigFor(directory);
-            std::optional<widemelon::InputPreset> activePreset = widemelon::InputPresetStore::loadActive();
-            if (!activePreset)
+            const std::optional<std::string> activePresetName = widemelon::InputPresetStore::activeName();
+            std::optional<widemelon::InputPreset> activePreset = activePresetName
+                ? widemelon::InputPresetStore::load(*activePresetName) : std::nullopt;
+            if (!activePreset && !activePresetName)
             {
                 widemelon::InputPreset migrated;
+                migrated.name = "Config 1";
                 migrated.leftStickMode = uiConfig.readValue(UiConfigLeftStickModeKey).value_or("D-pad");
                 migrated.rightStickMode = uiConfig.readValue(UiConfigRightStickModeKey).value_or("Disabled");
                 migrated.mphCameraSpeed = static_cast<std::uint16_t>(uiConfig.readInt(UiConfigMphManualSpeedKey, widemelon::MphManualSpeedDefault, widemelon::MphManualSpeedMinimum, widemelon::MphManualSpeedMaximum));
@@ -220,6 +223,15 @@ namespace widemelon
                 }
                 else
                     Logger::error("Input preset migration warning: " + migrationError);
+            }
+            else if (!activePreset)
+            {
+                activePreset = widemelon::InputPresetStore::defaultPreset();
+                std::string fallbackError;
+                if (widemelon::InputPresetStore::save(*activePreset, true, fallbackError))
+                    Logger::info("Active input preset is unavailable; restored Default preset");
+                else
+                    Logger::error("Cannot restore Default input preset; continuing with built-in defaults: " + fallbackError);
             }
             if (!activePreset)
             {

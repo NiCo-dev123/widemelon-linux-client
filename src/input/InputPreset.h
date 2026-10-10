@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace widemelon
@@ -27,6 +28,9 @@ namespace widemelon
     class InputPresetStore
     {
     public:
+        static constexpr std::string_view DefaultPresetName{"Default"};
+
+        static InputPreset defaultPreset();
         static std::optional<InputPreset> load(std::string_view name);
         static std::optional<InputPreset> loadActive();
         static std::optional<std::string> activeName();
