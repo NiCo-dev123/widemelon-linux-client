@@ -43,6 +43,7 @@ namespace widemelon::display
         SDL_Texture *hintA = nullptr;
         SDL_Texture *hintB = nullptr;
         SDL_Texture *hintX = nullptr;
+        SDL_Texture *hintY = nullptr;
         SDL_Texture *hintStart = nullptr;
         SDL_Texture *hintL = nullptr;
         SDL_Texture *hintR = nullptr;
@@ -64,8 +65,10 @@ namespace widemelon::display
     void drawPill(SDL_Renderer *renderer, const SDL_Rect &rect, bool selected, bool numpad = false);
     void drawKeyboardKey(SDL_Renderer *renderer, const SDL_Rect &rect, bool selected);
     int textWidth(std::string_view text, int fontSize);
+    int symbolWidth(std::string_view symbol, int fontSize);
     void drawText(SDL_Renderer *renderer, std::string_view text, int x, int y, int fontSize);
     void drawTextColored(SDL_Renderer *renderer, std::string_view text, int x, int y, int fontSize, SDL_Color color);
+    void drawSymbol(SDL_Renderer *renderer, std::string_view symbol, int x, int y, int fontSize, SDL_Color color);
     int controlHintWidth(SDL_Texture *icon, std::string_view fallback, std::string_view label, int fontSize);
     int drawControlHint(SDL_Renderer *renderer, SDL_Texture *icon, std::string_view fallback,
                         std::string_view label, int x, int y, int fontSize);

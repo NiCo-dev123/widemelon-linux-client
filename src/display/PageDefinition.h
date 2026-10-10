@@ -25,6 +25,7 @@ namespace widemelon::display
         A,
         B,
         X,
+        Y,
         Start,
         L,
         R

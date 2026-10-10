@@ -29,6 +29,7 @@ enum class UiAction
     Delete,
     Back,
     Start,
+    Y,
 };
 
 class EvdevInput

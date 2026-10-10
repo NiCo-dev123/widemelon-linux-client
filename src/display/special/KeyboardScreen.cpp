@@ -2,11 +2,12 @@
 
 #include "display/ConfigScreen.h"
 #include "display/MenuNavigation.h"
+#include "display/PageDefinition.h"
 #include "display/UiTheme.h"
-#include "display/pages/NumpadPage.h"
 #include "input/EvdevInput.h"
 
 #include <array>
+#include <cctype>
 #include <string_view>
 
 namespace widemelon::display
@@ -17,38 +18,71 @@ namespace
     constexpr int KeySize = 80;
     constexpr int KeyStep = 98;
     constexpr int KeyStartY = 225;
-    const std::array<std::string_view, 39> Keys{
-        "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
-        "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
-        "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "SPACE", "-", "_",
+    enum class KeyType { Character, Space, Shift, ShiftLock };
+    struct Key { std::string_view value; KeyType type{KeyType::Character}; };
+    const std::array<Key, 39> Keys{
+        Key{"Q"}, Key{"W"}, Key{"E"}, Key{"R"}, Key{"T"}, Key{"Y"}, Key{"U"}, Key{"I"}, Key{"O"}, Key{"P"}, Key{"1"}, Key{"2"}, Key{"3"},
+        Key{"A"}, Key{"S"}, Key{"D"}, Key{"F"}, Key{"G"}, Key{"H"}, Key{"J"}, Key{"K"}, Key{"L"}, Key{"4"}, Key{"5"}, Key{"6"}, Key{"7"},
+        Key{"", KeyType::Shift}, Key{"Z"}, Key{"X"}, Key{"C"}, Key{"V"}, Key{"B"}, Key{"N"}, Key{"M"}, Key{"", KeyType::ShiftLock}, Key{"8"}, Key{"9"}, Key{"0"}, Key{"", KeyType::Space},
     };
 
     void render(SDL_Renderer *renderer, int width, int height, const std::string &title,
-                const std::string &value, int selectedKey)
+                const std::string &value, int selectedKey, bool shift, bool shiftLock)
     {
-        const PageDefinition page = pages::numpadPage(title);
+        const PageDefinition page{PageId::Numpad, title, {
+            {FooterItemType::Icon, FooterIcon::A, "SELECT"},
+            {FooterItemType::Icon, FooterIcon::B, "BACK"},
+            {FooterItemType::Icon, FooterIcon::Y, "DELETE"},
+            {FooterItemType::Icon, FooterIcon::Start, "OK"},
+        }, {}};
         const ThemeTextSettings &text = uiTextSettings();
         const UiTextures &textures = uiTextures();
         drawGradientBackground(renderer, width, height);
         drawText(renderer, page.title, (width - textWidth(page.title, text.titleFontSize)) / 2, 65, text.titleFontSize);
-        const std::string_view displayed = value.empty() ? "_" : value;
-        drawText(renderer, displayed, (width - textWidth(displayed, text.keyboardValueFontSize)) / 2, 125, text.keyboardValueFontSize);
+        if (!value.empty())
+            drawText(renderer, value, (width - textWidth(value, text.keyboardValueFontSize)) / 2, 125, text.keyboardValueFontSize);
         const int startX = (width - ((ColumnCount - 1) * KeyStep + KeySize)) / 2;
         for (std::size_t index = 0; index < Keys.size(); ++index)
         {
             const int row = static_cast<int>(index) / ColumnCount;
             const int column = static_cast<int>(index) % ColumnCount;
             const SDL_Rect key{startX + column * KeyStep, KeyStartY + row * KeySize, KeySize, KeySize};
-            drawKeyboardKey(renderer, key, static_cast<int>(index) == selectedKey);
-            const int fontSize = Keys[index] == "SPACE" ? text.keyboardActionFontSize : text.keyboardValueFontSize;
-            drawText(renderer, Keys[index], key.x + (key.w - textWidth(Keys[index], fontSize)) / 2,
-                     key.y + (key.h - fontSize) / 2, fontSize);
+            const Key &keyboardKey = Keys[index];
+            drawKeyboardKey(renderer, key, static_cast<int>(index) == selectedKey || (keyboardKey.type == KeyType::ShiftLock && shiftLock));
+            if (keyboardKey.type == KeyType::Shift || keyboardKey.type == KeyType::ShiftLock)
+            {
+                const std::string_view glyph = keyboardKey.type == KeyType::Shift ? "↑" : "↑↑";
+                drawSymbol(renderer, glyph, key.x + (key.w - symbolWidth(glyph, text.keyboardValueFontSize)) / 2,
+                           key.y + (key.h - text.keyboardValueFontSize) / 2, text.keyboardValueFontSize, uiPalette().primary);
+            }
+            else if (keyboardKey.type == KeyType::Space)
+            {
+                constexpr std::string_view label{"SPACE"};
+                drawText(renderer, label, key.x + (key.w - textWidth(label, text.keyboardActionFontSize)) / 2,
+                         key.y + (key.h - text.keyboardActionFontSize) / 2, text.keyboardActionFontSize);
+            }
+            else
+            {
+                std::string label(keyboardKey.value);
+                if (!(shift || shiftLock) && std::isalpha(static_cast<unsigned char>(label.front()))) label.front() = static_cast<char>(std::tolower(static_cast<unsigned char>(label.front())));
+                drawText(renderer, label, key.x + (key.w - textWidth(label, text.keyboardValueFontSize)) / 2,
+                         key.y + (key.h - text.keyboardValueFontSize) / 2, text.keyboardValueFontSize);
+            }
         }
-        int hintX = width / 2 - 190;
+        int total = 0;
+        for (const FooterItem &item : page.footer)
+        {
+            SDL_Texture *texture = item.icon == FooterIcon::A ? textures.hintA : item.icon == FooterIcon::B ? textures.hintB
+                : item.icon == FooterIcon::Y ? textures.hintY : textures.hintStart;
+            const std::string_view fallback = item.icon == FooterIcon::A ? "A" : item.icon == FooterIcon::B ? "B"
+                : item.icon == FooterIcon::Y ? "Y" : "START";
+            total += controlHintWidth(texture, fallback, item.text, text.hintFontSize);
+        }
+        int hintX = (width - total) / 2;
         const int hintY = height - 64;
         hintX = drawControlHint(renderer, textures.hintA, "A", page.footer[0].text, hintX, hintY, text.hintFontSize);
         hintX = drawControlHint(renderer, textures.hintB, "B", page.footer[1].text, hintX, hintY, text.hintFontSize);
-        hintX = drawControlHint(renderer, textures.hintX, "X", page.footer[2].text, hintX, hintY, text.hintFontSize);
+        hintX = drawControlHint(renderer, textures.hintY, "Y", page.footer[2].text, hintX, hintY, text.hintFontSize);
         drawControlHint(renderer, textures.hintStart, "START", page.footer[3].text, hintX, hintY, text.hintFontSize);
         SDL_RenderPresent(renderer);
     }
@@ -59,10 +93,12 @@ KeyboardScreen::Result KeyboardScreen::edit(SDL_Renderer *renderer, int width, i
 {
     const std::string original = value;
     int selectedKey = 0;
+    bool shift = false;
+    bool shiftLock = false;
     MenuNavigation navigation;
     while (true)
     {
-        render(renderer, width, height, title, value, selectedKey);
+        render(renderer, width, height, title, value, selectedKey, shift, shiftLock);
         input.pollEvent();
         if (input.exitComboPressed()) return Result::Exit;
         switch (navigation.nextAction(input.takeUiAction(), input.heldUiDirection()))
@@ -71,13 +107,26 @@ KeyboardScreen::Result KeyboardScreen::edit(SDL_Renderer *renderer, int width, i
         case UiAction::Down: selectedKey = (selectedKey + ColumnCount) % static_cast<int>(Keys.size()); break;
         case UiAction::Left: selectedKey = (selectedKey + static_cast<int>(Keys.size()) - 1) % static_cast<int>(Keys.size()); break;
         case UiAction::Right: selectedKey = (selectedKey + 1) % static_cast<int>(Keys.size()); break;
-        case UiAction::Delete: if (!value.empty()) value.pop_back(); break;
-        case UiAction::Back: value = original; return Result::Cancelled;
+        case UiAction::Delete: value = original; return Result::Cancelled;
+        case UiAction::Y: if (!value.empty()) value.pop_back(); break;
+        case UiAction::Back: break;
         case UiAction::Start: return Result::Accepted;
         case UiAction::Confirm:
         {
-            const std::string_view key = Keys[static_cast<std::size_t>(selectedKey)];
-            if (value.size() < maximumLength) value += key == "SPACE" ? std::string{" "} : std::string(key);
+            const Key &key = Keys[static_cast<std::size_t>(selectedKey)];
+            if (key.type == KeyType::Shift) shift = true;
+            else if (key.type == KeyType::ShiftLock) shiftLock = !shiftLock;
+            else if (value.size() < maximumLength)
+            {
+                if (key.type == KeyType::Space) value += ' ';
+                else
+                {
+                    char character = key.value.front();
+                    if (!(shift || shiftLock) && std::isalpha(static_cast<unsigned char>(character))) character = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+                    value += character;
+                }
+                shift = false;
+            }
             break;
         }
         default: break;

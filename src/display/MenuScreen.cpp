@@ -155,11 +155,11 @@ void multiline(SDL_Renderer *r, int x, int y, std::string_view value)
 SDL_Texture *icon(FooterIcon value)
 {
     const UiTextures &t = uiTextures();
-    switch (value) { case FooterIcon::A: return t.hintA; case FooterIcon::B: return t.hintB; case FooterIcon::X: return t.hintX; case FooterIcon::Start: return t.hintStart; case FooterIcon::L: return t.hintL; case FooterIcon::R: return t.hintR; }
+    switch (value) { case FooterIcon::A: return t.hintA; case FooterIcon::B: return t.hintB; case FooterIcon::X: return t.hintX; case FooterIcon::Y: return t.hintY; case FooterIcon::Start: return t.hintStart; case FooterIcon::L: return t.hintL; case FooterIcon::R: return t.hintR; }
     return nullptr;
 }
 const char *iconFallback(FooterIcon value)
-{ switch (value) { case FooterIcon::A: return "A"; case FooterIcon::B: return "B"; case FooterIcon::X: return "X"; case FooterIcon::Start: return "START"; case FooterIcon::L: return "L"; case FooterIcon::R: return "R"; } return ""; }
+{ switch (value) { case FooterIcon::A: return "A"; case FooterIcon::B: return "B"; case FooterIcon::X: return "X"; case FooterIcon::Y: return "Y"; case FooterIcon::Start: return "START"; case FooterIcon::L: return "L"; case FooterIcon::R: return "R"; } return ""; }
 
 void render(SDL_Renderer *renderer, int width, int height, const PageDefinition &page, const Config &config,
             const MenuState &state, const std::vector<MenuEntry> &entries, int selected, int scroll)
