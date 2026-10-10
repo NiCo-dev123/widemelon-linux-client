@@ -177,6 +177,49 @@ namespace widemelon
         auto sm64ModeEnabled = [&] { return sm64Enabled || sm64ManualEnabled || cursorEnabled || rightCursorEnabled || mphManualEnabled; };
         auto sm64TouchState = [&]() -> const Sm64TouchState&
         { return mphManualEnabled ? mphManualStick.touchState() : ((cursorEnabled || rightCursorEnabled) ? cursorStick.touchState() : (sm64ManualEnabled ? sm64ManualStick.touchState() : sm64Stick.touchState())); };
+        auto reloadStickMods = [&]
+        {
+            std::array<char, 4096> executable{};
+            const ssize_t length = readlink("/proc/self/exe", executable.data(), executable.size() - 1);
+            if (length <= 0)
+            {
+                Logger::error("Cannot reload stick configuration: cannot resolve executable path");
+                return;
+            }
+
+            executable[static_cast<std::size_t>(length)] = 0;
+            const std::string directory = std::filesystem::path(executable.data()).parent_path().string();
+            const widemelon::display::UiConfig uiConfig = uiConfigFor(directory);
+            const std::string leftStickMode = uiConfig.readValue(UiConfigLeftStickModeKey).value_or("D-pad");
+            const std::string rightStickMode = uiConfig.readValue(UiConfigRightStickModeKey).value_or("Disabled");
+            leftStickCalibration.left = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleLeftKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent));
+            leftStickCalibration.right = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleRightKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent));
+            leftStickCalibration.up = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleUpKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent));
+            leftStickCalibration.down = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleDownKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent));
+            sm64Enabled = leftStickMode == "SM64 Auto" || leftStickMode == "SM64";
+            sm64ManualEnabled = leftStickMode == "SM64 Manual";
+            cursorEnabled = leftStickMode == "Cursor";
+            rightCursorEnabled = rightStickMode == "Cursor";
+            mphManualEnabled = rightStickMode == "MPH Manual";
+            sm64DpadEnabled = leftStickMode == "SM64 D-pad";
+            sm64Stick.setCenterHoldFrames(static_cast<std::uint8_t>(uiConfig.readInt(UiConfigSm64AutoFramesKey, widemelon::Sm64TouchCenterHoldFramesDefault,
+                                                                                      widemelon::Sm64TouchCenterHoldFramesMinimum, widemelon::Sm64TouchCenterHoldFramesMaximum)));
+            sm64Stick.setReleaseDelayMs(static_cast<std::uint16_t>(uiConfig.readInt(UiConfigSm64AutoReleaseDelayKey, widemelon::Sm64TouchReleaseDelayDefaultMs,
+                                                                                     widemelon::Sm64TouchReleaseDelayMinimumMs, widemelon::Sm64TouchReleaseDelayMaximumMs)));
+            sm64Stick.setEnabled(sm64Enabled);
+            sm64ManualStick.setEnabled(sm64ManualEnabled);
+            cursorStick.setSpeedLimit(static_cast<std::uint16_t>(uiConfig.readInt(UiConfigCursorSpeedKey, widemelon::CursorSpeedDefault,
+                                                                                   widemelon::CursorSpeedMinimum, widemelon::CursorSpeedMaximum)));
+            cursorStick.setEnabled(cursorEnabled || rightCursorEnabled);
+            mphManualStick.setSpeed(static_cast<std::uint16_t>(uiConfig.readInt(UiConfigMphManualSpeedKey, widemelon::MphManualSpeedDefault, widemelon::MphManualSpeedMinimum, widemelon::MphManualSpeedMaximum)));
+            mphManualStick.setEnabled(mphManualEnabled);
+            sm64Dpad.setDeadzonePercent(static_cast<std::uint8_t>(uiConfig.readInt(UiConfigSm64DpadDeadzoneKey, widemelon::Sm64DpadDeadzoneDefaultPercent,
+                                                                                     widemelon::Sm64DpadDeadzoneMinimumPercent, widemelon::Sm64DpadDeadzoneMaximumPercent)));
+            sm64Dpad.setEnabled(sm64DpadEnabled);
+            exitInput.setLeftStickDpadEnabled(leftStickMode == "D-pad" || sm64DpadEnabled);
+            if (sm64DpadEnabled) exitInput.setLeftStickDpadThresholdFraction(widemelon::Sm64DpadDirectionalThreshold);
+            Logger::info("Stick configuration reloaded: left=" + leftStickMode + ", right=" + rightStickMode);
+        };
         std::future<std::string> connection;
         if (!inputTest)
         {
@@ -217,52 +260,7 @@ namespace widemelon
             }
         }
 
-        if (!inputTest)
-        {
-            std::array<char, 4096> executable{};
-            const ssize_t length = readlink("/proc/self/exe", executable.data(), executable.size() - 1);
-            if (length > 0)
-            {
-                executable[static_cast<std::size_t>(length)] = 0;
-                const std::string directory = std::filesystem::path(executable.data()).parent_path().string();
-                const widemelon::display::UiConfig uiConfig = uiConfigFor(directory);
-                const std::string leftStickMode = uiConfig.readValue(UiConfigLeftStickModeKey).value_or("D-pad");
-                const std::string rightStickMode = uiConfig.readValue(UiConfigRightStickModeKey).value_or("Disabled");
-                leftStickCalibration.left = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleLeftKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent));
-                leftStickCalibration.right = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleRightKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent));
-                leftStickCalibration.up = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleUpKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent));
-                leftStickCalibration.down = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleDownKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent));
-                sm64Enabled = leftStickMode == "SM64 Auto" || leftStickMode == "SM64";
-                sm64ManualEnabled = leftStickMode == "SM64 Manual";
-                cursorEnabled = leftStickMode == "Cursor";
-                rightCursorEnabled = rightStickMode == "Cursor";
-                mphManualEnabled = rightStickMode == "MPH Manual";
-                sm64DpadEnabled = leftStickMode == "SM64 D-pad";
-                sm64Stick.setCenterHoldFrames(static_cast<std::uint8_t>(uiConfig.readInt(UiConfigSm64AutoFramesKey, widemelon::Sm64TouchCenterHoldFramesDefault,
-                                                                                          widemelon::Sm64TouchCenterHoldFramesMinimum, widemelon::Sm64TouchCenterHoldFramesMaximum)));
-                sm64Stick.setReleaseDelayMs(static_cast<std::uint16_t>(uiConfig.readInt(UiConfigSm64AutoReleaseDelayKey, widemelon::Sm64TouchReleaseDelayDefaultMs,
-                                                                                         widemelon::Sm64TouchReleaseDelayMinimumMs, widemelon::Sm64TouchReleaseDelayMaximumMs)));
-                sm64Stick.setEnabled(sm64Enabled);
-                sm64ManualStick.setEnabled(sm64ManualEnabled);
-                cursorStick.setSpeedLimit(static_cast<std::uint16_t>(uiConfig.readInt(UiConfigCursorSpeedKey, widemelon::CursorSpeedDefault,
-                                                                                       widemelon::CursorSpeedMinimum, widemelon::CursorSpeedMaximum)));
-                cursorStick.setEnabled(cursorEnabled || rightCursorEnabled);
-                mphManualStick.setSpeed(static_cast<std::uint16_t>(uiConfig.readInt(UiConfigMphManualSpeedKey, widemelon::MphManualSpeedDefault, widemelon::MphManualSpeedMinimum, widemelon::MphManualSpeedMaximum)));
-                mphManualStick.setEnabled(mphManualEnabled);
-                sm64Dpad.setDeadzonePercent(static_cast<std::uint8_t>(uiConfig.readInt(UiConfigSm64DpadDeadzoneKey, widemelon::Sm64DpadDeadzoneDefaultPercent,
-                                                                                         widemelon::Sm64DpadDeadzoneMinimumPercent, widemelon::Sm64DpadDeadzoneMaximumPercent)));
-                sm64Dpad.setEnabled(sm64DpadEnabled);
-                exitInput.setLeftStickDpadEnabled(leftStickMode == "D-pad" || sm64DpadEnabled);
-                if (sm64DpadEnabled) exitInput.setLeftStickDpadThresholdFraction(widemelon::Sm64DpadDirectionalThreshold);
-                if (sm64Enabled) Logger::info("SM64 Auto stick mod enabled");
-                if (sm64ManualEnabled) Logger::info("SM64 Manual stick mod enabled");
-                if (cursorEnabled) Logger::info("Cursor stick mod enabled");
-                if (rightCursorEnabled) Logger::info("Right cursor stick mod enabled");
-                if (mphManualEnabled) Logger::info("MPH Manual stick mod enabled");
-                if (sm64DpadEnabled) Logger::info("SM64 D-pad stick mod enabled");
-                if (leftStickMode == "Disabled") Logger::info("Left stick disabled");
-            }
-        }
+        if (!inputTest) reloadStickMods();
 
         std::string status = inputTest ? "INPUT TEST ACTIVE" : "CONNECTION OK";
         if (inputTest)
@@ -317,6 +315,7 @@ namespace widemelon
                 }
                 else
                 {
+                    reloadStickMods();
                     widemelon::display::GameplayScreen::render(renderer, width, height, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
                 }
                 continue;
