@@ -250,4 +250,29 @@ bool InputPresetStore::setActive(std::string_view name, std::string &error)
     }
     return false;
 }
+
+bool InputPresetStore::remove(std::string_view name, std::string &error)
+{
+    if (!isValidName(name))
+    {
+        error = "Invalid preset name";
+        return false;
+    }
+
+    std::error_code removeError;
+    for (const std::filesystem::path &root : StorageRoots)
+    {
+        const std::filesystem::path path = presetPath(root, name);
+        if (!std::filesystem::exists(path, removeError)) continue;
+        if (removeError || !std::filesystem::remove(path, removeError))
+        {
+            error = root.string() + ": Cannot remove preset file";
+            return false;
+        }
+        return true;
+    }
+
+    error = "Preset does not exist";
+    return false;
+}
 }

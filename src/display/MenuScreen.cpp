@@ -12,6 +12,7 @@
 #include "display/pages/AboutPage.h"
 #include "display/pages/InputPresetManagerPage.h"
 #include "display/pages/InputPresetEditorPage.h"
+#include "display/pages/InputPresetDeleteConfirmPage.h"
 #include "display/pages/LeftStickCalibrationPage.h"
 #include "display/pages/LeftStickModPage.h"
 #include "display/pages/RightStickModPage.h"
@@ -64,7 +65,8 @@ const PageDefinition &pageDefinition(PageId id, std::string_view leftMode, std::
     case PageId::Home: return pages::homePage();
     case PageId::Settings: return pages::settingsPage();
     case PageId::InputPresetManager: return pages::inputPresetManagerPage();
-    case PageId::InputPresetEditor: return pages::inputPresetEditorPage();
+    case PageId::InputPresetEditor: { static PageDefinition page; page = pages::inputPresetEditorPage(leftMode, rightMode); return page; }
+    case PageId::InputPresetDeleteConfirm: return pages::inputPresetDeleteConfirmPage();
     case PageId::About: return pages::aboutPage();
     case PageId::LeftStickCalibration: return pages::leftStickCalibrationPage();
     case PageId::LeftStickMod: { static PageDefinition page; page = pages::leftStickModPage(leftMode); return page; }
@@ -188,10 +190,14 @@ std::vector<std::string> themes(const std::string &directory)
 UiConfig configFor(const std::string &directory) { return UiConfig(std::filesystem::path(directory) / "widemelon-client-ui.conf"); }
 std::string executableDirectory() { std::array<char, 4096> path{}; const ssize_t length = readlink("/proc/self/exe", path.data(), path.size() - 1); return length > 0 ? std::filesystem::path(std::string(path.data(), static_cast<std::size_t>(length))).parent_path().string() : std::string{}; }
 
-void updateRange(const FieldDefinition &field, int direction, MenuState &state, const UiConfig &config)
+void updateRange(const FieldDefinition &field, int direction, MenuState &state, const UiConfig &config, bool persistLegacyConfig)
 {
     const int minimum = field.minimum, maximum = field.maximum, step = field.step * direction;
-    auto update = [&](std::string_view key, auto &target) { const int value = std::clamp(static_cast<int>(target) + step, minimum, maximum); if (config.writeInt(key, value, minimum, maximum)) target = static_cast<std::decay_t<decltype(target)>>(value); };
+    auto update = [&](std::string_view key, auto &target)
+    {
+        const int value = std::clamp(static_cast<int>(target) + step, minimum, maximum);
+        if (!persistLegacyConfig || config.writeInt(key, value, minimum, maximum)) target = static_cast<std::decay_t<decltype(target)>>(value);
+    };
     switch (field.value) {
     case ValueId::Sm64AutoDelayFrames: update(AutoFramesKey, state.autoFrames); break;
     case ValueId::Sm64AutoReleaseDelayMs: update(AutoReleaseKey, state.autoRelease); break;
@@ -231,13 +237,23 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
     }
     state.activePreset = InputPresetStore::activeName().value_or(state.presetNames.empty() ? std::string{} : state.presetNames.front());
     const std::array<std::string, 6> modes{"Disabled", "D-pad", "SM64 Auto", "SM64 Manual", "SM64 D-pad", "Cursor"};
+    InputPreset editingPreset;
+    bool editing = false;
     PageId pageId = PageId::Settings; int selected = 0, scroll = 0; MenuNavigation navigation;
     while (true) {
         const PageDefinition &page = pageDefinition(pageId, state.mode, state.rightMode); const std::vector<MenuEntry> entries = entriesFor(page); const auto nav = navigationItems(entries);
         if (selected < 0 || selected >= static_cast<int>(nav.size()) || !nav[static_cast<std::size_t>(selected)].selectable) selected = firstSelectable(nav);
         scroll = MenuNavigation::scrollOffsetForSelection(nav, selected, scroll, footerTop(height) - UiMenuItemGap - listTop()); render(renderer, width, height, page, config, state, entries, selected, scroll);
         input.pollEvent(); if (input.exitComboPressed()) return Result::Exit; const UiAction action = navigation.nextAction(input.takeUiAction(), input.heldUiDirection());
-        if (action == UiAction::Back || action == UiAction::Delete) { if (pageId == PageId::Settings) return backResult; pageId = PageId::Settings; selected = 0; scroll = 0; continue; }
+        if (action == UiAction::Back || action == UiAction::Delete)
+        {
+            if (pageId == PageId::Settings) return backResult;
+            pageId = (pageId == PageId::InputPresetEditor || pageId == PageId::InputPresetDeleteConfirm) ? PageId::InputPresetManager : PageId::Settings;
+            selected = 0;
+            scroll = 0;
+            editing = false;
+            continue;
+        }
         if (action == UiAction::Up || action == UiAction::Down) { selected = MenuNavigation::nextSelection(nav, selected, action == UiAction::Up ? -1 : 1); SDL_Delay(10); continue; }
         if (selected < 0 || selected >= static_cast<int>(entries.size())) { SDL_Delay(10); continue; }
         const FieldDefinition &field = *entries[static_cast<std::size_t>(selected)].field;
@@ -245,9 +261,9 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
             const int direction = action == UiAction::Left ? -1 : 1;
             if (field.value == ValueId::ActiveTheme) { auto it = std::find(availableThemes.begin(), availableThemes.end(), state.theme); const int index = it == availableThemes.end() ? 0 : static_cast<int>(std::distance(availableThemes.begin(), it)); state.theme = availableThemes[static_cast<std::size_t>((index + direction + static_cast<int>(availableThemes.size())) % static_cast<int>(availableThemes.size()))]; if (uiConfig.writeValue(ThemeKey, state.theme)) reloadUiResources(renderer); }
             else if (field.value == ValueId::ActiveInputPreset && !state.presetNames.empty()) { auto it = std::find(state.presetNames.begin(), state.presetNames.end(), state.activePreset); const int index = it == state.presetNames.end() ? 0 : static_cast<int>(std::distance(state.presetNames.begin(), it)); const std::string next = state.presetNames[static_cast<std::size_t>((index + direction + static_cast<int>(state.presetNames.size())) % static_cast<int>(state.presetNames.size()))]; std::string presetError; if (InputPresetStore::setActive(next, presetError)) state.activePreset = next; else Logger::error("Cannot select input preset: " + presetError); }
-            else if (field.value == ValueId::LeftStickMode) { auto it = std::find(modes.begin(), modes.end(), state.mode); const int index = it == modes.end() ? 0 : static_cast<int>(std::distance(modes.begin(), it)); state.mode = modes[static_cast<std::size_t>((index + direction + static_cast<int>(modes.size())) % static_cast<int>(modes.size()))]; uiConfig.writeValue(ModeKey, state.mode); }
-            else if (field.value == ValueId::RightStickMode) { static const std::array<std::string, 4> rightModes{"Disabled", "Cursor", "MPH Manual", "MPH Auto"}; auto it = std::find(rightModes.begin(), rightModes.end(), state.rightMode); const int index = it == rightModes.end() ? 0 : static_cast<int>(std::distance(rightModes.begin(), it)); state.rightMode = rightModes[static_cast<std::size_t>((index + direction + static_cast<int>(rightModes.size())) % static_cast<int>(rightModes.size()))]; uiConfig.writeValue(RightModeKey, state.rightMode); }
-            else updateRange(field, direction, state, uiConfig);
+            else if (field.value == ValueId::LeftStickMode) { auto it = std::find(modes.begin(), modes.end(), state.mode); const int index = it == modes.end() ? 0 : static_cast<int>(std::distance(modes.begin(), it)); state.mode = modes[static_cast<std::size_t>((index + direction + static_cast<int>(modes.size())) % static_cast<int>(modes.size()))]; if (!editing) uiConfig.writeValue(ModeKey, state.mode); }
+            else if (field.value == ValueId::RightStickMode) { static const std::array<std::string, 4> rightModes{"Disabled", "Cursor", "MPH Manual", "MPH Auto"}; auto it = std::find(rightModes.begin(), rightModes.end(), state.rightMode); const int index = it == rightModes.end() ? 0 : static_cast<int>(std::distance(rightModes.begin(), it)); state.rightMode = rightModes[static_cast<std::size_t>((index + direction + static_cast<int>(rightModes.size())) % static_cast<int>(rightModes.size()))]; if (!editing) uiConfig.writeValue(RightModeKey, state.rightMode); }
+            else updateRange(field, direction, state, uiConfig, !editing);
         } else if (action == UiAction::Confirm) {
             if (field.action == ActionId::Quit) return Result::Exit;
             if (field.action == ActionId::NewInputPreset)
@@ -262,9 +278,47 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
                 if (InputPresetStore::save(preset, true, presetError)) { state.presetNames = InputPresetStore::names(); state.activePreset = preset.name; }
                 else Logger::error("Cannot create input preset: " + presetError);
             }
+            if (field.action == ActionId::SaveInputPreset && editing)
+            {
+                editingPreset.leftStickMode = state.mode; editingPreset.rightStickMode = state.rightMode; editingPreset.mphCameraSpeed = state.mphSpeed; editingPreset.mphAutoReleaseDelayMs = state.mphAutoRelease;
+                editingPreset.sm64AutoCenterHoldFrames = state.autoFrames; editingPreset.sm64AutoReleaseDelayMs = state.autoRelease; editingPreset.sm64DpadDeadzonePercent = state.dpadDeadzone; editingPreset.cursorSpeedLimit = state.cursorSpeed;
+                editingPreset.leftStickCalibration = {state.calibration.left, state.calibration.right, state.calibration.up, state.calibration.down};
+                std::string presetError;
+                if (InputPresetStore::save(editingPreset, editingPreset.name == state.activePreset, presetError)) { pageId = PageId::InputPresetManager; selected = 0; scroll = 0; editing = false; }
+                else Logger::error("Cannot save input preset: " + presetError);
+            }
+            if (field.action == ActionId::DiscardInputPreset && editing) { pageId = PageId::InputPresetManager; selected = 0; scroll = 0; editing = false; }
+            if (field.action == ActionId::RequestDeleteInputPreset && editing)
+            {
+                if (state.presetNames.size() <= 1) Logger::error("Cannot delete the last input preset");
+                else { pageId = PageId::InputPresetDeleteConfirm; selected = 0; scroll = 0; }
+            }
+            if (field.action == ActionId::ConfirmDeleteInputPreset && editing)
+            {
+                std::string presetError;
+                if (InputPresetStore::remove(editingPreset.name, presetError))
+                {
+                    state.presetNames = InputPresetStore::names();
+                    if (state.activePreset == editingPreset.name && !state.presetNames.empty())
+                    {
+                        if (!InputPresetStore::setActive(state.presetNames.front(), presetError)) Logger::error("Cannot select fallback input preset: " + presetError);
+                        else state.activePreset = state.presetNames.front();
+                    }
+                    pageId = PageId::InputPresetManager;
+                    selected = 0;
+                    scroll = 0;
+                    editing = false;
+                }
+                else Logger::error("Cannot delete input preset: " + presetError);
+            }
             if (field.type == FieldType::NavigationButton)
             {
                 if (field.destination == PageId::Home) { if (pageId == PageId::Settings) return backResult; pageId = PageId::Settings; }
+                else if (field.destination == PageId::InputPresetEditor) {
+                    const std::optional<InputPreset> preset = InputPresetStore::load(state.activePreset);
+                    if (preset) { editingPreset = *preset; state.mode = preset->leftStickMode; state.rightMode = preset->rightStickMode; state.mphSpeed = preset->mphCameraSpeed; state.mphAutoRelease = preset->mphAutoReleaseDelayMs; state.autoFrames = preset->sm64AutoCenterHoldFrames; state.autoRelease = preset->sm64AutoReleaseDelayMs; state.dpadDeadzone = preset->sm64DpadDeadzonePercent; state.cursorSpeed = preset->cursorSpeedLimit; state.calibration = {preset->leftStickCalibration[0], preset->leftStickCalibration[1], preset->leftStickCalibration[2], preset->leftStickCalibration[3]}; editing = true; pageId = field.destination; selected = 0; scroll = 0; }
+                    else Logger::error("Cannot load selected input preset");
+                }
                 else if (field.destination != pageId) { pageId = field.destination; selected = 0; scroll = 0; }
             }
         }
