@@ -14,7 +14,7 @@ namespace widemelon::display
 {
     namespace
     {
-        constexpr int ColumnCount = 13;
+        constexpr int ColumnCount = 10;
         constexpr int KeySize = 80;
         constexpr int KeyStep = 98;
         constexpr int KeyStartY = 225;
@@ -106,9 +106,7 @@ namespace widemelon::display
                 }
                 else if (keyboardKey.type == KeyType::Space)
                 {
-                    constexpr std::string_view label{"SPACE"};
-                    drawText(renderer, label, key.x + (key.w - textWidth(label, text.keyboardActionFontSize)) / 2,
-                             key.y + (key.h - text.keyboardActionFontSize) / 2, text.keyboardActionFontSize);
+                    // A blank key is less visually noisy than a text label for space.
                 }
                 else
                 {
