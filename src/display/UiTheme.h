@@ -36,8 +36,8 @@ namespace widemelon::display
         SDL_Texture *gameplayBackground = nullptr;
         SDL_Texture *fieldSelected = nullptr;
         SDL_Texture *fieldUnselected = nullptr;
-        SDL_Texture *keyboardSelected = nullptr;
-        SDL_Texture *keyboardUnselected = nullptr;
+        SDL_Texture *numpadSelected = nullptr;
+        SDL_Texture *numpadUnselected = nullptr;
         SDL_Texture *hintA = nullptr;
         SDL_Texture *hintB = nullptr;
         SDL_Texture *hintX = nullptr;
@@ -59,7 +59,7 @@ namespace widemelon::display
 
     void drawBackground(SDL_Renderer *renderer, int width, int height, bool gameplay);
     void drawGradientBackground(SDL_Renderer *renderer, int width, int height);
-    void drawPill(SDL_Renderer *renderer, const SDL_Rect &rect, bool selected, bool keyboard = false);
+    void drawPill(SDL_Renderer *renderer, const SDL_Rect &rect, bool selected, bool numpad = false);
     int textWidth(std::string_view text, int fontSize);
     void drawText(SDL_Renderer *renderer, std::string_view text, int x, int y, int fontSize);
     void drawTextColored(SDL_Renderer *renderer, std::string_view text, int x, int y, int fontSize, SDL_Color color);

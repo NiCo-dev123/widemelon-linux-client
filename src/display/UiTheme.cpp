@@ -156,7 +156,7 @@ namespace
     {
         SDL_DestroyTexture(textures.background); SDL_DestroyTexture(textures.gameplayBackground);
         SDL_DestroyTexture(textures.fieldSelected); SDL_DestroyTexture(textures.fieldUnselected);
-        SDL_DestroyTexture(textures.keyboardSelected); SDL_DestroyTexture(textures.keyboardUnselected);
+        SDL_DestroyTexture(textures.numpadSelected); SDL_DestroyTexture(textures.numpadUnselected);
         SDL_DestroyTexture(textures.hintA); SDL_DestroyTexture(textures.hintB); SDL_DestroyTexture(textures.hintX);
         SDL_DestroyTexture(textures.hintStart); SDL_DestroyTexture(textures.hintL); SDL_DestroyTexture(textures.hintR);
         SDL_DestroyTexture(textures.cursor);
@@ -260,8 +260,8 @@ void loadUiResources(SDL_Renderer *renderer)
     loadTexture(renderer, textures.gameplayBackground, assets + "backgrounds/background-gameplay.png");
     loadTexture(renderer, textures.fieldSelected, assets + "icons/field-input-selected.png");
     loadTexture(renderer, textures.fieldUnselected, assets + "icons/field-input-unselected.png");
-    loadTexture(renderer, textures.keyboardSelected, assets + "icons/keyboard-selected.png");
-    loadTexture(renderer, textures.keyboardUnselected, assets + "icons/keyboard-unselected.png");
+    loadTexture(renderer, textures.numpadSelected, assets + "icons/numpad-selected.png");
+    loadTexture(renderer, textures.numpadUnselected, assets + "icons/numpad-unselected.png");
     loadTexture(renderer, textures.hintA, assets + "icons/hint-A.png"); loadTexture(renderer, textures.hintB, assets + "icons/hint-B.png");
     loadTexture(renderer, textures.hintX, assets + "icons/hint-X.png"); loadTexture(renderer, textures.hintStart, assets + "icons/hint-START.png");
     loadTexture(renderer, textures.hintL, assets + "icons/hint-L.png"); loadTexture(renderer, textures.hintR, assets + "icons/hint-R.png");
@@ -321,10 +321,10 @@ void drawBackground(SDL_Renderer *renderer, int width, int height, bool gameplay
 
 void drawGradientBackground(SDL_Renderer *renderer, int width, int height) { drawBackground(renderer, width, height, false); }
 
-void drawPill(SDL_Renderer *renderer, const SDL_Rect &rect, bool selected, bool keyboard)
+void drawPill(SDL_Renderer *renderer, const SDL_Rect &rect, bool selected, bool numpad)
 {
 #ifdef WIDEMELON_HAVE_SDL_IMAGE
-    SDL_Texture *texture = keyboard ? (selected ? textures.keyboardSelected : textures.keyboardUnselected)
+    SDL_Texture *texture = numpad ? (selected ? textures.numpadSelected : textures.numpadUnselected)
                                   : (selected ? textures.fieldSelected : textures.fieldUnselected);
     if (texture) { SDL_RenderCopy(renderer, texture, nullptr, &rect); return; }
 #endif
