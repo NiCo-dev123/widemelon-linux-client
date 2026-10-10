@@ -20,7 +20,7 @@ namespace widemelon::display::pages
                 {"Navigation", {}, {{FieldType::NavigationButton, "Back", ValueId::None, PageId::Settings}}},
             },
         };
-        if (mode == "MPH Manual")
+        if (mode == "MPH Manual" || mode == "MPH Auto")
             page.sections.insert(page.sections.end() - 1, {"", {}, {{FieldType::Range, "MPH camera speed", ValueId::MphManualSpeed, PageId::Home, ActionId::None, MphManualSpeedMinimum, MphManualSpeedMaximum, MphManualSpeedStep}}});
         return page;
     }
