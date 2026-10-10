@@ -1,0 +1,17 @@
+{
+    "preset name" : "preset 1",
+    "left stick mode" : "Cursor",
+    "right stick mode" : "Disabled",
+    "key mapping" : [
+        {"key":"L3",
+        "input":"screen press",
+        "X coordinate": 10,
+        "Y coordinater" : 10},
+        {"key":"R3",
+        "input":"select"},
+        {"key":"B",
+        "input":"A"},
+        {"key":"A",
+        "input":"B"}
+    ]
+}

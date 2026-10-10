@@ -14,14 +14,15 @@ namespace widemelon::display::pages
             },
             {
                 {"Theme", {}, {{FieldType::Choice, {}, ValueId::ActiveTheme}}},
-                {"Analog sticks", {}, {
-                    {FieldType::NavigationButton, "Left stick mod", ValueId::None, PageId::LeftStickMod},
+                {"Input mapping", {}, {
+                    {FieldType::NavigationButton, "Input presets", ValueId::None, PageId::InputPresetManager},
                     {FieldType::NavigationButton, "Left stick calibration", ValueId::None, PageId::LeftStickCalibration},
                 }},
                 {"Navigation", {}, {
                     {FieldType::NavigationButton, "Back", ValueId::None, PageId::Home},
                     {FieldType::ActionButton, "Quit", ValueId::None, PageId::Home, ActionId::Quit},
                 }},
+                {"More", {}, {{FieldType::NavigationButton, "About this app", ValueId::None, PageId::About}}},
             },
         };
         return page;

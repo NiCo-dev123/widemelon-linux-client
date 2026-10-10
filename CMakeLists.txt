@@ -19,15 +19,29 @@ add_executable(widemelon-client
     src/config/Config.cpp
     src/display/ConfigScreen.cpp
     src/display/DisplaySession.cpp
+    src/display/special/GameplayScreen.cpp
+    src/display/special/KeyboardScreen.cpp
     src/display/MenuNavigation.cpp
+    src/display/MenuScreen.cpp
+    src/display/special/NumpadScreen.cpp
+    src/display/special/PopupScreen.cpp
     src/display/PageRenderer.cpp
+    src/display/UiConfig.cpp
+    src/display/UiTheme.cpp
     src/display/pages/HomePage.cpp
+    src/display/pages/AboutPage.cpp
+    src/display/pages/InputPresetManagerPage.cpp
+    src/display/pages/InputPresetEditorPage.cpp
     src/display/pages/LeftStickCalibrationPage.cpp
     src/display/pages/LeftStickModPage.cpp
+    src/display/pages/RightStickModPage.cpp
     src/display/pages/NumpadPage.cpp
     src/display/pages/SettingsPage.cpp
     src/input/EvdevInput.cpp
+    src/input/InputPreset.cpp
     src/input/LeftStickCalibration.cpp
+    src/input/MphAutoStickMod.cpp
+    src/input/MphManualStickMod.cpp
     src/input/CursorStickMod.cpp
     src/input/Sm64DpadMod.cpp
     src/input/Sm64ManualStickMod.cpp

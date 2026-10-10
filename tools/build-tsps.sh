@@ -39,11 +39,12 @@ if [[ "${app_dir}" == "${project_dir}" || "${app_dir}" == "/" ]]; then
     exit 1
 fi
 rm -rf "${app_dir}"
-mkdir -p "${lib_dir}" "${themes_dir}" "${app_dir}/assets/icons"
+mkdir -p "${lib_dir}" "${themes_dir}" "${app_dir}/assets/icons" "${app_dir}/assets/fonts"
 cp "${project_dir}/${BUILD_DIR}/widemelon-client" "${app_dir}/widemelon-client"
 cp "${project_dir}/packaging/spruce/WideMelonClient/config.json" "${project_dir}/packaging/spruce/WideMelonClient/launch.sh" "${app_dir}/"
 cp "${project_dir}/assets/appIcon/wmclient.png" "${app_dir}/wmclient.png"
 find "${project_dir}/assets/icons" -maxdepth 1 -type f -name "*.png" -exec cp {} "${app_dir}/assets/icons/" \;
+find "${project_dir}/assets/fonts" -maxdepth 1 -type f -name "*.ttf" -exec cp {} "${app_dir}/assets/fonts/" \;
 
 for source_theme in "${themes_source_dir}"/*; do
     [[ -d "${source_theme}" ]] || continue

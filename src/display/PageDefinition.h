@@ -10,7 +10,11 @@ namespace widemelon::display
     {
         Home,
         Settings,
+        InputPresetManager,
+        InputPresetEditor,
+        About,
         LeftStickMod,
+        RightStickMod,
         LeftStickCalibration,
         Numpad
     };
@@ -20,6 +24,7 @@ namespace widemelon::display
         A,
         B,
         X,
+        Y,
         Start,
         L,
         R
@@ -54,7 +59,11 @@ namespace widemelon::display
         Port,
         PairingCode,
         ActiveTheme,
+        ActiveInputPreset,
         LeftStickMode,
+        RightStickMode,
+        MphManualSpeed,
+        MphAutoReleaseDelayMs,
         Sm64AutoDelayFrames,
         Sm64AutoReleaseDelayMs,
         Sm64DpadDeadzonePercent,
@@ -69,6 +78,12 @@ namespace widemelon::display
     {
         None,
         Connect,
+        NewInputPreset,
+        RenameInputPreset,
+        SaveInputPreset,
+        DiscardInputPreset,
+        RequestDeleteInputPreset,
+        EditInputPreset,
         Quit
     };
 

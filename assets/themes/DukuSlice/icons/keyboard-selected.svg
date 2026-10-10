@@ -2,9 +2,9 @@
 <!-- Created with Inkscape (http://www.inkscape.org/) -->
 
 <svg
-   width="170"
-   height="85"
-   viewBox="0 0 44.979166 22.489584"
+   width="80"
+   height="80"
+   viewBox="0 0 21.166666 21.166667"
    version="1.1"
    id="svg1"
    inkscape:version="1.3.2 (1:1.3.2+202311252150+091e20ef0f)"
@@ -27,8 +27,8 @@
      inkscape:deskcolor="#505050"
      inkscape:document-units="mm"
      inkscape:zoom="6.4640292"
-     inkscape:cx="70.698938"
-     inkscape:cy="16.785196"
+     inkscape:cx="23.669448"
+     inkscape:cy="36.432385"
      inkscape:window-width="1920"
      inkscape:window-height="1131"
      inkscape:window-x="0"
@@ -42,8 +42,8 @@
      inkscape:groupmode="layer"
      id="layer1">
     <path
-       id="rect1"
-       style="fill:#232323;stroke:none;stroke-width:1.26757;stroke-linecap:round;stroke-dashoffset:0.529134;paint-order:markers stroke fill;fill-opacity:1"
-       d="M 0 0 L 0 22.489583 L 44.979167 22.489583 L 44.979167 0 L 0 0 z M 0.52916667 0.52916667 L 44.45 0.52916667 L 44.45 21.960417 L 0.52916667 21.960417 L 0.52916667 0.52916667 z " />
+       id="rect2"
+       style="fill:#232323;stroke-width:1.5;stroke-linecap:round;stroke-dashoffset:0.529134;stroke-opacity:0.5;paint-order:fill markers stroke;fill-opacity:1"
+       d="M 0 0 L 0 21.166667 L 21.166667 21.166667 L 21.166667 0 L 0 0 z M 0.52916667 0.52916667 L 20.6375 0.52916667 L 20.6375 20.6375 L 0.52916667 20.6375 L 0.52916667 0.52916667 z " />
   </g>
 </svg>

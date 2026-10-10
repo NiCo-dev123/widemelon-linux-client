@@ -29,6 +29,8 @@ enum class UiAction
     Delete,
     Back,
     Start,
+    Y,
+    L,
 };
 
 class EvdevInput
@@ -49,6 +51,7 @@ public:
     bool takeStateChanged();
     bool takeLeftStickChanged();
     LeftStickState leftStickState() const;
+    LeftStickState rightStickState() const;
     bool r2Pressed() const { return rightTriggerPressed; }
     void setLeftStickDpadEnabled(bool enabled);
     void setLeftStickDpadThresholdFraction(float fraction);
@@ -76,6 +79,14 @@ private:
     int leftStickYCenter = 0;
     int leftStickXThreshold = 8192;
     int leftStickYThreshold = 8192;
+    int rightStickX = 0;
+    int rightStickY = 0;
+    int rightStickXMinimum = 0;
+    int rightStickXMaximum = 0;
+    int rightStickYMinimum = 0;
+    int rightStickYMaximum = 0;
+    int rightStickXCenter = 0;
+    int rightStickYCenter = 0;
     bool stateChanged = false;
     bool leftStickChanged = false;
     bool leftStickDpadEnabled = true;
