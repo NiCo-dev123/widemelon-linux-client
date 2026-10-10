@@ -27,7 +27,12 @@ bool MphManualStickMod::update(const LeftStickState &stick, bool r2Pressed)
     if (toggled)
     {
         contactRequested = !contactRequested;
-        if (!contactRequested) reactivateAfterWrap = false;
+        if (!contactRequested)
+        {
+            reactivateAfterWrap = false;
+            cursorX = Sm64TouchCenterX;
+            cursorY = Sm64TouchCenterY;
+        }
     }
     previousR2Pressed = r2Pressed;
     const float nextX = cursorX + normalizeAxis(stick.x, stick.xCenter, stick.xMinimum, stick.xMaximum) * speed * elapsed;
