@@ -23,13 +23,8 @@ namespace widemelon::display::pages
                 }},
             },
         };
-        if (leftMode == "SM64 D-pad") page.sections.insert(page.sections.begin() + 2, {"D-pad deadzone", {}, {{FieldType::Range, "", ValueId::Sm64DpadDeadzonePercent, PageId::Home, ActionId::None, 25, 95, 5}}});
-        else if (leftMode == "Cursor") page.sections.insert(page.sections.begin() + 2, {"Cursor speed", {}, {{FieldType::Range, "", ValueId::CursorSpeedLimit, PageId::Home, ActionId::None, 100, 500, 25}}});
+        if (leftMode == "Cursor") page.sections.insert(page.sections.begin() + 2, {"Cursor speed", {}, {{FieldType::Range, "", ValueId::CursorSpeedLimit, PageId::Home, ActionId::None, 100, 500, 25}}});
         if (rightMode == "Cursor") page.sections.insert(page.sections.end() - 1, {"Cursor speed", {}, {{FieldType::Range, "", ValueId::CursorSpeedLimit, PageId::Home, ActionId::None, 100, 500, 25}}});
-        else if (rightMode == "MPH Manual")
-        {
-            page.sections.insert(page.sections.end() - 1, {"MPH camera speed", {}, {{FieldType::Range, "", ValueId::MphManualSpeed, PageId::Home, ActionId::None, 50, 500, 10}}});
-        }
         return page;
     }
 }
