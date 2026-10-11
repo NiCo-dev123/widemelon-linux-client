@@ -14,7 +14,7 @@ namespace widemelon::display
     class PopupScreen
     {
     public:
-        enum class Result { Save, Discard, Delete, Cancel, Acknowledge, Exit };
+        enum class Result { Save, Discard, Delete, Cancel, Acknowledge, MappingDisabled, MappingPress, MappingHold, Exit };
 
         static Result saveChanges(SDL_Renderer *renderer, int width, int height, EvdevInput &input,
                                   std::string_view message = "Save changes?");
@@ -23,5 +23,7 @@ namespace widemelon::display
         static Result acknowledge(SDL_Renderer *renderer, int width, int height, EvdevInput &input,
                                   std::string_view message);
         static Result cannotDeleteLastPreset(SDL_Renderer *renderer, int width, int height, EvdevInput &input);
+        static Result editStylusMapping(SDL_Renderer *renderer, int width, int height, EvdevInput &input,
+                                        std::string_view inputName, Result current);
     };
 }

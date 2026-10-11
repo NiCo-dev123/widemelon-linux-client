@@ -16,6 +16,10 @@ namespace widemelon::display::pages
                 {"", {displayedPresetName}, {}},
                 {"Left stick mode", {}, {{FieldType::Choice, "", ValueId::LeftStickMode}}},
                 {"Right stick mode", {}, {{FieldType::Choice, "", ValueId::RightStickMode}}},
+                {"Key mapping", {}, {
+                    {FieldType::ActionButton, "L2 : Stylus mapping", ValueId::L2StylusMapping, PageId::Home, ActionId::ConfigureL2StylusMapping},
+                    {FieldType::ActionButton, "R2 : Stylus mapping", ValueId::R2StylusMapping, PageId::Home, ActionId::ConfigureR2StylusMapping},
+                }},
                 {"File", {}, {
                     {FieldType::ActionButton, "Save and quit", ValueId::None, PageId::Home, ActionId::SaveInputPreset},
                     {FieldType::ActionButton, "Quit without saving", ValueId::None, PageId::Home, ActionId::DiscardInputPreset},

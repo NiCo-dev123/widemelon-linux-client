@@ -107,4 +107,13 @@ PopupScreen::Result PopupScreen::cannotDeleteLastPreset(SDL_Renderer *renderer, 
 {
     return acknowledge(renderer, width, height, input, "Cannot delete the last preset.");
 }
+
+PopupScreen::Result PopupScreen::editStylusMapping(SDL_Renderer *renderer, int width, int height, EvdevInput &input,
+                                                    std::string_view inputName, Result current)
+{
+    const int selected = current == Result::MappingPress ? 1 : current == Result::MappingHold ? 2 : 0;
+    const std::string title = "Key mapping : " + std::string(inputName);
+    return show(renderer, width, height, input, title,
+                {{"Disabled", Result::MappingDisabled}, {"Stylus press", Result::MappingPress}, {"Stylus hold", Result::MappingHold}}, selected);
+}
 }

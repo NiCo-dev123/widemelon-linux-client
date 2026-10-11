@@ -4,7 +4,7 @@ namespace widemelon
 {
 bool StylusRouter::submit(const StylusIntent &intent)
 {
-    const StylusState nextState{intent.pressed, intent.x, intent.y};
+    const StylusState nextState{intent.pressed || mappedPressed, intent.x, intent.y};
 
     // Any active stick claims ownership immediately. This is intentional:
     // after a left-stick cooldown begins, a newly moved right stick must not
@@ -31,9 +31,20 @@ bool StylusRouter::submit(const StylusIntent &intent)
     return stateChanged;
 }
 
+bool StylusRouter::setMappedPressed(bool pressed)
+{
+    if (mappedPressed == pressed) return false;
+    mappedPressed = pressed;
+    const bool nextPressed = mappedPressed;
+    if (stylusState.pressed == nextPressed) return false;
+    stylusState.pressed = nextPressed;
+    return true;
+}
+
 void StylusRouter::reset()
 {
     stylusState = {};
     currentOwner.reset();
+    mappedPressed = false;
 }
 }

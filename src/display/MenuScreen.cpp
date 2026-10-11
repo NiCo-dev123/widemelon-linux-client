@@ -57,7 +57,36 @@ struct MenuState
     std::uint8_t dpadDeadzone{Sm64DpadDeadzoneDefaultPercent};
     std::uint16_t cursorSpeed{CursorSpeedDefault};
     LeftStickCalibration calibration{};
+    StylusButtonMapping l2StylusMapping{StylusButtonMapping::Disabled};
+    StylusButtonMapping r2StylusMapping{StylusButtonMapping::Disabled};
 };
+
+std::string mappingLabel(StylusButtonMapping mapping)
+{
+    switch (mapping)
+    {
+    case StylusButtonMapping::Press: return "Stylus press";
+    case StylusButtonMapping::Hold: return "Stylus hold";
+    default: return "Disabled";
+    }
+}
+
+PopupScreen::Result popupResultForMapping(StylusButtonMapping mapping)
+{
+    switch (mapping)
+    {
+    case StylusButtonMapping::Press: return PopupScreen::Result::MappingPress;
+    case StylusButtonMapping::Hold: return PopupScreen::Result::MappingHold;
+    default: return PopupScreen::Result::MappingDisabled;
+    }
+}
+
+StylusButtonMapping mappingForPopupResult(PopupScreen::Result result)
+{
+    if (result == PopupScreen::Result::MappingPress) return StylusButtonMapping::Press;
+    if (result == PopupScreen::Result::MappingHold) return StylusButtonMapping::Hold;
+    return StylusButtonMapping::Disabled;
+}
 
 const PageDefinition &pageDefinition(PageId id, std::string_view presetName, std::string_view leftMode, std::string_view rightMode)
 {
@@ -138,6 +167,8 @@ std::string fieldValue(const FieldDefinition &field, const Config &config, const
     case ValueId::LeftStickScaleRightPercent: return std::to_string(state.calibration.right) + " %";
     case ValueId::LeftStickScaleUpPercent: return std::to_string(state.calibration.up) + " %";
     case ValueId::LeftStickScaleDownPercent: return std::to_string(state.calibration.down) + " %";
+    case ValueId::L2StylusMapping: return "L2 : " + mappingLabel(state.l2StylusMapping);
+    case ValueId::R2StylusMapping: return "R2 : " + mappingLabel(state.r2StylusMapping);
     default: return std::string(field.label);
     }
 }
@@ -249,6 +280,8 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
     }
     if (activePreset)
     {
+        state.l2StylusMapping = activePreset->l2StylusMapping;
+        state.r2StylusMapping = activePreset->r2StylusMapping;
         state.calibration = {
             activePreset->leftStickCalibration[0],
             activePreset->leftStickCalibration[1],
@@ -269,6 +302,8 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
         editingPreset.sm64AutoReleaseDelayMs = state.autoRelease;
         editingPreset.sm64DpadDeadzonePercent = state.dpadDeadzone;
         editingPreset.cursorSpeedLimit = state.cursorSpeed;
+        editingPreset.l2StylusMapping = state.l2StylusMapping;
+        editingPreset.r2StylusMapping = state.r2StylusMapping;
         editingPreset.leftStickCalibration = {state.calibration.left, state.calibration.right, state.calibration.up, state.calibration.down};
         std::string presetError;
         if (!InputPresetStore::save(editingPreset, editingPreset.name == state.activePreset, presetError))
@@ -288,6 +323,8 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
             || editingPreset.sm64AutoReleaseDelayMs != state.autoRelease
             || editingPreset.sm64DpadDeadzonePercent != state.dpadDeadzone
             || editingPreset.cursorSpeedLimit != state.cursorSpeed
+            || editingPreset.l2StylusMapping != state.l2StylusMapping
+            || editingPreset.r2StylusMapping != state.r2StylusMapping
             || editingPreset.leftStickCalibration != std::array<std::uint8_t, 4>{state.calibration.left, state.calibration.right, state.calibration.up, state.calibration.down};
     };
     PageId pageId = PageId::Settings; int selected = 0, scroll = 0; MenuNavigation navigation;
@@ -394,6 +431,15 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
             {
                 if (saveEditingPreset()) { pageId = PageId::InputPresetManager; selected = 0; scroll = 0; editing = false; }
             }
+            if (field.action == ActionId::ConfigureL2StylusMapping || field.action == ActionId::ConfigureR2StylusMapping)
+            {
+                const bool isL2 = field.action == ActionId::ConfigureL2StylusMapping;
+                StylusButtonMapping &mapping = isL2 ? state.l2StylusMapping : state.r2StylusMapping;
+                const PopupScreen::Result result = PopupScreen::editStylusMapping(
+                    renderer, width, height, input, isL2 ? "L2" : "R2", popupResultForMapping(mapping));
+                if (result == PopupScreen::Result::Exit) return Result::Exit;
+                if (result != PopupScreen::Result::Cancel) mapping = mappingForPopupResult(result);
+            }
             if (field.action == ActionId::DiscardInputPreset && editing) { pageId = PageId::InputPresetManager; selected = 0; scroll = 0; editing = false; }
             if (field.action == ActionId::RequestDeleteInputPreset && editing)
             {
@@ -428,7 +474,7 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
                 if (field.destination == PageId::Home) { if (pageId == PageId::Settings) return backResult; pageId = PageId::Settings; }
                 else if (field.destination == PageId::InputPresetEditor) {
                     const std::optional<InputPreset> preset = InputPresetStore::load(state.activePreset);
-                    if (preset) { editingPreset = *preset; state.mode = preset->leftStickMode; state.rightMode = preset->rightStickMode; state.mphSpeed = preset->mphCameraSpeed; state.mphAutoRelease = preset->mphAutoReleaseDelayMs; state.autoFrames = preset->sm64AutoCenterHoldFrames; state.autoRelease = preset->sm64AutoReleaseDelayMs; state.dpadDeadzone = preset->sm64DpadDeadzonePercent; state.cursorSpeed = preset->cursorSpeedLimit; state.calibration = {preset->leftStickCalibration[0], preset->leftStickCalibration[1], preset->leftStickCalibration[2], preset->leftStickCalibration[3]}; editing = true; pageId = field.destination; selected = 0; scroll = 0; }
+                    if (preset) { editingPreset = *preset; state.mode = preset->leftStickMode; state.rightMode = preset->rightStickMode; state.mphSpeed = preset->mphCameraSpeed; state.mphAutoRelease = preset->mphAutoReleaseDelayMs; state.autoFrames = preset->sm64AutoCenterHoldFrames; state.autoRelease = preset->sm64AutoReleaseDelayMs; state.dpadDeadzone = preset->sm64DpadDeadzonePercent; state.cursorSpeed = preset->cursorSpeedLimit; state.l2StylusMapping = preset->l2StylusMapping; state.r2StylusMapping = preset->r2StylusMapping; state.calibration = {preset->leftStickCalibration[0], preset->leftStickCalibration[1], preset->leftStickCalibration[2], preset->leftStickCalibration[3]}; editing = true; pageId = field.destination; selected = 0; scroll = 0; }
                     else Logger::error("Cannot load selected input preset");
                 }
                 else if (field.destination != pageId) { pageId = field.destination; selected = 0; scroll = 0; }

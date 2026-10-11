@@ -23,6 +23,7 @@
 #include "input/StickDpadMod.h"
 #include "input/StylusIntent.h"
 #include "input/StylusRouter.h"
+#include "input/StylusButtonMapping.h"
 #include "network/WebSocketClient.h"
 
 #include <SDL.h>
@@ -185,7 +186,9 @@ namespace widemelon
         bool rightStickDpadEnabled = false;
         widemelon::LeftStickCalibration leftStickCalibration;
         widemelon::StylusRouter stylusRouter;
-        auto sm64ModeEnabled = [&] { return analogCenteredEnabled || cursorEnabled || rightCursorEnabled; };
+        widemelon::StylusButtonMapper stylusButtonMapper;
+        bool stylusButtonMappingEnabled = false;
+        auto sm64ModeEnabled = [&] { return analogCenteredEnabled || cursorEnabled || rightCursorEnabled || stylusButtonMappingEnabled; };
         Sm64TouchState displayedStylusState;
         auto sm64TouchState = [&]() -> const Sm64TouchState&
         {
@@ -269,6 +272,9 @@ namespace widemelon
             rightCursorStick.setEnabled(rightCursorEnabled);
             leftStickDpad.setEnabled(leftStickDpadEnabled);
             rightStickDpad.setEnabled(rightStickDpadEnabled);
+            stylusButtonMapper.setMappings(activePreset->l2StylusMapping, activePreset->r2StylusMapping);
+            stylusButtonMappingEnabled = activePreset->l2StylusMapping != widemelon::StylusButtonMapping::Disabled
+                || activePreset->r2StylusMapping != widemelon::StylusButtonMapping::Disabled;
             exitInput.setLeftStickDpadEnabled(false);
             stylusRouter.reset();
             Logger::info("Stick configuration reloaded: left=" + leftStickMode + ", right=" + rightStickMode);
@@ -384,10 +390,12 @@ namespace widemelon
             const bool rightCursorTouchChanged = rightCursorStick.update(rightStick);
             const bool leftStickDpadChanged = leftStickDpad.update(calibratedStick);
             const bool rightStickDpadChanged = rightStickDpad.update(rightStick);
+            const bool mappedStylusChanged = stylusButtonMapper.update(exitInput.l2Pressed(), exitInput.r2Pressed());
             bool stylusChanged = false;
             if (sm64ManualTouchChanged) stylusChanged = stylusRouter.submit(sm64ManualStick.intent()) || stylusChanged;
             if (leftCursorTouchChanged) stylusChanged = stylusRouter.submit(leftCursorStick.intent()) || stylusChanged;
             if (rightCursorTouchChanged) stylusChanged = stylusRouter.submit(rightCursorStick.intent()) || stylusChanged;
+            if (mappedStylusChanged) stylusChanged = stylusRouter.setMappedPressed(stylusButtonMapper.touchPressed()) || stylusChanged;
             inputDirty = exitInput.takeStateChanged() || stylusChanged || leftStickDpadChanged || rightStickDpadChanged || inputDirty;
             if (stylusChanged && !inputTest)
                 widemelon::display::GameplayScreen::render(renderer, width, height, status, videoTexture, &sm64TouchState());
@@ -442,7 +450,7 @@ namespace widemelon
                 else if (inputDirty || now >= nextInputSnapshot)
                 {
                     const std::uint32_t sequence = ++inputSequence;
-                    const bool touchActive = sm64ModeEnabled() && sm64TouchState().active;
+                    const bool touchActive = sm64TouchState().active;
                     client->sendInputSnapshot(sequence, static_cast<std::uint16_t>(exitInput.buttonMask() | leftStickDpad.additionalButtons() | rightStickDpad.additionalButtons()),
                         touchActive, sm64TouchState().x, sm64TouchState().y);
                     inputDirty = false;

@@ -22,6 +22,9 @@ namespace widemelon
     public:
         // Returns true when the owner or outgoing touchscreen state changed.
         bool submit(const StylusIntent &intent);
+        // Button mappings control contact independently from the source that
+        // owns the current stylus position.
+        bool setMappedPressed(bool pressed);
         void reset();
 
         const StylusState &state() const { return stylusState; }
@@ -30,5 +33,6 @@ namespace widemelon
     private:
         StylusState stylusState;
         std::optional<StylusSource> currentOwner;
+        bool mappedPressed{false};
     };
 }

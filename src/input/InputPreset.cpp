@@ -106,6 +106,23 @@ int clampValue(const std::optional<int> &value, int defaultValue, int minimum, i
     return value ? std::clamp(*value, minimum, maximum) : defaultValue;
 }
 
+std::string_view mappingName(StylusButtonMapping mapping)
+{
+    switch (mapping)
+    {
+    case StylusButtonMapping::Press: return "press";
+    case StylusButtonMapping::Hold: return "hold";
+    default: return "disabled";
+    }
+}
+
+StylusButtonMapping mappingFromName(const std::optional<std::string> &value)
+{
+    if (value && *value == "press") return StylusButtonMapping::Press;
+    if (value && *value == "hold") return StylusButtonMapping::Hold;
+    return StylusButtonMapping::Disabled;
+}
+
 std::string json(const InputPreset &preset)
 {
     return "{\n"
@@ -118,6 +135,8 @@ std::string json(const InputPreset &preset)
            "  \"sm64_auto_release_delay_ms\": " + std::to_string(preset.sm64AutoReleaseDelayMs) + ",\n"
            "  \"sm64_dpad_deadzone_percent\": " + std::to_string(preset.sm64DpadDeadzonePercent) + ",\n"
            "  \"cursor_speed_limit\": " + std::to_string(preset.cursorSpeedLimit) + ",\n"
+           "  \"l2_stylus_mapping\": \"" + std::string(mappingName(preset.l2StylusMapping)) + "\",\n"
+           "  \"r2_stylus_mapping\": \"" + std::string(mappingName(preset.r2StylusMapping)) + "\",\n"
            "  \"left_stick_calibration\": {\n"
            "    \"left\": " + std::to_string(preset.leftStickCalibration[0]) + ",\n"
            "    \"right\": " + std::to_string(preset.leftStickCalibration[1]) + ",\n"
@@ -142,6 +161,8 @@ std::optional<InputPreset> parse(std::string_view document)
     preset.sm64AutoReleaseDelayMs = static_cast<std::uint16_t>(clampValue(jsonInt(document, "sm64_auto_release_delay_ms"), 1000, 0, 2000));
     preset.sm64DpadDeadzonePercent = static_cast<std::uint8_t>(clampValue(jsonInt(document, "sm64_dpad_deadzone_percent"), 75, 25, 95));
     preset.cursorSpeedLimit = static_cast<std::uint16_t>(clampValue(jsonInt(document, "cursor_speed_limit"), 300, 100, 500));
+    preset.l2StylusMapping = mappingFromName(jsonString(document, "l2_stylus_mapping"));
+    preset.r2StylusMapping = mappingFromName(jsonString(document, "r2_stylus_mapping"));
     preset.leftStickCalibration[0] = static_cast<std::uint8_t>(clampValue(jsonInt(document, "left"), 100, 50, 150));
     preset.leftStickCalibration[1] = static_cast<std::uint8_t>(clampValue(jsonInt(document, "right"), 100, 50, 150));
     preset.leftStickCalibration[2] = static_cast<std::uint8_t>(clampValue(jsonInt(document, "up"), 100, 50, 150));

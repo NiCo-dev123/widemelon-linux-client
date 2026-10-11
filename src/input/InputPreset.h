@@ -9,8 +9,13 @@
 
 namespace widemelon
 {
-    // Button mappings deliberately do not belong here yet. Phase 5 adds them
-    // after the physical-to-virtual input router exists.
+    enum class StylusButtonMapping : std::uint8_t
+    {
+        Disabled,
+        Press,
+        Hold,
+    };
+
     struct InputPreset
     {
         std::string name{"Config 1"};
@@ -23,6 +28,8 @@ namespace widemelon
         std::uint8_t sm64DpadDeadzonePercent{75};
         std::uint16_t cursorSpeedLimit{300};
         std::array<std::uint8_t, 4> leftStickCalibration{{100, 100, 100, 100}};
+        StylusButtonMapping l2StylusMapping{StylusButtonMapping::Disabled};
+        StylusButtonMapping r2StylusMapping{StylusButtonMapping::Disabled};
     };
 
     class InputPresetStore

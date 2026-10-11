@@ -53,6 +53,7 @@ public:
     LeftStickState leftStickState() const;
     LeftStickState rightStickState() const;
     bool r2Pressed() const { return rightTriggerPressed; }
+    bool l2Pressed() const { return leftTriggerPressed; }
     void setLeftStickDpadEnabled(bool enabled);
     void setLeftStickDpadThresholdFraction(float fraction);
 
@@ -91,6 +92,7 @@ private:
     bool leftStickChanged = false;
     bool leftStickDpadEnabled = true;
     bool rightTriggerPressed = false;
+    bool leftTriggerPressed = false;
     UiAction uiAction = UiAction::None;
 };
 

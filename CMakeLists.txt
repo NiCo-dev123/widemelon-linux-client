@@ -48,6 +48,7 @@ add_executable(widemelon-client
     src/input/Sm64StickMod.cpp
     src/input/StickDpadMod.cpp
     src/input/StylusRouter.cpp
+    src/input/StylusButtonMapping.cpp
     src/network/WebSocketClient.cpp
     src/protocol/WideMelonProtocol.cpp
 )
