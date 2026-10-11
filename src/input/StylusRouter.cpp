@@ -2,6 +2,11 @@
 
 namespace widemelon
 {
+void StylusRouter::beginFrame()
+{
+    togglePressHasPriority = false;
+}
+
 bool StylusRouter::submit(const StylusIntent &intent)
 {
     const StylusState nextState{intent.pressed, intent.x, intent.y};
@@ -11,11 +16,18 @@ bool StylusRouter::submit(const StylusIntent &intent)
     // wait for that cooldown to finish before taking control.
     if (intent.sourceActive)
     {
+        // Toggle is the unambiguous interpretation of an R2 edge when a
+        // manual mode and a Cursor Hold mode are configured together.
+        if (intent.pressSemantics == StylusPressSemantics::Hold && togglePressHasPriority)
+            return false;
+
         const bool ownerChanged = currentOwner != intent.source;
         const bool stateChanged = stylusState.pressed != nextState.pressed
             || stylusState.x != nextState.x || stylusState.y != nextState.y;
         currentOwner = intent.source;
         stylusState = nextState;
+        if (intent.pressSemantics == StylusPressSemantics::Toggle && intent.pressStateChanged)
+            togglePressHasPriority = true;
         return ownerChanged || stateChanged;
     }
 
@@ -35,5 +47,6 @@ void StylusRouter::reset()
 {
     stylusState = {};
     currentOwner.reset();
+    togglePressHasPriority = false;
 }
 }

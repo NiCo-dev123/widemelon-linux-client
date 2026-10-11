@@ -49,6 +49,7 @@ bool MphManualStickMod::update(const LeftStickState &stick, bool r2Pressed)
     const float horizontal = normalizeAxis(stick.x, stick.xCenter, stick.xMinimum, stick.xMaximum);
     const float vertical = normalizeAxis(stick.y, stick.yCenter, stick.yMinimum, stick.yMaximum);
     StylusIntent next = stylusIntent;
+    next.pressStateChanged = toggled;
     next.sourceActive = std::sqrt(horizontal * horizontal + vertical * vertical) > 0.05F;
     next.x = static_cast<std::uint16_t>(std::clamp(static_cast<int>(std::lround(cursorX)), 0, 255));
     next.y = static_cast<std::uint16_t>(std::clamp(static_cast<int>(std::lround(cursorY)), 0, 191));

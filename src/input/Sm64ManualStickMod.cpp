@@ -36,10 +36,15 @@ bool Sm64ManualStickMod::update(const LeftStickState& stick, bool r2Pressed)
     }
 
     StylusIntent next = stylusIntent;
+    next.pressStateChanged = false;
     next.x = static_cast<std::uint16_t>(static_cast<int>(Sm64TouchCenterX) + offsetX);
     next.y = static_cast<std::uint16_t>(static_cast<int>(Sm64TouchCenterY) + offsetY);
     next.sourceActive = distance > static_cast<float>(Sm64TouchPressRadius);
-    if (r2Pressed && !previousR2Pressed) next.pressed = !next.pressed;
+    if (r2Pressed && !previousR2Pressed)
+    {
+        next.pressed = !next.pressed;
+        next.pressStateChanged = true;
+    }
     previousR2Pressed = r2Pressed;
 
     if (sameStylusIntent(next, stylusIntent)) return false;
