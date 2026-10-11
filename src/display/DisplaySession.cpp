@@ -16,7 +16,6 @@
 #include "common/Logger.h"
 #include "input/CursorStickMod.h"
 #include "input/LeftStickCalibration.h"
-#include "input/MphAutoStickMod.h"
 #include "input/MphManualStickMod.h"
 #include "input/Sm64DpadMod.h"
 #include "input/EvdevInput.h"
@@ -59,7 +58,6 @@ namespace
     constexpr std::string_view UiConfigLeftStickModeKey{"left-stick-mod"};
     constexpr std::string_view UiConfigRightStickModeKey{"right-stick-mod"};
     constexpr std::string_view UiConfigMphManualSpeedKey{"mph-manual-speed"};
-    constexpr std::string_view UiConfigMphAutoReleaseDelayKey{"mph-auto-release-delay-ms"};
     constexpr std::string_view UiConfigSm64AutoFramesKey{"sm64-auto-center-hold-frames"};
     constexpr std::string_view UiConfigSm64AutoReleaseDelayKey{"sm64-auto-release-delay-ms"};
     constexpr std::string_view UiConfigCursorSpeedKey{"cursor-speed-limit"};
@@ -167,23 +165,19 @@ namespace widemelon
         };
 
         std::unique_ptr<widemelon::WebSocketClient> client = std::make_unique<widemelon::WebSocketClient>();
-        widemelon::Sm64StickMod sm64Stick;
         widemelon::Sm64ManualStickMod sm64ManualStick;
         widemelon::CursorStickMod leftCursorStick;
         widemelon::CursorStickMod rightCursorStick;
-        widemelon::MphAutoStickMod mphAutoStick;
         widemelon::MphManualStickMod mphManualStick;
         widemelon::Sm64DpadMod sm64Dpad;
-        bool sm64Enabled = false;
         bool sm64ManualEnabled = false;
         bool cursorEnabled = false;
         bool rightCursorEnabled = false;
-        bool mphAutoEnabled = false;
         bool mphManualEnabled = false;
         bool sm64DpadEnabled = false;
         widemelon::LeftStickCalibration leftStickCalibration;
         widemelon::StylusRouter stylusRouter;
-        auto sm64ModeEnabled = [&] { return sm64Enabled || sm64ManualEnabled || cursorEnabled || rightCursorEnabled || mphAutoEnabled || mphManualEnabled; };
+        auto sm64ModeEnabled = [&] { return sm64ManualEnabled || cursorEnabled || rightCursorEnabled || mphManualEnabled; };
         Sm64TouchState displayedStylusState;
         auto sm64TouchState = [&]() -> const Sm64TouchState&
         {
@@ -214,7 +208,6 @@ namespace widemelon
                 migrated.leftStickMode = uiConfig.readValue(UiConfigLeftStickModeKey).value_or("D-pad");
                 migrated.rightStickMode = uiConfig.readValue(UiConfigRightStickModeKey).value_or("Disabled");
                 migrated.mphCameraSpeed = static_cast<std::uint16_t>(uiConfig.readInt(UiConfigMphManualSpeedKey, widemelon::MphManualSpeedDefault, widemelon::MphManualSpeedMinimum, widemelon::MphManualSpeedMaximum));
-                migrated.mphAutoReleaseDelayMs = static_cast<std::uint16_t>(uiConfig.readInt(UiConfigMphAutoReleaseDelayKey, widemelon::MphAutoReleaseDelayMs, widemelon::MphAutoReleaseDelayMinimumMs, widemelon::MphAutoReleaseDelayMaximumMs));
                 migrated.sm64AutoCenterHoldFrames = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigSm64AutoFramesKey, widemelon::Sm64TouchCenterHoldFramesDefault, widemelon::Sm64TouchCenterHoldFramesMinimum, widemelon::Sm64TouchCenterHoldFramesMaximum));
                 migrated.sm64AutoReleaseDelayMs = static_cast<std::uint16_t>(uiConfig.readInt(UiConfigSm64AutoReleaseDelayKey, widemelon::Sm64TouchReleaseDelayDefaultMs, widemelon::Sm64TouchReleaseDelayMinimumMs, widemelon::Sm64TouchReleaseDelayMaximumMs));
                 migrated.sm64DpadDeadzonePercent = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigSm64DpadDeadzoneKey, widemelon::Sm64DpadDeadzoneDefaultPercent, widemelon::Sm64DpadDeadzoneMinimumPercent, widemelon::Sm64DpadDeadzoneMaximumPercent));
@@ -254,16 +247,11 @@ namespace widemelon
             leftStickCalibration.right = activePreset->leftStickCalibration[1];
             leftStickCalibration.up = activePreset->leftStickCalibration[2];
             leftStickCalibration.down = activePreset->leftStickCalibration[3];
-            sm64Enabled = leftStickMode == "SM64 Auto" || leftStickMode == "SM64";
             sm64ManualEnabled = leftStickMode == "SM64 Manual";
             cursorEnabled = leftStickMode == "Cursor";
             rightCursorEnabled = rightStickMode == "Cursor";
-            mphAutoEnabled = rightStickMode == "MPH Auto";
             mphManualEnabled = rightStickMode == "MPH Manual";
             sm64DpadEnabled = leftStickMode == "SM64 D-pad";
-            sm64Stick.setCenterHoldFrames(activePreset->sm64AutoCenterHoldFrames);
-            sm64Stick.setReleaseDelayMs(activePreset->sm64AutoReleaseDelayMs);
-            sm64Stick.setEnabled(sm64Enabled);
             sm64ManualStick.setEnabled(sm64ManualEnabled);
             leftCursorStick.setSource(StylusSource::LeftStick);
             leftCursorStick.setSpeedLimit(activePreset->cursorSpeedLimit);
@@ -273,9 +261,6 @@ namespace widemelon
             rightCursorStick.setEnabled(rightCursorEnabled);
             mphManualStick.setSpeed(activePreset->mphCameraSpeed);
             mphManualStick.setEnabled(mphManualEnabled);
-            mphAutoStick.setSpeed(activePreset->mphCameraSpeed);
-            mphAutoStick.setReleaseDelayMs(activePreset->mphAutoReleaseDelayMs);
-            mphAutoStick.setEnabled(mphAutoEnabled);
             sm64Dpad.setDeadzonePercent(activePreset->sm64DpadDeadzonePercent);
             sm64Dpad.setEnabled(sm64DpadEnabled);
             exitInput.setLeftStickDpadEnabled(leftStickMode == "D-pad" || sm64DpadEnabled);
@@ -384,22 +369,21 @@ namespace widemelon
                 continue;
             }
             const widemelon::LeftStickState calibratedStick = widemelon::applyLeftStickCalibration(exitInput.leftStickState(), leftStickCalibration);
-            stylusRouter.beginFrame();
-            const bool sm64TouchChanged = sm64Stick.update(calibratedStick);
-            const bool sm64ManualTouchChanged = sm64ManualStick.update(calibratedStick, exitInput.r2Pressed());
+            const bool sm64ManualTouchChanged = sm64ManualStick.update(calibratedStick);
             const widemelon::LeftStickState rightStick = exitInput.rightStickState();
-            const bool leftCursorTouchChanged = leftCursorStick.update(calibratedStick, exitInput.r2Pressed());
-            const bool rightCursorTouchChanged = rightCursorStick.update(rightStick, exitInput.r2Pressed());
-            const bool mphManualTouchChanged = mphManualStick.update(rightStick, exitInput.r2Pressed());
-            const bool mphAutoTouchChanged = mphAutoStick.update(rightStick);
+            if (leftCursorStick.isStickActive(calibratedStick) && stylusRouter.owner() != StylusSource::LeftStick)
+                leftCursorStick.setCursorPosition(stylusRouter.state().x, stylusRouter.state().y);
+            if (rightCursorStick.isStickActive(rightStick) && stylusRouter.owner() != StylusSource::RightStick)
+                rightCursorStick.setCursorPosition(stylusRouter.state().x, stylusRouter.state().y);
+            const bool leftCursorTouchChanged = leftCursorStick.update(calibratedStick);
+            const bool rightCursorTouchChanged = rightCursorStick.update(rightStick);
+            const bool mphManualTouchChanged = mphManualStick.update(rightStick);
             const bool sm64DpadChanged = sm64Dpad.update(calibratedStick);
             bool stylusChanged = false;
-            if (sm64TouchChanged) stylusChanged = stylusRouter.submit(sm64Stick.intent()) || stylusChanged;
             if (sm64ManualTouchChanged) stylusChanged = stylusRouter.submit(sm64ManualStick.intent()) || stylusChanged;
             if (leftCursorTouchChanged) stylusChanged = stylusRouter.submit(leftCursorStick.intent()) || stylusChanged;
             if (rightCursorTouchChanged) stylusChanged = stylusRouter.submit(rightCursorStick.intent()) || stylusChanged;
             if (mphManualTouchChanged) stylusChanged = stylusRouter.submit(mphManualStick.intent()) || stylusChanged;
-            if (mphAutoTouchChanged) stylusChanged = stylusRouter.submit(mphAutoStick.intent()) || stylusChanged;
             inputDirty = exitInput.takeStateChanged() || stylusChanged || sm64DpadChanged || inputDirty;
             if (stylusChanged && !inputTest)
                 widemelon::display::GameplayScreen::render(renderer, width, height, status, videoTexture, &sm64TouchState());

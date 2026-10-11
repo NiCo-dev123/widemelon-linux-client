@@ -20,10 +20,6 @@ namespace widemelon
     class StylusRouter
     {
     public:
-        // Starts one controller polling iteration. Toggle priority is scoped
-        // to this frame so it resolves an R2 event without blocking later
-        // intentional stick ownership hand-offs.
-        void beginFrame();
         // Returns true when the owner or outgoing touchscreen state changed.
         bool submit(const StylusIntent &intent);
         void reset();
@@ -34,6 +30,5 @@ namespace widemelon
     private:
         StylusState stylusState;
         std::optional<StylusSource> currentOwner;
-        bool togglePressHasPriority{false};
     };
 }

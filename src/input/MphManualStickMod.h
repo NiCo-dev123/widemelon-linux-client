@@ -19,15 +19,12 @@ namespace widemelon
     public:
         void setEnabled(bool enabled);
         void setSpeed(std::uint16_t pixelsPerSecond);
-        bool update(const LeftStickState &stick, bool r2Pressed);
+        bool update(const LeftStickState &stick);
         const StylusIntent &intent() const { return stylusIntent; }
 
     private:
         static float normalizeAxis(int value, int center, int minimum, int maximum);
         bool enabled{false};
-        bool previousR2Pressed{false};
-        bool contactRequested{false};
-        bool reactivateAfterWrap{false};
         std::uint16_t speed{MphManualSpeedDefault};
         float cursorX{Sm64TouchCenterX};
         float cursorY{Sm64TouchCenterY};

@@ -33,8 +33,6 @@ namespace widemelon
         bool pressed{false};
         bool sourceActive{false};
         StylusPressSemantics pressSemantics{StylusPressSemantics::Automatic};
-        // True only on the input update that changed a Toggle press state.
-        bool pressStateChanged{false};
     };
 
     inline bool sameStylusIntent(const StylusIntent &left, const StylusIntent &right)
@@ -44,7 +42,6 @@ namespace widemelon
             && left.y == right.y
             && left.pressed == right.pressed
             && left.sourceActive == right.sourceActive
-            && left.pressSemantics == right.pressSemantics
-            && left.pressStateChanged == right.pressStateChanged;
+            && left.pressSemantics == right.pressSemantics;
     }
 }

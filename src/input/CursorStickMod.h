@@ -21,7 +21,9 @@ public:
     void setEnabled(bool enabled);
     void setSource(StylusSource value);
     void setSpeedLimit(std::uint16_t pixelsPerSecond);
-    bool update(const LeftStickState& stick, bool r2Pressed);
+    bool isStickActive(const LeftStickState &stick) const;
+    void setCursorPosition(std::uint16_t x, std::uint16_t y);
+    bool update(const LeftStickState& stick);
     const StylusIntent &intent() const { return stylusIntent; }
 
 private:
