@@ -23,6 +23,7 @@
 #include "input/InputPreset.h"
 #include "input/Sm64ManualStickMod.h"
 #include "input/Sm64StickMod.h"
+#include "input/StylusIntent.h"
 #include "network/WebSocketClient.h"
 
 #include <SDL.h>
