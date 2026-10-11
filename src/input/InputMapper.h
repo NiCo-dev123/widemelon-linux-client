@@ -27,6 +27,7 @@ namespace widemelon
         std::array<InputMapping, PhysicalInputCount> mappings{};
         std::array<bool, PhysicalInputCount> previousPressed{};
         std::array<bool, PhysicalInputCount> togglePressed{};
+        std::array<bool, PhysicalInputCount> singlePressPending{};
         std::uint16_t virtualButtonMask{0};
         bool stylusPressed{false};
     };

@@ -112,62 +112,69 @@ PopupScreen::MappingResult PopupScreen::editInputMapping(SDL_Renderer *renderer,
                                                           std::string_view inputName, InputMapping current)
 {
     const std::string title = "Key mapping : " + std::string(inputName);
-    const auto select = [&](std::string_view caption, const std::vector<std::string_view> &labels, int selected) -> int
-    {
-        MenuNavigation navigation;
-        while (true)
-        {
-            const ThemeTextSettings &text = uiTextSettings();
-            const UiTextures &textures = uiTextures();
-            drawGradientBackground(renderer, width, height);
-            const SDL_Rect popup{(width - PopupSize) / 2, (height - PopupSize) / 2, PopupSize, PopupSize};
-            drawPopupBackground(renderer, popup);
-            drawTextColored(renderer, title, (width - textWidth(title, text.titleFontSize)) / 2, popup.y + 96, text.titleFontSize, uiPalette().primary);
-            drawTextColored(renderer, caption, (width - textWidth(caption, text.formFontSize)) / 2, popup.y + 190, text.formFontSize, uiPalette().primary);
-            const SDL_Rect field{(width - 440) / 2, popup.y + 250, 440, UiFormFieldHeight};
-            drawPill(renderer, field, true);
-            const int textY = field.y + (field.h - text.formFontSize) / 2;
-            drawTextColored(renderer, "<", field.x + 12, textY, text.formFontSize, uiPalette().primary);
-            drawTextColored(renderer, ">", field.x + field.w - textWidth(">", text.formFontSize) - 12, textY, text.formFontSize, uiPalette().primary);
-            const std::string_view label = labels[static_cast<std::size_t>(selected)];
-            drawTextColored(renderer, label, field.x + (field.w - textWidth(label, text.formFontSize)) / 2, textY, text.formFontSize, uiPalette().primary);
-            const int hintY = popup.y + popup.h - 72;
-            const int total = controlHintWidth(textures.hintA, "A", "SELECT", text.hintFontSize) + controlHintWidth(textures.hintB, "B", "CANCEL", text.hintFontSize);
-            int hintX = (width - total) / 2;
-            hintX = drawControlHint(renderer, textures.hintA, "A", "SELECT", hintX, hintY, text.hintFontSize);
-            drawControlHint(renderer, textures.hintB, "B", "CANCEL", hintX, hintY, text.hintFontSize);
-            SDL_RenderPresent(renderer);
-            input.pollEvent();
-            if (input.exitComboPressed()) return -2;
-            switch (navigation.nextAction(input.takeUiAction(), input.heldUiDirection()))
-            {
-            case UiAction::Left: selected = (selected + static_cast<int>(labels.size()) - 1) % static_cast<int>(labels.size()); break;
-            case UiAction::Right: selected = (selected + 1) % static_cast<int>(labels.size()); break;
-            case UiAction::Back:
-            case UiAction::Delete: return -1;
-            case UiAction::Confirm:
-            case UiAction::Start: return selected;
-            default: break;
-            }
-            SDL_Delay(10);
-        }
-    };
-
     const std::vector<std::string_view> outputLabels{"Disabled", "Key press", "Stylus press", "Stylus hold"};
-    int outputSelected = current.output == MappingOutput::KeyPress ? 1 : current.output == MappingOutput::StylusPress ? 2 : current.output == MappingOutput::StylusHold ? 3 : 0;
-    const int output = select("Output type", outputLabels, outputSelected);
-    if (output == -2) return {false, true, current};
-    if (output < 0) return {false, false, current};
-    current.output = static_cast<MappingOutput>(output);
-    if (current.output != MappingOutput::KeyPress) return {true, false, current};
-
     std::vector<std::string_view> buttonLabels;
     for (std::size_t index = 0; index <= static_cast<std::size_t>(DsButton::Start); ++index)
         buttonLabels.push_back(dsButtonName(static_cast<DsButton>(index)));
-    const int button = select("DS button", buttonLabels, static_cast<int>(current.button));
-    if (button == -2) return {false, true, current};
-    if (button < 0) return {false, false, current};
-    current.button = static_cast<DsButton>(button);
-    return {true, false, current};
+    int outputSelected = current.output == MappingOutput::KeyPress ? 1 : current.output == MappingOutput::StylusPress ? 2 : current.output == MappingOutput::StylusHold ? 3 : 0;
+    int buttonSelected = static_cast<int>(current.button);
+    int selectedField = 0;
+    MenuNavigation navigation;
+    const auto drawField = [&](const ThemeTextSettings &text, const SDL_Rect &field, std::string_view label,
+                               std::string_view value, bool selected)
+    {
+        drawTextColored(renderer, label, (width - textWidth(label, text.formFontSize)) / 2, field.y - text.formFontSize - 12,
+                        text.formFontSize, uiPalette().primary);
+        drawPill(renderer, field, selected);
+        const int textY = field.y + (field.h - text.formFontSize) / 2;
+        drawTextColored(renderer, "<", field.x + 12, textY, text.formFontSize, uiPalette().primary);
+        drawTextColored(renderer, ">", field.x + field.w - textWidth(">", text.formFontSize) - 12, textY, text.formFontSize, uiPalette().primary);
+        drawTextColored(renderer, value, field.x + (field.w - textWidth(value, text.formFontSize)) / 2, textY, text.formFontSize, uiPalette().primary);
+    };
+    while (true)
+    {
+        const ThemeTextSettings &text = uiTextSettings();
+        const UiTextures &textures = uiTextures();
+        drawGradientBackground(renderer, width, height);
+        const SDL_Rect popup{(width - PopupSize) / 2, (height - PopupSize) / 2, PopupSize, PopupSize};
+        drawPopupBackground(renderer, popup);
+        drawTextColored(renderer, title, (width - textWidth(title, text.titleFontSize)) / 2, popup.y + 72, text.titleFontSize, uiPalette().primary);
+        const SDL_Rect outputField{(width - 440) / 2, popup.y + 190, 440, UiFormFieldHeight};
+        drawField(text, outputField, "Output type", outputLabels[static_cast<std::size_t>(outputSelected)], selectedField == 0);
+        const bool keyPress = outputSelected == static_cast<int>(MappingOutput::KeyPress);
+        if (keyPress)
+        {
+            const SDL_Rect buttonField{(width - 440) / 2, popup.y + 360, 440, UiFormFieldHeight};
+            drawField(text, buttonField, "Select output", buttonLabels[static_cast<std::size_t>(buttonSelected)], selectedField == 1);
+        }
+        const int hintY = popup.y + popup.h - 72;
+        const int total = controlHintWidth(textures.hintA, "A", "SELECT", text.hintFontSize) + controlHintWidth(textures.hintB, "B", "CANCEL", text.hintFontSize);
+        int hintX = (width - total) / 2;
+        hintX = drawControlHint(renderer, textures.hintA, "A", "SELECT", hintX, hintY, text.hintFontSize);
+        drawControlHint(renderer, textures.hintB, "B", "CANCEL", hintX, hintY, text.hintFontSize);
+        SDL_RenderPresent(renderer);
+
+        input.pollEvent();
+        if (input.exitComboPressed()) return {false, true, current};
+        const UiAction action = navigation.nextAction(input.takeUiAction(), input.heldUiDirection());
+        if (action == UiAction::Back || action == UiAction::Delete) return {false, false, current};
+        if (action == UiAction::Up && keyPress) { selectedField = 0; continue; }
+        if (action == UiAction::Down && keyPress) { selectedField = 1; continue; }
+        if (action == UiAction::Left || action == UiAction::Right)
+        {
+            const int direction = action == UiAction::Left ? -1 : 1;
+            if (selectedField == 0) outputSelected = (outputSelected + direction + static_cast<int>(outputLabels.size())) % static_cast<int>(outputLabels.size());
+            else buttonSelected = (buttonSelected + direction + static_cast<int>(buttonLabels.size())) % static_cast<int>(buttonLabels.size());
+            if (outputSelected != static_cast<int>(MappingOutput::KeyPress)) selectedField = 0;
+            continue;
+        }
+        if (action == UiAction::Confirm || action == UiAction::Start)
+        {
+            current.output = static_cast<MappingOutput>(outputSelected);
+            current.button = static_cast<DsButton>(buttonSelected);
+            return {true, false, current};
+        }
+        SDL_Delay(10);
+    }
 }
 }
