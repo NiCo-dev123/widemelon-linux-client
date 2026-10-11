@@ -222,7 +222,8 @@ namespace widemelon
                 migrated.sm64AutoCenterHoldFrames = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigSm64AutoFramesKey, widemelon::Sm64TouchCenterHoldFramesDefault, widemelon::Sm64TouchCenterHoldFramesMinimum, widemelon::Sm64TouchCenterHoldFramesMaximum));
                 migrated.sm64AutoReleaseDelayMs = static_cast<std::uint16_t>(uiConfig.readInt(UiConfigSm64AutoReleaseDelayKey, widemelon::Sm64TouchReleaseDelayDefaultMs, widemelon::Sm64TouchReleaseDelayMinimumMs, widemelon::Sm64TouchReleaseDelayMaximumMs));
                 migrated.sm64DpadDeadzonePercent = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigSm64DpadDeadzoneKey, LegacySm64DpadDeadzoneDefaultPercent, LegacySm64DpadDeadzoneMinimumPercent, LegacySm64DpadDeadzoneMaximumPercent));
-                migrated.cursorSpeedLimit = static_cast<std::uint16_t>(uiConfig.readInt(UiConfigCursorSpeedKey, widemelon::CursorSpeedDefault, widemelon::CursorSpeedMinimum, widemelon::CursorSpeedMaximum));
+                migrated.leftCursorSpeedLimit = static_cast<std::uint16_t>(uiConfig.readInt(UiConfigCursorSpeedKey, widemelon::CursorSpeedDefault, widemelon::CursorSpeedMinimum, widemelon::CursorSpeedMaximum));
+                migrated.rightCursorSpeedLimit = migrated.leftCursorSpeedLimit;
                 migrated.leftStickCalibration = {
                     static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleLeftKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)),
                     static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleRightKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)),
@@ -265,10 +266,10 @@ namespace widemelon
             rightStickDpadEnabled = rightStickMode == "D-pad";
             sm64ManualStick.setEnabled(analogCenteredEnabled);
             leftCursorStick.setSource(StylusSource::LeftStick);
-            leftCursorStick.setSpeedLimit(activePreset->cursorSpeedLimit);
+            leftCursorStick.setSpeedLimit(activePreset->leftCursorSpeedLimit);
             leftCursorStick.setEnabled(cursorEnabled);
             rightCursorStick.setSource(StylusSource::RightStick);
-            rightCursorStick.setSpeedLimit(activePreset->cursorSpeedLimit);
+            rightCursorStick.setSpeedLimit(activePreset->rightCursorSpeedLimit);
             rightCursorStick.setEnabled(rightCursorEnabled);
             leftStickDpad.setEnabled(leftStickDpadEnabled);
             rightStickDpad.setEnabled(rightStickDpadEnabled);

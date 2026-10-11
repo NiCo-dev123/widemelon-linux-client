@@ -134,7 +134,8 @@ std::string json(const InputPreset &preset)
            "  \"sm64_auto_center_hold_frames\": " + std::to_string(preset.sm64AutoCenterHoldFrames) + ",\n"
            "  \"sm64_auto_release_delay_ms\": " + std::to_string(preset.sm64AutoReleaseDelayMs) + ",\n"
            "  \"sm64_dpad_deadzone_percent\": " + std::to_string(preset.sm64DpadDeadzonePercent) + ",\n"
-           "  \"cursor_speed_limit\": " + std::to_string(preset.cursorSpeedLimit) + ",\n"
+           "  \"left_cursor_speed_limit\": " + std::to_string(preset.leftCursorSpeedLimit) + ",\n"
+           "  \"right_cursor_speed_limit\": " + std::to_string(preset.rightCursorSpeedLimit) + ",\n"
            "  \"l2_stylus_mapping\": \"" + std::string(mappingName(preset.l2StylusMapping)) + "\",\n"
            "  \"r2_stylus_mapping\": \"" + std::string(mappingName(preset.r2StylusMapping)) + "\",\n"
            "  \"left_stick_calibration\": {\n"
@@ -160,7 +161,10 @@ std::optional<InputPreset> parse(std::string_view document)
     preset.sm64AutoCenterHoldFrames = static_cast<std::uint8_t>(clampValue(jsonInt(document, "sm64_auto_center_hold_frames"), 12, 2, 20));
     preset.sm64AutoReleaseDelayMs = static_cast<std::uint16_t>(clampValue(jsonInt(document, "sm64_auto_release_delay_ms"), 1000, 0, 2000));
     preset.sm64DpadDeadzonePercent = static_cast<std::uint8_t>(clampValue(jsonInt(document, "sm64_dpad_deadzone_percent"), 75, 25, 95));
-    preset.cursorSpeedLimit = static_cast<std::uint16_t>(clampValue(jsonInt(document, "cursor_speed_limit"), 300, 100, 500));
+    // `cursor_speed_limit` was shared by both sticks in older presets.
+    const int legacyCursorSpeed = clampValue(jsonInt(document, "cursor_speed_limit"), 300, 100, 500);
+    preset.leftCursorSpeedLimit = static_cast<std::uint16_t>(clampValue(jsonInt(document, "left_cursor_speed_limit"), legacyCursorSpeed, 100, 500));
+    preset.rightCursorSpeedLimit = static_cast<std::uint16_t>(clampValue(jsonInt(document, "right_cursor_speed_limit"), legacyCursorSpeed, 100, 500));
     preset.l2StylusMapping = mappingFromName(jsonString(document, "l2_stylus_mapping"));
     preset.r2StylusMapping = mappingFromName(jsonString(document, "r2_stylus_mapping"));
     preset.leftStickCalibration[0] = static_cast<std::uint8_t>(clampValue(jsonInt(document, "left"), 100, 50, 150));

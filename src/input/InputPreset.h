@@ -26,7 +26,8 @@ namespace widemelon
         std::uint8_t sm64AutoCenterHoldFrames{12};
         std::uint16_t sm64AutoReleaseDelayMs{1000};
         std::uint8_t sm64DpadDeadzonePercent{75};
-        std::uint16_t cursorSpeedLimit{300};
+        std::uint16_t leftCursorSpeedLimit{300};
+        std::uint16_t rightCursorSpeedLimit{300};
         std::array<std::uint8_t, 4> leftStickCalibration{{100, 100, 100, 100}};
         StylusButtonMapping l2StylusMapping{StylusButtonMapping::Disabled};
         StylusButtonMapping r2StylusMapping{StylusButtonMapping::Disabled};

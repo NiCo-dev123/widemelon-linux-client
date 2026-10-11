@@ -56,7 +56,7 @@ namespace widemelon::display::pages
         }
         else if (mode == "Cursor")
         {
-            page.sections.push_back({"", {}, {{FieldType::Range, "Cursor speed limit", ValueId::CursorSpeedLimit,
+            page.sections.push_back({"", {}, {{FieldType::Range, "Cursor speed limit", ValueId::LeftCursorSpeedLimit,
                                                  PageId::Home, ActionId::None, CursorSpeedMinimum, CursorSpeedMaximum,
                                                  CursorSpeedStep}}});
         }

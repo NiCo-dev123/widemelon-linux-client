@@ -1,6 +1,7 @@
 #include "display/pages/InputPresetEditorPage.h"
 
 #include <string>
+#include <vector>
 
 namespace widemelon::display::pages
 {
@@ -8,14 +9,20 @@ namespace widemelon::display::pages
     {
         static std::string displayedPresetName;
         displayedPresetName = presetName;
+        std::vector<FieldDefinition> leftStickFields{{FieldType::Choice, "Left stick mode", ValueId::LeftStickMode}};
+        std::vector<FieldDefinition> rightStickFields{{FieldType::Choice, "Right stick mode", ValueId::RightStickMode}};
+        if (leftMode == "Cursor")
+            leftStickFields.push_back({FieldType::Range, "Cursor speed", ValueId::LeftCursorSpeedLimit, PageId::Home, ActionId::None, 100, 500, 25});
+        if (rightMode == "Cursor")
+            rightStickFields.push_back({FieldType::Range, "Cursor speed", ValueId::RightCursorSpeedLimit, PageId::Home, ActionId::None, 100, 500, 25});
         PageDefinition page{
             PageId::InputPresetEditor,
             "Edit preset",
             {{FooterItemType::Icon, FooterIcon::A, "SELECT"}, {FooterItemType::Icon, FooterIcon::B, "QUIT"}, {FooterItemType::Icon, FooterIcon::Start, "SAVE"}},
             {
                 {"", {displayedPresetName}, {}},
-                {"Left stick mode", {}, {{FieldType::Choice, "", ValueId::LeftStickMode}}},
-                {"Right stick mode", {}, {{FieldType::Choice, "", ValueId::RightStickMode}}},
+                {"Left stick", {}, leftStickFields},
+                {"Right stick", {}, rightStickFields},
                 {"Key mapping", {}, {
                     {FieldType::ActionButton, "L2 : Stylus mapping", ValueId::L2StylusMapping, PageId::Home, ActionId::ConfigureL2StylusMapping},
                     {FieldType::ActionButton, "R2 : Stylus mapping", ValueId::R2StylusMapping, PageId::Home, ActionId::ConfigureR2StylusMapping},
@@ -27,8 +34,6 @@ namespace widemelon::display::pages
                 }},
             },
         };
-        if (leftMode == "Cursor") page.sections.insert(page.sections.begin() + 2, {"Cursor speed", {}, {{FieldType::Range, "", ValueId::CursorSpeedLimit, PageId::Home, ActionId::None, 100, 500, 25}}});
-        if (rightMode == "Cursor") page.sections.insert(page.sections.end() - 1, {"Cursor speed", {}, {{FieldType::Range, "", ValueId::CursorSpeedLimit, PageId::Home, ActionId::None, 100, 500, 25}}});
         return page;
     }
 }
