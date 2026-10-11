@@ -34,4 +34,14 @@ namespace widemelon
         bool sourceActive{false};
         StylusPressSemantics pressSemantics{StylusPressSemantics::Automatic};
     };
+
+    inline bool sameStylusIntent(const StylusIntent &left, const StylusIntent &right)
+    {
+        return left.source == right.source
+            && left.x == right.x
+            && left.y == right.y
+            && left.pressed == right.pressed
+            && left.sourceActive == right.sourceActive
+            && left.pressSemantics == right.pressSemantics;
+    }
 }

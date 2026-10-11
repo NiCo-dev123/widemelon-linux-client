@@ -181,8 +181,16 @@ namespace widemelon
         bool sm64DpadEnabled = false;
         widemelon::LeftStickCalibration leftStickCalibration;
         auto sm64ModeEnabled = [&] { return sm64Enabled || sm64ManualEnabled || cursorEnabled || rightCursorEnabled || mphAutoEnabled || mphManualEnabled; };
+        Sm64TouchState displayedStylusState;
         auto sm64TouchState = [&]() -> const Sm64TouchState&
-        { return mphManualEnabled ? mphManualStick.touchState() : (mphAutoEnabled ? mphAutoStick.touchState() : ((cursorEnabled || rightCursorEnabled) ? cursorStick.touchState() : (sm64ManualEnabled ? sm64ManualStick.touchState() : sm64Stick.touchState()))); };
+        {
+            const StylusIntent &intent = mphManualEnabled ? mphManualStick.intent()
+                : (mphAutoEnabled ? mphAutoStick.intent()
+                : ((cursorEnabled || rightCursorEnabled) ? cursorStick.intent()
+                : (sm64ManualEnabled ? sm64ManualStick.intent() : sm64Stick.intent())));
+            displayedStylusState = {intent.pressed, intent.x, intent.y};
+            return displayedStylusState;
+        };
         auto reloadStickMods = [&]
         {
             std::array<char, 4096> executable{};
@@ -384,10 +392,11 @@ namespace widemelon
             // Both sticks feed one stylus. If both are configured, whichever
             // one is currently moved controls it; users should avoid moving
             // both simultaneously.
-            const widemelon::LeftStickState &cursorStickInput = rightCursorEnabled
+            const bool rightCursorControls = rightCursorEnabled
                 && (!cursorEnabled || stickMoved(rightStick))
-                ? rightStick
-                : calibratedStick;
+                ;
+            const widemelon::LeftStickState &cursorStickInput = rightCursorControls ? rightStick : calibratedStick;
+            cursorStick.setSource(rightCursorControls ? StylusSource::RightStick : StylusSource::LeftStick);
             const bool cursorTouchChanged = cursorStick.update(cursorStickInput, exitInput.r2Pressed());
             const bool mphManualTouchChanged = mphManualStick.update(rightStick, exitInput.r2Pressed());
             const bool mphAutoTouchChanged = mphAutoStick.update(rightStick);

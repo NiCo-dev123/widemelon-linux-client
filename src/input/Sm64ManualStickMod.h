@@ -4,6 +4,7 @@
 
 #include "input/EvdevInput.h"
 #include "input/Sm64StickMod.h"
+#include "input/StylusIntent.h"
 
 namespace widemelon
 {
@@ -14,8 +15,8 @@ public:
     void setEnabled(bool enabled);
     bool enabled() const { return isEnabled; }
     bool update(const LeftStickState& stick, bool r2Pressed);
-    const Sm64TouchState& touchState() const { return touch; }
-    bool cursorPressed() const { return touch.active; }
+    const StylusIntent &intent() const { return stylusIntent; }
+    bool cursorPressed() const { return stylusIntent.pressed; }
     bool cursorTracking() const { return false; }
     float currentCursorSpeed() const { return 0.0F; }
 
@@ -24,7 +25,7 @@ private:
 
     bool isEnabled = false;
     bool previousR2Pressed = false;
-    Sm64TouchState touch;
+    StylusIntent stylusIntent{StylusSource::LeftStick, Sm64TouchCenterX, Sm64TouchCenterY, false, false, StylusPressSemantics::Toggle};
 };
 
 }

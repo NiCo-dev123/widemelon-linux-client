@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include "input/EvdevInput.h"
+#include "input/StylusIntent.h"
 
 namespace widemelon
 {
@@ -35,7 +36,7 @@ public:
     void setReleaseDelayMs(std::uint16_t milliseconds);
     bool enabled() const { return isEnabled; }
     bool update(const LeftStickState& stick);
-    const Sm64TouchState& touchState() const { return touch; }
+    const StylusIntent &intent() const { return stylusIntent; }
     bool cursorPressed() const { return isCursorPressed; }
 
 private:
@@ -46,7 +47,7 @@ private:
     std::uint8_t centerHoldFrames = 0;
     std::uint8_t centerHoldFrameLimit = Sm64TouchCenterHoldFramesDefault;
     std::chrono::milliseconds releaseDelay{Sm64TouchReleaseDelayDefaultMs};
-    Sm64TouchState touch;
+    StylusIntent stylusIntent{StylusSource::LeftStick, Sm64TouchCenterX, Sm64TouchCenterY, false, false, StylusPressSemantics::Automatic};
 };
 
 }

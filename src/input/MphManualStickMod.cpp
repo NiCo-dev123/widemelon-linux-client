@@ -9,7 +9,8 @@ void MphManualStickMod::setEnabled(bool value)
 {
     enabled = value; previousR2Pressed = false; lastUpdateAt = {};
     contactRequested = false; reactivateAfterWrap = false;
-    cursorX = Sm64TouchCenterX; cursorY = Sm64TouchCenterY; touch = {};
+    cursorX = Sm64TouchCenterX; cursorY = Sm64TouchCenterY;
+    stylusIntent = {StylusSource::RightStick, Sm64TouchCenterX, Sm64TouchCenterY, false, false, StylusPressSemantics::Toggle};
 }
 void MphManualStickMod::setSpeed(std::uint16_t value) { speed = std::clamp(value, MphManualSpeedMinimum, MphManualSpeedMaximum); }
 float MphManualStickMod::normalizeAxis(int value, int center, int minimum, int maximum)
@@ -45,24 +46,27 @@ bool MphManualStickMod::update(const LeftStickState &stick, bool r2Pressed)
     if (cursorX < 0.0F) cursorX += 256.0F;
     // Vertical camera movement must stop at the screen edges.
     cursorY = std::clamp(cursorY, 0.0F, 191.0F);
-    Sm64TouchState next = touch;
+    const float horizontal = normalizeAxis(stick.x, stick.xCenter, stick.xMinimum, stick.xMaximum);
+    const float vertical = normalizeAxis(stick.y, stick.yCenter, stick.yMinimum, stick.yMaximum);
+    StylusIntent next = stylusIntent;
+    next.sourceActive = std::sqrt(horizontal * horizontal + vertical * vertical) > 0.05F;
     next.x = static_cast<std::uint16_t>(std::clamp(static_cast<int>(std::lround(cursorX)), 0, 255));
     next.y = static_cast<std::uint16_t>(std::clamp(static_cast<int>(std::lround(cursorY)), 0, 191));
     if (reactivateAfterWrap)
     {
         reactivateAfterWrap = false;
-        next.active = contactRequested;
+        next.pressed = contactRequested;
     }
     else if (wrappedHorizontally && contactRequested)
     {
         reactivateAfterWrap = true;
-        next.active = false;
+        next.pressed = false;
     }
     else
     {
-        next.active = contactRequested;
+        next.pressed = contactRequested;
     }
-    if (!toggled && next.active == touch.active && next.x == touch.x && next.y == touch.y) return false;
-    touch = next; return true;
+    if (!toggled && sameStylusIntent(next, stylusIntent)) return false;
+    stylusIntent = next; return true;
 }
 }

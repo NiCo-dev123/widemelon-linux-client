@@ -3,6 +3,7 @@
 #include "input/EvdevInput.h"
 #include "input/MphManualStickMod.h"
 #include "input/Sm64StickMod.h"
+#include "input/StylusIntent.h"
 
 #include <chrono>
 #include <cstdint>
@@ -22,7 +23,7 @@ namespace widemelon
         void setSpeed(std::uint16_t pixelsPerSecond);
         void setReleaseDelayMs(std::uint16_t milliseconds);
         bool update(const LeftStickState &stick);
-        const Sm64TouchState &touchState() const { return touch; }
+        const StylusIntent &intent() const { return stylusIntent; }
 
     private:
         static float normalizeAxis(int value, int center, int minimum, int maximum);
@@ -35,6 +36,6 @@ namespace widemelon
         std::chrono::steady_clock::time_point lastUpdateAt{};
         std::chrono::steady_clock::time_point releaseStartedAt{};
         std::chrono::milliseconds releaseDelay{MphAutoReleaseDelayMs};
-        Sm64TouchState touch;
+        StylusIntent stylusIntent{StylusSource::RightStick, Sm64TouchCenterX, Sm64TouchCenterY, false, false, StylusPressSemantics::Automatic};
     };
 }
