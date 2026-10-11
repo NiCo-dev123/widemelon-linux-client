@@ -39,6 +39,7 @@ add_executable(widemelon-client
     src/display/pages/SettingsPage.cpp
     src/input/EvdevInput.cpp
     src/input/InputPreset.cpp
+    src/input/InputMapper.cpp
     src/input/LeftStickCalibration.cpp
     src/input/MphAutoStickMod.cpp
     src/input/MphManualStickMod.cpp
@@ -48,7 +49,6 @@ add_executable(widemelon-client
     src/input/Sm64StickMod.cpp
     src/input/StickDpadMod.cpp
     src/input/StylusRouter.cpp
-    src/input/StylusButtonMapping.cpp
     src/network/WebSocketClient.cpp
     src/protocol/WideMelonProtocol.cpp
 )

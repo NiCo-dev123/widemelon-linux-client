@@ -106,26 +106,27 @@ int clampValue(const std::optional<int> &value, int defaultValue, int minimum, i
     return value ? std::clamp(*value, minimum, maximum) : defaultValue;
 }
 
-std::string_view mappingName(StylusButtonMapping mapping)
+MappingOutput mappingOutputFromName(const std::optional<std::string> &value)
 {
-    switch (mapping)
-    {
-    case StylusButtonMapping::Press: return "press";
-    case StylusButtonMapping::Hold: return "hold";
-    default: return "disabled";
-    }
+    if (value && *value == "key-press") return MappingOutput::KeyPress;
+    if (value && *value == "stylus-press") return MappingOutput::StylusPress;
+    if (value && *value == "stylus-hold") return MappingOutput::StylusHold;
+    return MappingOutput::Disabled;
 }
 
-StylusButtonMapping mappingFromName(const std::optional<std::string> &value)
+DsButton dsButtonFromName(const std::optional<std::string> &value)
 {
-    if (value && *value == "press") return StylusButtonMapping::Press;
-    if (value && *value == "hold") return StylusButtonMapping::Hold;
-    return StylusButtonMapping::Disabled;
+    for (std::size_t index = 0; index <= static_cast<std::size_t>(DsButton::Start); ++index)
+    {
+        const DsButton button = static_cast<DsButton>(index);
+        if (value && *value == dsButtonName(button)) return button;
+    }
+    return DsButton::A;
 }
 
 std::string json(const InputPreset &preset)
 {
-    return "{\n"
+    std::string result = "{\n"
            "  \"name\": \"" + preset.name + "\",\n"
            "  \"left_stick_mode\": \"" + preset.leftStickMode + "\",\n"
            "  \"right_stick_mode\": \"" + preset.rightStickMode + "\",\n"
@@ -135,10 +136,16 @@ std::string json(const InputPreset &preset)
            "  \"sm64_auto_release_delay_ms\": " + std::to_string(preset.sm64AutoReleaseDelayMs) + ",\n"
            "  \"sm64_dpad_deadzone_percent\": " + std::to_string(preset.sm64DpadDeadzonePercent) + ",\n"
            "  \"left_cursor_speed_limit\": " + std::to_string(preset.leftCursorSpeedLimit) + ",\n"
-           "  \"right_cursor_speed_limit\": " + std::to_string(preset.rightCursorSpeedLimit) + ",\n"
-           "  \"l2_stylus_mapping\": \"" + std::string(mappingName(preset.l2StylusMapping)) + "\",\n"
-           "  \"r2_stylus_mapping\": \"" + std::string(mappingName(preset.r2StylusMapping)) + "\",\n"
-           "  \"left_stick_calibration\": {\n"
+           "  \"right_cursor_speed_limit\": " + std::to_string(preset.rightCursorSpeedLimit) + ",\n";
+    for (std::size_t index = 0; index < preset.mappings.size(); ++index)
+    {
+        const PhysicalInput input = static_cast<PhysicalInput>(index);
+        const InputMapping &mapping = preset.mappings[index];
+        const std::string key(physicalInputStorageName(input));
+        result += "  \"map_" + key + "_output\": \"" + std::string(mappingOutputName(mapping.output)) + "\",\n";
+        result += "  \"map_" + key + "_button\": \"" + std::string(dsButtonName(mapping.button)) + "\",\n";
+    }
+    return result + "  \"left_stick_calibration\": {\n"
            "    \"left\": " + std::to_string(preset.leftStickCalibration[0]) + ",\n"
            "    \"right\": " + std::to_string(preset.leftStickCalibration[1]) + ",\n"
            "    \"up\": " + std::to_string(preset.leftStickCalibration[2]) + ",\n"
@@ -152,7 +159,7 @@ std::optional<InputPreset> parse(std::string_view document)
     const std::optional<std::string> name = jsonString(document, "name");
     if (!name || !InputPresetStore::isValidName(*name)) return std::nullopt;
 
-    InputPreset preset;
+    InputPreset preset = InputPresetStore::defaultPreset();
     preset.name = *name;
     preset.leftStickMode = jsonString(document, "left_stick_mode").value_or(preset.leftStickMode);
     preset.rightStickMode = jsonString(document, "right_stick_mode").value_or(preset.rightStickMode);
@@ -165,14 +172,63 @@ std::optional<InputPreset> parse(std::string_view document)
     const int legacyCursorSpeed = clampValue(jsonInt(document, "cursor_speed_limit"), 300, 100, 500);
     preset.leftCursorSpeedLimit = static_cast<std::uint16_t>(clampValue(jsonInt(document, "left_cursor_speed_limit"), legacyCursorSpeed, 100, 500));
     preset.rightCursorSpeedLimit = static_cast<std::uint16_t>(clampValue(jsonInt(document, "right_cursor_speed_limit"), legacyCursorSpeed, 100, 500));
-    preset.l2StylusMapping = mappingFromName(jsonString(document, "l2_stylus_mapping"));
-    preset.r2StylusMapping = mappingFromName(jsonString(document, "r2_stylus_mapping"));
+    for (std::size_t index = 0; index < preset.mappings.size(); ++index)
+    {
+        const PhysicalInput input = static_cast<PhysicalInput>(index);
+        const std::string key(physicalInputStorageName(input));
+        const std::optional<std::string> output = jsonString(document, "map_" + key + "_output");
+        if (output) preset.mappings[index].output = mappingOutputFromName(output);
+        preset.mappings[index].button = dsButtonFromName(jsonString(document, "map_" + key + "_button"));
+    }
+    // Compatibility with the L2/R2 stylus POC stored by older presets.
+    const auto legacyStylusOutput = [&](std::string_view key)
+    {
+        const std::optional<std::string> legacy = jsonString(document, key);
+        return legacy && *legacy == "press" ? MappingOutput::StylusPress
+             : legacy && *legacy == "hold" ? MappingOutput::StylusHold : MappingOutput::Disabled;
+    };
+    const std::size_t l2 = static_cast<std::size_t>(PhysicalInput::L2);
+    const std::size_t r2 = static_cast<std::size_t>(PhysicalInput::R2);
+    if (!jsonString(document, "map_l2_output")) preset.mappings[l2].output = legacyStylusOutput("l2_stylus_mapping");
+    if (!jsonString(document, "map_r2_output")) preset.mappings[r2].output = legacyStylusOutput("r2_stylus_mapping");
     preset.leftStickCalibration[0] = static_cast<std::uint8_t>(clampValue(jsonInt(document, "left"), 100, 50, 150));
     preset.leftStickCalibration[1] = static_cast<std::uint8_t>(clampValue(jsonInt(document, "right"), 100, 50, 150));
     preset.leftStickCalibration[2] = static_cast<std::uint8_t>(clampValue(jsonInt(document, "up"), 100, 50, 150));
     preset.leftStickCalibration[3] = static_cast<std::uint8_t>(clampValue(jsonInt(document, "down"), 100, 50, 150));
     return preset;
 }
+}
+
+std::string_view physicalInputName(PhysicalInput input)
+{
+    static constexpr std::array<std::string_view, PhysicalInputCount> Names{
+        "A", "B", "X", "Y", "L", "R", "L2", "R2", "D-pad left", "D-pad right", "D-pad up", "D-pad down", "Select", "Start", "L3", "R3"};
+    return Names[static_cast<std::size_t>(input)];
+}
+
+std::string_view physicalInputStorageName(PhysicalInput input)
+{
+    static constexpr std::array<std::string_view, PhysicalInputCount> Names{
+        "a", "b", "x", "y", "l", "r", "l2", "r2", "dpad_left", "dpad_right", "dpad_up", "dpad_down", "select", "start", "l3", "r3"};
+    return Names[static_cast<std::size_t>(input)];
+}
+
+std::string_view mappingOutputName(MappingOutput output)
+{
+    switch (output)
+    {
+    case MappingOutput::KeyPress: return "key-press";
+    case MappingOutput::StylusPress: return "stylus-press";
+    case MappingOutput::StylusHold: return "stylus-hold";
+    default: return "disabled";
+    }
+}
+
+std::string_view dsButtonName(DsButton button)
+{
+    static constexpr std::array<std::string_view, 12> Names{
+        "A", "B", "X", "Y", "L", "R", "D-pad left", "D-pad right", "D-pad up", "D-pad down", "Select", "Start"};
+    return Names[static_cast<std::size_t>(button)];
 }
 
 bool InputPresetStore::isValidName(std::string_view name)
@@ -188,6 +244,22 @@ InputPreset InputPresetStore::defaultPreset()
 {
     InputPreset preset;
     preset.name = std::string(DefaultPresetName);
+    const auto identity = [&](PhysicalInput input, DsButton button)
+    {
+        preset.mappings[static_cast<std::size_t>(input)] = {MappingOutput::KeyPress, button};
+    };
+    identity(PhysicalInput::A, DsButton::A);
+    identity(PhysicalInput::B, DsButton::B);
+    identity(PhysicalInput::X, DsButton::X);
+    identity(PhysicalInput::Y, DsButton::Y);
+    identity(PhysicalInput::L, DsButton::L);
+    identity(PhysicalInput::R, DsButton::R);
+    identity(PhysicalInput::DpadLeft, DsButton::DpadLeft);
+    identity(PhysicalInput::DpadRight, DsButton::DpadRight);
+    identity(PhysicalInput::DpadUp, DsButton::DpadUp);
+    identity(PhysicalInput::DpadDown, DsButton::DpadDown);
+    identity(PhysicalInput::Select, DsButton::Select);
+    identity(PhysicalInput::Start, DsButton::Start);
     return preset;
 }
 

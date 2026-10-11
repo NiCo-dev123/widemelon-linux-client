@@ -183,6 +183,8 @@ std::string EvdevInput::pollEvent()
             case BTN_TR: button = ButtonR; rightPressed = pressed; break;
             case BTN_TL2: leftTriggerPressed = pressed; stateChanged = true; break;
             case BTN_TR2: rightTriggerPressed = pressed; stateChanged = true; break;
+            case BTN_THUMBL: leftStickPressed = pressed; stateChanged = true; break;
+            case BTN_THUMBR: rightStickPressed = pressed; stateChanged = true; break;
             default: break;
             }
             if (button != 0)

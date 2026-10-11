@@ -73,8 +73,9 @@ namespace widemelon::display
         LeftStickScaleDownPercent,
         LeftStickScaleLeftPercent,
         LeftStickScaleRightPercent,
-        L2StylusMapping,
-        R2StylusMapping
+        MappingA, MappingB, MappingX, MappingY, MappingL, MappingR, MappingL2, MappingR2,
+        MappingDpadLeft, MappingDpadRight, MappingDpadUp, MappingDpadDown,
+        MappingSelect, MappingStart, MappingL3, MappingR3
     };
 
     enum class ActionId : std::uint8_t
@@ -87,8 +88,7 @@ namespace widemelon::display
         DiscardInputPreset,
         RequestDeleteInputPreset,
         EditInputPreset,
-        ConfigureL2StylusMapping,
-        ConfigureR2StylusMapping,
+        ConfigureInputMapping,
         Quit
     };
 

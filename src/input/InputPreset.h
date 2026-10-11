@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -9,12 +10,44 @@
 
 namespace widemelon
 {
-    enum class StylusButtonMapping : std::uint8_t
+    enum class PhysicalInput : std::uint8_t
+    {
+        A, B, X, Y, L, R, L2, R2,
+        DpadLeft, DpadRight, DpadUp, DpadDown,
+        Select, Start, L3, R3,
+        Count,
+    };
+
+    enum class MappingOutput : std::uint8_t
     {
         Disabled,
-        Press,
-        Hold,
+        KeyPress,
+        StylusPress,
+        StylusHold,
     };
+
+    enum class DsButton : std::uint8_t
+    {
+        A, B, X, Y, L, R, DpadLeft, DpadRight, DpadUp, DpadDown, Select, Start,
+    };
+
+    struct InputMapping
+    {
+        MappingOutput output{MappingOutput::Disabled};
+        DsButton button{DsButton::A};
+
+        bool operator==(const InputMapping &other) const
+        {
+            return output == other.output && button == other.button;
+        }
+        bool operator!=(const InputMapping &other) const { return !(*this == other); }
+    };
+
+    constexpr std::size_t PhysicalInputCount = static_cast<std::size_t>(PhysicalInput::Count);
+    std::string_view physicalInputName(PhysicalInput input);
+    std::string_view physicalInputStorageName(PhysicalInput input);
+    std::string_view mappingOutputName(MappingOutput output);
+    std::string_view dsButtonName(DsButton button);
 
     struct InputPreset
     {
@@ -29,8 +62,7 @@ namespace widemelon
         std::uint16_t leftCursorSpeedLimit{300};
         std::uint16_t rightCursorSpeedLimit{300};
         std::array<std::uint8_t, 4> leftStickCalibration{{100, 100, 100, 100}};
-        StylusButtonMapping l2StylusMapping{StylusButtonMapping::Disabled};
-        StylusButtonMapping r2StylusMapping{StylusButtonMapping::Disabled};
+        std::array<InputMapping, PhysicalInputCount> mappings{};
     };
 
     class InputPresetStore

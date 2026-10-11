@@ -1,6 +1,8 @@
 #include "display/pages/InputPresetEditorPage.h"
+#include "input/InputPreset.h"
 
 #include <string>
+#include <array>
 #include <vector>
 
 namespace widemelon::display::pages
@@ -15,6 +17,13 @@ namespace widemelon::display::pages
             leftStickFields.push_back({FieldType::Range, "Cursor speed", ValueId::LeftCursorSpeedLimit, PageId::Home, ActionId::None, 100, 500, 25});
         if (rightMode == "Cursor")
             rightStickFields.push_back({FieldType::Range, "Cursor speed", ValueId::RightCursorSpeedLimit, PageId::Home, ActionId::None, 100, 500, 25});
+        const std::array<ValueId, PhysicalInputCount> mappingValues{
+            ValueId::MappingA, ValueId::MappingB, ValueId::MappingX, ValueId::MappingY, ValueId::MappingL, ValueId::MappingR,
+            ValueId::MappingL2, ValueId::MappingR2, ValueId::MappingDpadLeft, ValueId::MappingDpadRight, ValueId::MappingDpadUp,
+            ValueId::MappingDpadDown, ValueId::MappingSelect, ValueId::MappingStart, ValueId::MappingL3, ValueId::MappingR3};
+        std::vector<FieldDefinition> mappingFields;
+        for (std::size_t index = 0; index < mappingValues.size(); ++index)
+            mappingFields.push_back({FieldType::ActionButton, "", mappingValues[index], PageId::Home, ActionId::ConfigureInputMapping});
         PageDefinition page{
             PageId::InputPresetEditor,
             "Edit preset",
@@ -23,10 +32,7 @@ namespace widemelon::display::pages
                 {"", {displayedPresetName}, {}},
                 {"Left stick", {}, leftStickFields},
                 {"Right stick", {}, rightStickFields},
-                {"Key mapping", {}, {
-                    {FieldType::ActionButton, "L2 : Stylus mapping", ValueId::L2StylusMapping, PageId::Home, ActionId::ConfigureL2StylusMapping},
-                    {FieldType::ActionButton, "R2 : Stylus mapping", ValueId::R2StylusMapping, PageId::Home, ActionId::ConfigureR2StylusMapping},
-                }},
+                {"Key mapping", {}, mappingFields},
                 {"File", {}, {
                     {FieldType::ActionButton, "Save and quit", ValueId::None, PageId::Home, ActionId::SaveInputPreset},
                     {FieldType::ActionButton, "Quit without saving", ValueId::None, PageId::Home, ActionId::DiscardInputPreset},
