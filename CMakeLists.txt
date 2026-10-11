@@ -39,6 +39,7 @@ add_executable(widemelon-client
     src/display/pages/SettingsPage.cpp
     src/input/EvdevInput.cpp
     src/input/InputPreset.cpp
+    src/input/configs/Default.cpp
     src/input/InputMapper.cpp
     src/input/LeftStickCalibration.cpp
     src/input/MphAutoStickMod.cpp
