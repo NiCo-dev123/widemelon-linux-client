@@ -35,6 +35,10 @@ void InputMapper::setMappings(const std::array<InputMapping, PhysicalInputCount>
     singlePressPending.fill(false);
     virtualButtonMask = 0;
     stylusPressed = false;
+    requestScreenPress = false;
+    requestedScreenX = 127;
+    requestedScreenY = 95;
+    requestedScreenPressReleaseDelayFrames = ScreenPressReleaseDelayFramesDefault;
 }
 
 bool InputMapper::isPressed(const EvdevInput &input, PhysicalInput source)
@@ -73,6 +77,7 @@ bool InputMapper::update(const EvdevInput &input)
     const bool previousStylus = stylusPressed;
     virtualButtonMask = 0;
     stylusPressed = false;
+    requestScreenPress = false;
     const std::array<bool, PhysicalInputCount> singlePressActive = singlePressPending;
     singlePressPending.fill(false);
     for (std::size_t index = 0; index < mappings.size(); ++index)
@@ -83,6 +88,13 @@ bool InputMapper::update(const EvdevInput &input)
             virtualButtonMask |= dsButtonMask(mapping.button);
         if (mapping.output == MappingOutput::StylusPress && pressed && !previousPressed[index])
             singlePressPending[index] = true;
+        if (mapping.output == MappingOutput::ScreenPress && pressed && !previousPressed[index])
+        {
+            requestScreenPress = true;
+            requestedScreenX = mapping.screenX;
+            requestedScreenY = mapping.screenY;
+            requestedScreenPressReleaseDelayFrames = mapping.screenPressReleaseDelayFrames;
+        }
         if (mapping.output == MappingOutput::StylusHold && pressed && !previousPressed[index])
             togglePressed[index] = !togglePressed[index];
         if (mapping.output != MappingOutput::StylusHold)
@@ -94,13 +106,13 @@ bool InputMapper::update(const EvdevInput &input)
         if (mapping.output == MappingOutput::StylusPress && (singlePressActive[index] || singlePressPending[index])) stylusPressed = true;
         previousPressed[index] = pressed;
     }
-    return previousButtons != virtualButtonMask || previousStylus != stylusPressed;
+    return previousButtons != virtualButtonMask || previousStylus != stylusPressed || requestScreenPress;
 }
 
 bool InputMapper::hasStylusMapping() const
 {
     for (const InputMapping &mapping : mappings)
-        if (mapping.output == MappingOutput::StylusPress || mapping.output == MappingOutput::StylusHold) return true;
+        if (mapping.output == MappingOutput::StylusPress || mapping.output == MappingOutput::StylusHold || mapping.output == MappingOutput::ScreenPress) return true;
     return false;
 }
 }

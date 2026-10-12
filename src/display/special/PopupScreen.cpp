@@ -5,7 +5,9 @@
 #include "display/UiTheme.h"
 #include "input/EvdevInput.h"
 
+#include <algorithm>
 #include <array>
+#include <cstdint>
 #include <vector>
 
 namespace widemelon::display
@@ -112,12 +114,16 @@ PopupScreen::MappingResult PopupScreen::editInputMapping(SDL_Renderer *renderer,
                                                           std::string_view inputName, InputMapping current)
 {
     const std::string title = "Key mapping : " + std::string(inputName);
-    const std::vector<std::string_view> outputLabels{"Disabled", "Key press", "Stylus press", "Stylus hold"};
+    const std::vector<std::string_view> outputLabels{"Disabled", "Key press", "Stylus press", "Stylus hold", "Screen press"};
     std::vector<std::string_view> buttonLabels;
     for (std::size_t index = 0; index <= static_cast<std::size_t>(DsButton::Start); ++index)
         buttonLabels.push_back(dsButtonName(static_cast<DsButton>(index)));
-    int outputSelected = current.output == MappingOutput::KeyPress ? 1 : current.output == MappingOutput::StylusPress ? 2 : current.output == MappingOutput::StylusHold ? 3 : 0;
+    int outputSelected = current.output == MappingOutput::KeyPress ? 1 : current.output == MappingOutput::StylusPress ? 2
+        : current.output == MappingOutput::StylusHold ? 3 : current.output == MappingOutput::ScreenPress ? 4 : 0;
     int buttonSelected = static_cast<int>(current.button);
+    int screenX = current.screenX;
+    int screenY = current.screenY;
+    int screenPressReleaseDelayFrames = current.screenPressReleaseDelayFrames;
     int selectedField = 0;
     MenuNavigation navigation;
     const auto drawField = [&](const ThemeTextSettings &text, const SDL_Rect &field, std::string_view label,
@@ -139,13 +145,23 @@ PopupScreen::MappingResult PopupScreen::editInputMapping(SDL_Renderer *renderer,
         const SDL_Rect popup{(width - PopupSize) / 2, (height - PopupSize) / 2, PopupSize, PopupSize};
         drawPopupBackground(renderer, popup);
         drawTextColored(renderer, title, (width - textWidth(title, text.titleFontSize)) / 2, popup.y + 72, text.titleFontSize, uiPalette().primary);
-        const SDL_Rect outputField{(width - 440) / 2, popup.y + 190, 440, UiFormFieldHeight};
+        const SDL_Rect outputField{(width - 440) / 2, popup.y + 150, 440, UiFormFieldHeight};
         drawField(text, outputField, "Output type", outputLabels[static_cast<std::size_t>(outputSelected)], selectedField == 0);
         const bool keyPress = outputSelected == static_cast<int>(MappingOutput::KeyPress);
+        const bool screenPress = outputSelected == static_cast<int>(MappingOutput::ScreenPress);
         if (keyPress)
         {
-            const SDL_Rect buttonField{(width - 440) / 2, popup.y + 360, 440, UiFormFieldHeight};
+            const SDL_Rect buttonField{(width - 440) / 2, popup.y + 330, 440, UiFormFieldHeight};
             drawField(text, buttonField, "Select output", buttonLabels[static_cast<std::size_t>(buttonSelected)], selectedField == 1);
+        }
+        if (screenPress)
+        {
+            const SDL_Rect xField{(width - 440) / 2, popup.y + 290, 440, UiFormFieldHeight};
+            const SDL_Rect yField{(width - 440) / 2, popup.y + 410, 440, UiFormFieldHeight};
+            const SDL_Rect delayField{(width - 440) / 2, popup.y + 530, 440, UiFormFieldHeight};
+            drawField(text, xField, "X coordinate", std::to_string(screenX), selectedField == 1);
+            drawField(text, yField, "Y coordinate", std::to_string(screenY), selectedField == 2);
+            drawField(text, delayField, "Release delay", std::to_string(screenPressReleaseDelayFrames) + " frames", selectedField == 3);
         }
         const int hintY = popup.y + popup.h - 72;
         const int total = controlHintWidth(textures.hintA, "A", "SELECT", text.hintFontSize) + controlHintWidth(textures.hintB, "B", "CANCEL", text.hintFontSize);
@@ -158,20 +174,30 @@ PopupScreen::MappingResult PopupScreen::editInputMapping(SDL_Renderer *renderer,
         if (input.exitComboPressed()) return {false, true, current};
         const UiAction action = navigation.nextAction(input.takeUiAction(), input.heldUiDirection());
         if (action == UiAction::Back || action == UiAction::Delete) return {false, false, current};
-        if (action == UiAction::Up && keyPress) { selectedField = 0; continue; }
-        if (action == UiAction::Down && keyPress) { selectedField = 1; continue; }
+        const int fieldCount = keyPress ? 2 : screenPress ? 4 : 1;
+        if (action == UiAction::Up) { selectedField = std::max(0, selectedField - 1); continue; }
+        if (action == UiAction::Down) { selectedField = std::min(fieldCount - 1, selectedField + 1); continue; }
         if (action == UiAction::Left || action == UiAction::Right)
         {
             const int direction = action == UiAction::Left ? -1 : 1;
             if (selectedField == 0) outputSelected = (outputSelected + direction + static_cast<int>(outputLabels.size())) % static_cast<int>(outputLabels.size());
-            else buttonSelected = (buttonSelected + direction + static_cast<int>(buttonLabels.size())) % static_cast<int>(buttonLabels.size());
-            if (outputSelected != static_cast<int>(MappingOutput::KeyPress)) selectedField = 0;
+            else if (keyPress) buttonSelected = (buttonSelected + direction + static_cast<int>(buttonLabels.size())) % static_cast<int>(buttonLabels.size());
+            else if (selectedField == 1) screenX = std::clamp(screenX + direction, 0, 255);
+            else if (selectedField == 2) screenY = std::clamp(screenY + direction, 0, 191);
+            else screenPressReleaseDelayFrames = std::clamp(screenPressReleaseDelayFrames + direction,
+                static_cast<int>(ScreenPressReleaseDelayFramesMinimum), static_cast<int>(ScreenPressReleaseDelayFramesMaximum));
+            const int updatedFieldCount = outputSelected == static_cast<int>(MappingOutput::KeyPress) ? 2
+                : outputSelected == static_cast<int>(MappingOutput::ScreenPress) ? 4 : 1;
+            selectedField = std::min(selectedField, updatedFieldCount - 1);
             continue;
         }
         if (action == UiAction::Confirm || action == UiAction::Start)
         {
             current.output = static_cast<MappingOutput>(outputSelected);
             current.button = static_cast<DsButton>(buttonSelected);
+            current.screenX = static_cast<std::uint16_t>(screenX);
+            current.screenY = static_cast<std::uint16_t>(screenY);
+            current.screenPressReleaseDelayFrames = static_cast<std::uint8_t>(screenPressReleaseDelayFrames);
             return {true, false, current};
         }
         SDL_Delay(10);

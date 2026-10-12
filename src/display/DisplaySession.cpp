@@ -392,11 +392,15 @@ namespace widemelon
             const bool leftStickDpadChanged = leftStickDpad.update(calibratedStick);
             const bool rightStickDpadChanged = rightStickDpad.update(rightStick);
             const bool mappedInputChanged = inputMapper.update(exitInput);
-            bool stylusChanged = false;
+            bool stylusChanged = stylusRouter.advanceScreenPress();
             if (sm64ManualTouchChanged) stylusChanged = stylusRouter.submit(sm64ManualStick.intent()) || stylusChanged;
             if (leftCursorTouchChanged) stylusChanged = stylusRouter.submit(leftCursorStick.intent()) || stylusChanged;
             if (rightCursorTouchChanged) stylusChanged = stylusRouter.submit(rightCursorStick.intent()) || stylusChanged;
-            if (mappedInputChanged) stylusChanged = stylusRouter.setMappedPressed(inputMapper.touchPressed()) || stylusChanged;
+            if (inputMapper.screenPressRequested())
+                stylusChanged = stylusRouter.requestScreenPress(inputMapper.screenPressX(), inputMapper.screenPressY(),
+                    inputMapper.screenPressReleaseDelayFrames()) || stylusChanged;
+            if (mappedInputChanged)
+                stylusChanged = stylusRouter.setMappedPressed(inputMapper.touchPressed()) || stylusChanged;
             inputDirty = exitInput.takeStateChanged() || stylusChanged || leftStickDpadChanged || rightStickDpadChanged || inputDirty;
             const Sm64TouchState *stylusCursor = sm64ModeEnabled() ? &sm64TouchState() : nullptr;
             if (widemelon::display::GameplayScreen::updateCursorVisibility(stylusCursor))
