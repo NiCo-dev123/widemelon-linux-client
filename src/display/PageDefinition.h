@@ -67,11 +67,15 @@ namespace widemelon::display
         Sm64AutoDelayFrames,
         Sm64AutoReleaseDelayMs,
         Sm64DpadDeadzonePercent,
-        CursorSpeedLimit,
+        LeftCursorSpeedLimit,
+        RightCursorSpeedLimit,
         LeftStickScaleUpPercent,
         LeftStickScaleDownPercent,
         LeftStickScaleLeftPercent,
-        LeftStickScaleRightPercent
+        LeftStickScaleRightPercent,
+        MappingA, MappingB, MappingX, MappingY, MappingL, MappingR, MappingL2, MappingR2,
+        MappingDpadLeft, MappingDpadRight, MappingDpadUp, MappingDpadDown,
+        MappingSelect, MappingStart, MappingL3, MappingR3
     };
 
     enum class ActionId : std::uint8_t
@@ -84,6 +88,7 @@ namespace widemelon::display
         DiscardInputPreset,
         RequestDeleteInputPreset,
         EditInputPreset,
+        ConfigureInputMapping,
         Quit
     };
 

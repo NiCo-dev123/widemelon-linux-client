@@ -25,7 +25,7 @@ void Sm64StickMod::setEnabled(bool enabled)
     isCursorPressed = false;
     releaseStartedAt = {};
     centerHoldFrames = 0;
-    touch = {};
+    stylusIntent = {StylusSource::LeftStick, Sm64TouchCenterX, Sm64TouchCenterY, false, false, StylusPressSemantics::Automatic};
 }
 
 int Sm64StickMod::mapRelativeAxis(int value, int center, int minimum, int maximum, std::uint16_t radius)
@@ -51,13 +51,14 @@ bool Sm64StickMod::update(const LeftStickState& stick)
         distance = static_cast<float>(Sm64TouchMaximumRadius);
     }
 
-    Sm64TouchState next = touch;
+    StylusIntent next = stylusIntent;
     const std::uint16_t targetX = static_cast<std::uint16_t>(static_cast<int>(Sm64TouchCenterX) + offsetX);
     const std::uint16_t targetY = static_cast<std::uint16_t>(static_cast<int>(Sm64TouchCenterY) + offsetY);
 
     const auto now = std::chrono::steady_clock::now();
     if (distance > static_cast<float>(Sm64TouchPressRadius))
     {
+        next.sourceActive = true;
         releaseStartedAt = {};
         if (!isCursorPressed)
         {
@@ -65,13 +66,13 @@ bool Sm64StickMod::update(const LeftStickState& stick)
             // quickly the stick first reached its current position.
             isCursorPressed = true;
             centerHoldFrames = 1;
-            next.active = true;
+            next.pressed = true;
             next.x = Sm64TouchCenterX;
             next.y = Sm64TouchCenterY;
         }
         else
         {
-            next.active = true;
+            next.pressed = true;
             if (centerHoldFrames < centerHoldFrameLimit)
             {
                 ++centerHoldFrames;
@@ -87,6 +88,7 @@ bool Sm64StickMod::update(const LeftStickState& stick)
     }
     else if (isCursorPressed)
     {
+        next.sourceActive = false;
         // Keep the exact same contact through a time-based release hysteresis.
         if (releaseStartedAt == std::chrono::steady_clock::time_point{})
             releaseStartedAt = now;
@@ -95,23 +97,24 @@ bool Sm64StickMod::update(const LeftStickState& stick)
             isCursorPressed = false;
             releaseStartedAt = {};
             centerHoldFrames = 0;
-            next.active = false;
+            next.pressed = false;
             next.x = Sm64TouchCenterX;
             next.y = Sm64TouchCenterY;
         }
         else
-            next.active = true;
+            next.pressed = true;
     }
     else
     {
         // An inactive cursor is always shown at the centre of the touch zone.
-        next.active = false;
+        next.sourceActive = false;
+        next.pressed = false;
         next.x = Sm64TouchCenterX;
         next.y = Sm64TouchCenterY;
     }
 
-    if (next.active == touch.active && next.x == touch.x && next.y == touch.y) return false;
-    touch = next;
+    if (sameStylusIntent(next, stylusIntent)) return false;
+    stylusIntent = next;
     return true;
 }
 

@@ -22,6 +22,7 @@
 #include "input/EvdevInput.h"
 #include "input/LeftStickCalibration.h"
 #include "input/InputPreset.h"
+#include "input/TspsStickConfig.h"
 #include "input/MphAutoStickMod.h"
 #include "input/MphManualStickMod.h"
 #include "input/Sm64DpadMod.h"
@@ -40,8 +41,6 @@ namespace
 constexpr std::string_view ThemeKey{"active-theme"}, ModeKey{"left-stick-mod"}, RightModeKey{"right-stick-mod"}, MphSpeedKey{"mph-manual-speed"};
 constexpr std::string_view AutoFramesKey{"sm64-auto-center-hold-frames"}, AutoReleaseKey{"sm64-auto-release-delay-ms"}, MphAutoReleaseKey{"mph-auto-release-delay-ms"};
 constexpr std::string_view CursorSpeedKey{"cursor-speed-limit"}, DpadDeadzoneKey{"sm64-dpad-deadzone-percent"};
-constexpr std::array<std::string_view, 4> CalibrationKeys{
-    "left-stick-scale-left-percent", "left-stick-scale-right-percent", "left-stick-scale-up-percent", "left-stick-scale-down-percent"};
 
 struct MenuState
 {
@@ -55,9 +54,23 @@ struct MenuState
     std::uint8_t autoFrames{Sm64TouchCenterHoldFramesDefault};
     std::uint16_t autoRelease{Sm64TouchReleaseDelayDefaultMs};
     std::uint8_t dpadDeadzone{Sm64DpadDeadzoneDefaultPercent};
-    std::uint16_t cursorSpeed{CursorSpeedDefault};
+    std::uint16_t leftCursorSpeed{CursorSpeedDefault};
+    std::uint16_t rightCursorSpeed{CursorSpeedDefault};
     LeftStickCalibration calibration{};
+    std::array<InputMapping, PhysicalInputCount> mappings{};
 };
+
+std::optional<std::size_t> mappingIndex(ValueId value)
+{
+    const int index = static_cast<int>(value) - static_cast<int>(ValueId::MappingA);
+    return index >= 0 && index < static_cast<int>(PhysicalInputCount) ? std::optional<std::size_t>(static_cast<std::size_t>(index)) : std::nullopt;
+}
+
+std::string mappingLabel(PhysicalInput input, const InputMapping &mapping)
+{
+    const std::string output = mapping.output == MappingOutput::KeyPress ? std::string(dsButtonName(mapping.button)) : std::string(mappingOutputName(mapping.output));
+    return std::string(physicalInputName(input)) + " : " + output;
+}
 
 const PageDefinition &pageDefinition(PageId id, std::string_view presetName, std::string_view leftMode, std::string_view rightMode)
 {
@@ -119,6 +132,8 @@ int firstSelectable(const std::vector<MenuNavigationItem> &items)
 
 std::string fieldValue(const FieldDefinition &field, const Config &config, const MenuState &state)
 {
+    if (const std::optional<std::size_t> index = mappingIndex(field.value))
+        return mappingLabel(static_cast<PhysicalInput>(*index), state.mappings[*index]);
     switch (field.value)
     {
     case ValueId::Host: return config.host;
@@ -133,7 +148,8 @@ std::string fieldValue(const FieldDefinition &field, const Config &config, const
     case ValueId::Sm64AutoDelayFrames: return std::to_string(state.autoFrames) + " frames";
     case ValueId::Sm64AutoReleaseDelayMs: return std::to_string(state.autoRelease) + " ms";
     case ValueId::Sm64DpadDeadzonePercent: return std::to_string(state.dpadDeadzone) + " %";
-    case ValueId::CursorSpeedLimit: return std::to_string(state.cursorSpeed) + " px/s";
+    case ValueId::LeftCursorSpeedLimit: return std::to_string(state.leftCursorSpeed) + " px/s";
+    case ValueId::RightCursorSpeedLimit: return std::to_string(state.rightCursorSpeed) + " px/s";
     case ValueId::LeftStickScaleLeftPercent: return std::to_string(state.calibration.left) + " %";
     case ValueId::LeftStickScaleRightPercent: return std::to_string(state.calibration.right) + " %";
     case ValueId::LeftStickScaleUpPercent: return std::to_string(state.calibration.up) + " %";
@@ -198,17 +214,22 @@ void updateRange(const FieldDefinition &field, int direction, MenuState &state, 
         const int value = std::clamp(static_cast<int>(target) + step, minimum, maximum);
         if (!persistLegacyConfig || config.writeInt(key, value, minimum, maximum)) target = static_cast<std::decay_t<decltype(target)>>(value);
     };
+    auto updateCalibration = [&](auto &target)
+    {
+        target = static_cast<std::decay_t<decltype(target)>>(std::clamp(static_cast<int>(target) + step, minimum, maximum));
+    };
     switch (field.value) {
     case ValueId::Sm64AutoDelayFrames: update(AutoFramesKey, state.autoFrames); break;
     case ValueId::Sm64AutoReleaseDelayMs: update(AutoReleaseKey, state.autoRelease); break;
     case ValueId::Sm64DpadDeadzonePercent: update(DpadDeadzoneKey, state.dpadDeadzone); break;
-    case ValueId::CursorSpeedLimit: update(CursorSpeedKey, state.cursorSpeed); break;
+    case ValueId::LeftCursorSpeedLimit: update(CursorSpeedKey, state.leftCursorSpeed); break;
+    case ValueId::RightCursorSpeedLimit: update(CursorSpeedKey, state.rightCursorSpeed); break;
     case ValueId::MphManualSpeed: update(MphSpeedKey, state.mphSpeed); break;
     case ValueId::MphAutoReleaseDelayMs: update(MphAutoReleaseKey, state.mphAutoRelease); break;
-    case ValueId::LeftStickScaleLeftPercent: update(CalibrationKeys[0], state.calibration.left); break;
-    case ValueId::LeftStickScaleRightPercent: update(CalibrationKeys[1], state.calibration.right); break;
-    case ValueId::LeftStickScaleUpPercent: update(CalibrationKeys[2], state.calibration.up); break;
-    case ValueId::LeftStickScaleDownPercent: update(CalibrationKeys[3], state.calibration.down); break;
+    case ValueId::LeftStickScaleLeftPercent: updateCalibration(state.calibration.left); break;
+    case ValueId::LeftStickScaleRightPercent: updateCalibration(state.calibration.right); break;
+    case ValueId::LeftStickScaleUpPercent: updateCalibration(state.calibration.up); break;
+    case ValueId::LeftStickScaleDownPercent: updateCalibration(state.calibration.down); break;
     default: break; }
 }
 
@@ -222,16 +243,15 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
     state.autoFrames = static_cast<std::uint8_t>(uiConfig.readInt(AutoFramesKey, Sm64TouchCenterHoldFramesDefault, Sm64TouchCenterHoldFramesMinimum, Sm64TouchCenterHoldFramesMaximum));
     state.autoRelease = static_cast<std::uint16_t>(uiConfig.readInt(AutoReleaseKey, Sm64TouchReleaseDelayDefaultMs, Sm64TouchReleaseDelayMinimumMs, Sm64TouchReleaseDelayMaximumMs));
     state.dpadDeadzone = static_cast<std::uint8_t>(uiConfig.readInt(DpadDeadzoneKey, Sm64DpadDeadzoneDefaultPercent, Sm64DpadDeadzoneMinimumPercent, Sm64DpadDeadzoneMaximumPercent));
-    state.cursorSpeed = static_cast<std::uint16_t>(uiConfig.readInt(CursorSpeedKey, CursorSpeedDefault, CursorSpeedMinimum, CursorSpeedMaximum));
-    state.calibration = {static_cast<std::uint8_t>(uiConfig.readInt(CalibrationKeys[0], LeftStickScaleDefaultPercent, LeftStickScaleMinimumPercent, LeftStickScaleMaximumPercent)), static_cast<std::uint8_t>(uiConfig.readInt(CalibrationKeys[1], LeftStickScaleDefaultPercent, LeftStickScaleMinimumPercent, LeftStickScaleMaximumPercent)), static_cast<std::uint8_t>(uiConfig.readInt(CalibrationKeys[2], LeftStickScaleDefaultPercent, LeftStickScaleMinimumPercent, LeftStickScaleMaximumPercent)), static_cast<std::uint8_t>(uiConfig.readInt(CalibrationKeys[3], LeftStickScaleDefaultPercent, LeftStickScaleMinimumPercent, LeftStickScaleMaximumPercent))};
+    state.leftCursorSpeed = static_cast<std::uint16_t>(uiConfig.readInt(CursorSpeedKey, CursorSpeedDefault, CursorSpeedMinimum, CursorSpeedMaximum));
+    state.rightCursorSpeed = state.leftCursorSpeed;
     state.presetNames = InputPresetStore::names();
     if (!InputPresetStore::activeName())
     {
-        InputPreset preset;
+        InputPreset preset = InputPresetStore::defaultPreset();
         preset.name = "Config 1";
         preset.leftStickMode = state.mode; preset.rightStickMode = state.rightMode; preset.mphCameraSpeed = state.mphSpeed; preset.mphAutoReleaseDelayMs = state.mphAutoRelease;
-        preset.sm64AutoCenterHoldFrames = state.autoFrames; preset.sm64AutoReleaseDelayMs = state.autoRelease; preset.sm64DpadDeadzonePercent = state.dpadDeadzone; preset.cursorSpeedLimit = state.cursorSpeed;
-        preset.leftStickCalibration = {state.calibration.left, state.calibration.right, state.calibration.up, state.calibration.down};
+        preset.sm64AutoCenterHoldFrames = state.autoFrames; preset.sm64AutoReleaseDelayMs = state.autoRelease; preset.sm64DpadDeadzonePercent = state.dpadDeadzone; preset.leftCursorSpeedLimit = state.leftCursorSpeed; preset.rightCursorSpeedLimit = state.rightCursorSpeed;
         std::string migrationError;
         if (!InputPresetStore::save(preset, true, migrationError)) Logger::error("Input preset migration warning: " + migrationError);
         state.presetNames = InputPresetStore::names();
@@ -249,14 +269,14 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
     }
     if (activePreset)
     {
-        state.calibration = {
-            activePreset->leftStickCalibration[0],
-            activePreset->leftStickCalibration[1],
-            activePreset->leftStickCalibration[2],
-            activePreset->leftStickCalibration[3],
-        };
+        state.mappings = activePreset->mappings;
+        state.leftCursorSpeed = activePreset->leftCursorSpeedLimit;
+        state.rightCursorSpeed = activePreset->rightCursorSpeedLimit;
+        std::optional<LeftStickCalibration> legacyCalibration = InputPresetStore::legacyLeftStickCalibration(state.activePreset);
+        if (!legacyCalibration) legacyCalibration = InputPresetStore::legacyActiveStickCalibration();
+        state.calibration = TspsStickConfig::loadOrMigrate(legacyCalibration.value_or(state.calibration));
     }
-    const std::array<std::string, 6> modes{"Disabled", "D-pad", "SM64 Auto", "SM64 Manual", "SM64 D-pad", "Cursor"};
+    const std::array<std::string, 4> modes{"Disabled", "D-pad", "Analog centered", "Cursor"};
     InputPreset editingPreset;
     bool editing = false;
     auto saveEditingPreset = [&]()
@@ -268,8 +288,9 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
         editingPreset.sm64AutoCenterHoldFrames = state.autoFrames;
         editingPreset.sm64AutoReleaseDelayMs = state.autoRelease;
         editingPreset.sm64DpadDeadzonePercent = state.dpadDeadzone;
-        editingPreset.cursorSpeedLimit = state.cursorSpeed;
-        editingPreset.leftStickCalibration = {state.calibration.left, state.calibration.right, state.calibration.up, state.calibration.down};
+        editingPreset.leftCursorSpeedLimit = state.leftCursorSpeed;
+        editingPreset.rightCursorSpeedLimit = state.rightCursorSpeed;
+        editingPreset.mappings = state.mappings;
         std::string presetError;
         if (!InputPresetStore::save(editingPreset, editingPreset.name == state.activePreset, presetError))
         {
@@ -287,8 +308,9 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
             || editingPreset.sm64AutoCenterHoldFrames != state.autoFrames
             || editingPreset.sm64AutoReleaseDelayMs != state.autoRelease
             || editingPreset.sm64DpadDeadzonePercent != state.dpadDeadzone
-            || editingPreset.cursorSpeedLimit != state.cursorSpeed
-            || editingPreset.leftStickCalibration != std::array<std::uint8_t, 4>{state.calibration.left, state.calibration.right, state.calibration.up, state.calibration.down};
+            || editingPreset.leftCursorSpeedLimit != state.leftCursorSpeed
+            || editingPreset.rightCursorSpeedLimit != state.rightCursorSpeed
+            || editingPreset.mappings != state.mappings;
     };
     PageId pageId = PageId::Settings; int selected = 0, scroll = 0; MenuNavigation navigation;
     while (true) {
@@ -336,27 +358,23 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
             if (field.value == ValueId::ActiveTheme) { auto it = std::find(availableThemes.begin(), availableThemes.end(), state.theme); const int index = it == availableThemes.end() ? 0 : static_cast<int>(std::distance(availableThemes.begin(), it)); state.theme = availableThemes[static_cast<std::size_t>((index + direction + static_cast<int>(availableThemes.size())) % static_cast<int>(availableThemes.size()))]; if (uiConfig.writeValue(ThemeKey, state.theme)) reloadUiResources(renderer); }
             else if (field.value == ValueId::ActiveInputPreset && !state.presetNames.empty()) { auto it = std::find(state.presetNames.begin(), state.presetNames.end(), state.activePreset); const int index = it == state.presetNames.end() ? 0 : static_cast<int>(std::distance(state.presetNames.begin(), it)); const std::string next = state.presetNames[static_cast<std::size_t>((index + direction + static_cast<int>(state.presetNames.size())) % static_cast<int>(state.presetNames.size()))]; std::string presetError; if (InputPresetStore::setActive(next, presetError)) state.activePreset = next; else Logger::error("Cannot select input preset: " + presetError); }
             else if (field.value == ValueId::LeftStickMode) { auto it = std::find(modes.begin(), modes.end(), state.mode); const int index = it == modes.end() ? 0 : static_cast<int>(std::distance(modes.begin(), it)); state.mode = modes[static_cast<std::size_t>((index + direction + static_cast<int>(modes.size())) % static_cast<int>(modes.size()))]; if (!editing) uiConfig.writeValue(ModeKey, state.mode); }
-            else if (field.value == ValueId::RightStickMode) { static const std::array<std::string, 4> rightModes{"Disabled", "Cursor", "MPH Manual", "MPH Auto"}; auto it = std::find(rightModes.begin(), rightModes.end(), state.rightMode); const int index = it == rightModes.end() ? 0 : static_cast<int>(std::distance(rightModes.begin(), it)); state.rightMode = rightModes[static_cast<std::size_t>((index + direction + static_cast<int>(rightModes.size())) % static_cast<int>(rightModes.size()))]; if (!editing) uiConfig.writeValue(RightModeKey, state.rightMode); }
+            else if (field.value == ValueId::RightStickMode) { static const std::array<std::string, 3> rightModes{"Disabled", "D-pad", "Cursor"}; auto it = std::find(rightModes.begin(), rightModes.end(), state.rightMode); const int index = it == rightModes.end() ? 0 : static_cast<int>(std::distance(rightModes.begin(), it)); state.rightMode = rightModes[static_cast<std::size_t>((index + direction + static_cast<int>(rightModes.size())) % static_cast<int>(rightModes.size()))]; if (!editing) uiConfig.writeValue(RightModeKey, state.rightMode); }
             else
             {
                 updateRange(field, direction, state, uiConfig, !editing);
                 const bool isCalibration = field.value == ValueId::LeftStickScaleLeftPercent || field.value == ValueId::LeftStickScaleRightPercent
                     || field.value == ValueId::LeftStickScaleUpPercent || field.value == ValueId::LeftStickScaleDownPercent;
-                if (isCalibration && !editing)
+                if (isCalibration)
                 {
-                    if (std::optional<InputPreset> activePreset = InputPresetStore::load(state.activePreset))
-                    {
-                        activePreset->leftStickCalibration = {state.calibration.left, state.calibration.right, state.calibration.up, state.calibration.down};
-                        std::string presetError;
-                        if (!InputPresetStore::save(*activePreset, true, presetError)) Logger::error("Cannot save left-stick calibration: " + presetError);
-                    }
+                    std::string calibrationError;
+                    TspsStickConfig::save(state.calibration, calibrationError);
                 }
             }
         } else if (action == UiAction::Confirm) {
             if (field.action == ActionId::Quit) return Result::Exit;
             if (field.action == ActionId::NewInputPreset)
             {
-                InputPreset preset;
+                InputPreset preset = InputPresetStore::defaultPreset();
                 for (unsigned int number = 1;; ++number)
                 {
                     preset.name = "Config " + std::to_string(number);
@@ -394,6 +412,16 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
             {
                 if (saveEditingPreset()) { pageId = PageId::InputPresetManager; selected = 0; scroll = 0; editing = false; }
             }
+            if (field.action == ActionId::ConfigureInputMapping)
+            {
+                if (const std::optional<std::size_t> index = mappingIndex(field.value))
+                {
+                    const PopupScreen::MappingResult result = PopupScreen::editInputMapping(
+                        renderer, width, height, input, physicalInputName(static_cast<PhysicalInput>(*index)), state.mappings[*index]);
+                    if (result.exit) return Result::Exit;
+                    if (result.accepted) state.mappings[*index] = result.mapping;
+                }
+            }
             if (field.action == ActionId::DiscardInputPreset && editing) { pageId = PageId::InputPresetManager; selected = 0; scroll = 0; editing = false; }
             if (field.action == ActionId::RequestDeleteInputPreset && editing)
             {
@@ -428,7 +456,7 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
                 if (field.destination == PageId::Home) { if (pageId == PageId::Settings) return backResult; pageId = PageId::Settings; }
                 else if (field.destination == PageId::InputPresetEditor) {
                     const std::optional<InputPreset> preset = InputPresetStore::load(state.activePreset);
-                    if (preset) { editingPreset = *preset; state.mode = preset->leftStickMode; state.rightMode = preset->rightStickMode; state.mphSpeed = preset->mphCameraSpeed; state.mphAutoRelease = preset->mphAutoReleaseDelayMs; state.autoFrames = preset->sm64AutoCenterHoldFrames; state.autoRelease = preset->sm64AutoReleaseDelayMs; state.dpadDeadzone = preset->sm64DpadDeadzonePercent; state.cursorSpeed = preset->cursorSpeedLimit; state.calibration = {preset->leftStickCalibration[0], preset->leftStickCalibration[1], preset->leftStickCalibration[2], preset->leftStickCalibration[3]}; editing = true; pageId = field.destination; selected = 0; scroll = 0; }
+                    if (preset) { editingPreset = *preset; state.mode = preset->leftStickMode; state.rightMode = preset->rightStickMode; state.mphSpeed = preset->mphCameraSpeed; state.mphAutoRelease = preset->mphAutoReleaseDelayMs; state.autoFrames = preset->sm64AutoCenterHoldFrames; state.autoRelease = preset->sm64AutoReleaseDelayMs; state.dpadDeadzone = preset->sm64DpadDeadzonePercent; state.leftCursorSpeed = preset->leftCursorSpeedLimit; state.rightCursorSpeed = preset->rightCursorSpeedLimit; state.mappings = preset->mappings; editing = true; pageId = field.destination; selected = 0; scroll = 0; }
                     else Logger::error("Cannot load selected input preset");
                 }
                 else if (field.destination != pageId) { pageId = field.destination; selected = 0; scroll = 0; }

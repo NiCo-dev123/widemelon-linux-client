@@ -1,7 +1,7 @@
 {
     "name": "DukuSlice",
     "author": "Nicolas C",
-    "Description": "Light theme inspired by the DS",
+    "description": "Light theme inspired by the DS",
     "title-font-size": 34,
     "footer-font-size": 16,
     "gameplay-status-font-size": 25,

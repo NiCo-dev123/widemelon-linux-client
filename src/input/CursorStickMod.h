@@ -5,6 +5,7 @@
 
 #include "input/EvdevInput.h"
 #include "input/Sm64StickMod.h"
+#include "input/StylusIntent.h"
 
 namespace widemelon
 {
@@ -18,9 +19,12 @@ class CursorStickMod
 {
 public:
     void setEnabled(bool enabled);
+    void setSource(StylusSource value);
     void setSpeedLimit(std::uint16_t pixelsPerSecond);
-    bool update(const LeftStickState& stick, bool r2Pressed);
-    const Sm64TouchState& touchState() const { return touch; }
+    bool isStickActive(const LeftStickState &stick) const;
+    void setCursorPosition(std::uint16_t x, std::uint16_t y);
+    bool update(const LeftStickState& stick);
+    const StylusIntent &intent() const { return stylusIntent; }
 
 private:
     static float normalizeAxis(int value, int center, int minimum, int maximum);
@@ -30,7 +34,8 @@ private:
     float cursorX = Sm64TouchCenterX;
     float cursorY = Sm64TouchCenterY;
     std::chrono::steady_clock::time_point lastUpdateAt{};
-    Sm64TouchState touch;
+    StylusSource source{StylusSource::LeftStick};
+    StylusIntent stylusIntent{StylusSource::LeftStick, Sm64TouchCenterX, Sm64TouchCenterY, false, false, StylusPressSemantics::Hold};
 };
 
 }

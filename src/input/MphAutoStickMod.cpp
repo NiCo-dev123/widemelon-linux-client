@@ -13,7 +13,7 @@ void MphAutoStickMod::setEnabled(bool value)
     releaseStartedAt = {};
     cursorX = Sm64TouchCenterX;
     cursorY = Sm64TouchCenterY;
-    touch = {};
+    stylusIntent = {StylusSource::RightStick, Sm64TouchCenterX, Sm64TouchCenterY, false, false, StylusPressSemantics::Automatic};
 }
 
 void MphAutoStickMod::setSpeed(std::uint16_t value)
@@ -45,7 +45,8 @@ bool MphAutoStickMod::update(const LeftStickState &stick)
     const float horizontal = normalizeAxis(stick.x, stick.xCenter, stick.xMinimum, stick.xMaximum);
     const float vertical = normalizeAxis(stick.y, stick.yCenter, stick.yMinimum, stick.yMaximum);
     const bool outsideDeadzone = std::sqrt(horizontal * horizontal + vertical * vertical) > MphAutoDeadzone;
-    Sm64TouchState next = touch;
+    StylusIntent next = stylusIntent;
+    next.sourceActive = outsideDeadzone;
 
     if (outsideDeadzone)
     {
@@ -61,19 +62,19 @@ bool MphAutoStickMod::update(const LeftStickState &stick)
         if (reactivateAfterWrap)
         {
             reactivateAfterWrap = false;
-            next.active = true;
+            next.pressed = true;
         }
-        else if (wrappedHorizontally && touch.active)
+        else if (wrappedHorizontally && stylusIntent.pressed)
         {
             reactivateAfterWrap = true;
-            next.active = false;
+            next.pressed = false;
         }
         else
         {
-            next.active = true;
+            next.pressed = true;
         }
     }
-    else if (touch.active || reactivateAfterWrap)
+    else if (stylusIntent.pressed || reactivateAfterWrap)
     {
         reactivateAfterWrap = false;
         if (releaseStartedAt == std::chrono::steady_clock::time_point{}) releaseStartedAt = now;
@@ -81,27 +82,27 @@ bool MphAutoStickMod::update(const LeftStickState &stick)
         {
             cursorX = Sm64TouchCenterX;
             cursorY = Sm64TouchCenterY;
-            next.active = false;
+            next.pressed = false;
             next.x = Sm64TouchCenterX;
             next.y = Sm64TouchCenterY;
             releaseStartedAt = {};
         }
         else
         {
-            next.active = true;
+            next.pressed = true;
         }
     }
     else
     {
         cursorX = Sm64TouchCenterX;
         cursorY = Sm64TouchCenterY;
-        next.active = false;
+        next.pressed = false;
         next.x = Sm64TouchCenterX;
         next.y = Sm64TouchCenterY;
     }
 
-    if (next.active == touch.active && next.x == touch.x && next.y == touch.y) return false;
-    touch = next;
+    if (sameStylusIntent(next, stylusIntent)) return false;
+    stylusIntent = next;
     return true;
 }
 }

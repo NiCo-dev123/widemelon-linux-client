@@ -9,8 +9,7 @@ namespace widemelon
 void Sm64ManualStickMod::setEnabled(bool enabled)
 {
     isEnabled = enabled;
-    previousR2Pressed = false;
-    touch = {};
+    stylusIntent = {StylusSource::LeftStick, Sm64TouchCenterX, Sm64TouchCenterY, false, false, StylusPressSemantics::Toggle};
 }
 
 int Sm64ManualStickMod::mapRelativeAxis(int value, int center, int minimum, int maximum, std::uint16_t radius)
@@ -21,7 +20,7 @@ int Sm64ManualStickMod::mapRelativeAxis(int value, int center, int minimum, int 
     return static_cast<int>(std::lround(normalized * static_cast<float>(radius)));
 }
 
-bool Sm64ManualStickMod::update(const LeftStickState& stick, bool r2Pressed)
+bool Sm64ManualStickMod::update(const LeftStickState& stick)
 {
     if (!isEnabled) return false;
 
@@ -35,14 +34,14 @@ bool Sm64ManualStickMod::update(const LeftStickState& stick, bool r2Pressed)
         offsetY = static_cast<int>(std::lround(static_cast<float>(offsetY) * scale));
     }
 
-    Sm64TouchState next = touch;
+    StylusIntent next = stylusIntent;
     next.x = static_cast<std::uint16_t>(static_cast<int>(Sm64TouchCenterX) + offsetX);
     next.y = static_cast<std::uint16_t>(static_cast<int>(Sm64TouchCenterY) + offsetY);
-    if (r2Pressed && !previousR2Pressed) next.active = !next.active;
-    previousR2Pressed = r2Pressed;
+    next.sourceActive = distance > static_cast<float>(Sm64TouchPressRadius);
+    next.pressed = false;
 
-    if (next.active == touch.active && next.x == touch.x && next.y == touch.y) return false;
-    touch = next;
+    if (sameStylusIntent(next, stylusIntent)) return false;
+    stylusIntent = next;
     return true;
 }
 

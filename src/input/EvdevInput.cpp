@@ -181,7 +181,10 @@ std::string EvdevInput::pollEvent()
             case BTN_START: button = ButtonStart; startPressed = pressed; break;
             case BTN_TL: button = ButtonL; leftPressed = pressed; break;
             case BTN_TR: button = ButtonR; rightPressed = pressed; break;
+            case BTN_TL2: leftTriggerPressed = pressed; stateChanged = true; break;
             case BTN_TR2: rightTriggerPressed = pressed; stateChanged = true; break;
+            case BTN_THUMBL: leftStickPressed = pressed; stateChanged = true; break;
+            case BTN_THUMBR: rightStickPressed = pressed; stateChanged = true; break;
             default: break;
             }
             if (button != 0)
@@ -208,12 +211,13 @@ std::string EvdevInput::pollEvent()
             if (updateDirectionMask(dpadMask, horizontal, event.value, 0, 0))
                 setUiDirection(horizontal, event.value, 0, 0);
         }
-        else if (event.type == EV_ABS && event.code == ABS_RZ)
+        else if (event.type == EV_ABS && (event.code == ABS_Z || event.code == ABS_RZ))
         {
             const bool pressed = event.value > 0;
-            if (rightTriggerPressed != pressed)
+            bool &triggerPressed = event.code == ABS_Z ? leftTriggerPressed : rightTriggerPressed;
+            if (triggerPressed != pressed)
             {
-                rightTriggerPressed = pressed;
+                triggerPressed = pressed;
                 stateChanged = true;
             }
         }

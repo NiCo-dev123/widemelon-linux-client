@@ -12,7 +12,13 @@ void CursorStickMod::setEnabled(bool enabled)
     cursorX = Sm64TouchCenterX;
     cursorY = Sm64TouchCenterY;
     lastUpdateAt = {};
-    touch = {};
+    stylusIntent = {source, Sm64TouchCenterX, Sm64TouchCenterY, false, false, StylusPressSemantics::Hold};
+}
+
+void CursorStickMod::setSource(StylusSource value)
+{
+    source = value;
+    stylusIntent.source = value;
 }
 
 void CursorStickMod::setSpeedLimit(std::uint16_t pixelsPerSecond)
@@ -27,7 +33,21 @@ float CursorStickMod::normalizeAxis(int value, int center, int minimum, int maxi
     return std::clamp(static_cast<float>(value - center) / static_cast<float>(distance), -1.0F, 1.0F);
 }
 
-bool CursorStickMod::update(const LeftStickState& stick, bool r2Pressed)
+bool CursorStickMod::isStickActive(const LeftStickState &stick) const
+{
+    const float horizontal = normalizeAxis(stick.x, stick.xCenter, stick.xMinimum, stick.xMaximum);
+    const float vertical = normalizeAxis(stick.y, stick.yCenter, stick.yMinimum, stick.yMaximum);
+    return isEnabled && std::sqrt(horizontal * horizontal + vertical * vertical) > 0.05F;
+}
+
+void CursorStickMod::setCursorPosition(std::uint16_t x, std::uint16_t y)
+{
+    cursorX = std::clamp(static_cast<float>(x), 0.0F, 255.0F);
+    cursorY = std::clamp(static_cast<float>(y), 0.0F, 191.0F);
+    lastUpdateAt = std::chrono::steady_clock::now();
+}
+
+bool CursorStickMod::update(const LeftStickState& stick)
 {
     if (!isEnabled) return false;
 
@@ -50,12 +70,14 @@ bool CursorStickMod::update(const LeftStickState& stick, bool r2Pressed)
     cursorX = std::clamp(cursorX + horizontal * speed * elapsedSeconds, 0.0F, 255.0F);
     cursorY = std::clamp(cursorY + vertical * speed * elapsedSeconds, 0.0F, 191.0F);
 
-    Sm64TouchState next = touch;
-    next.active = r2Pressed;
+    StylusIntent next = stylusIntent;
+    next.source = source;
+    next.pressed = false;
+    next.sourceActive = magnitude > 0.05F;
     next.x = static_cast<std::uint16_t>(std::lround(cursorX));
     next.y = static_cast<std::uint16_t>(std::lround(cursorY));
-    if (next.active == touch.active && next.x == touch.x && next.y == touch.y) return false;
-    touch = next;
+    if (sameStylusIntent(next, stylusIntent)) return false;
+    stylusIntent = next;
     return true;
 }
 
