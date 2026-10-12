@@ -398,6 +398,9 @@ namespace widemelon
             if (rightCursorTouchChanged) stylusChanged = stylusRouter.submit(rightCursorStick.intent()) || stylusChanged;
             if (mappedInputChanged) stylusChanged = stylusRouter.setMappedPressed(inputMapper.touchPressed()) || stylusChanged;
             inputDirty = exitInput.takeStateChanged() || stylusChanged || leftStickDpadChanged || rightStickDpadChanged || inputDirty;
+            const Sm64TouchState *stylusCursor = sm64ModeEnabled() ? &sm64TouchState() : nullptr;
+            if (widemelon::display::GameplayScreen::updateCursorVisibility(stylusCursor))
+                widemelon::display::GameplayScreen::render(renderer, width, height, status, videoTexture, stylusCursor);
             if (stylusChanged && !inputTest)
                 widemelon::display::GameplayScreen::render(renderer, width, height, status, videoTexture, &sm64TouchState());
             if (inputTest && !inputEvent.empty())
