@@ -177,14 +177,17 @@ PopupScreen::MappingResult PopupScreen::editInputMapping(SDL_Renderer *renderer,
         const int fieldCount = keyPress ? 2 : screenPress ? 4 : 1;
         if (action == UiAction::Up) { selectedField = std::max(0, selectedField - 1); continue; }
         if (action == UiAction::Down) { selectedField = std::min(fieldCount - 1, selectedField + 1); continue; }
-        if (action == UiAction::Left || action == UiAction::Right)
+        const bool normalAdjustment = action == UiAction::Left || action == UiAction::Right;
+        const bool fastRangeAdjustment = action == UiAction::L || action == UiAction::R;
+        if (normalAdjustment || fastRangeAdjustment)
         {
-            const int direction = action == UiAction::Left ? -1 : 1;
-            if (selectedField == 0) outputSelected = (outputSelected + direction + static_cast<int>(outputLabels.size())) % static_cast<int>(outputLabels.size());
-            else if (keyPress) buttonSelected = (buttonSelected + direction + static_cast<int>(buttonLabels.size())) % static_cast<int>(buttonLabels.size());
-            else if (selectedField == 1) screenX = std::clamp(screenX + direction, 0, 255);
-            else if (selectedField == 2) screenY = std::clamp(screenY + direction, 0, 191);
-            else screenPressReleaseDelayFrames = std::clamp(screenPressReleaseDelayFrames + direction,
+            const int direction = (action == UiAction::Left || action == UiAction::L) ? -1 : 1;
+            const int stepMultiplier = fastRangeAdjustment ? UiRangeFastStepMultiplier : 1;
+            if (selectedField == 0 && normalAdjustment) outputSelected = (outputSelected + direction + static_cast<int>(outputLabels.size())) % static_cast<int>(outputLabels.size());
+            else if (keyPress && normalAdjustment) buttonSelected = (buttonSelected + direction + static_cast<int>(buttonLabels.size())) % static_cast<int>(buttonLabels.size());
+            else if (screenPress && selectedField == 1) screenX = std::clamp(screenX + direction * stepMultiplier, 0, 255);
+            else if (screenPress && selectedField == 2) screenY = std::clamp(screenY + direction * stepMultiplier, 0, 191);
+            else if (screenPress && selectedField == 3) screenPressReleaseDelayFrames = std::clamp(screenPressReleaseDelayFrames + direction * stepMultiplier,
                 static_cast<int>(ScreenPressReleaseDelayFramesMinimum), static_cast<int>(ScreenPressReleaseDelayFramesMaximum));
             const int updatedFieldCount = outputSelected == static_cast<int>(MappingOutput::KeyPress) ? 2
                 : outputSelected == static_cast<int>(MappingOutput::ScreenPress) ? 4 : 1;

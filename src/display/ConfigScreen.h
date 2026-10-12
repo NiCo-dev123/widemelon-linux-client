@@ -11,6 +11,7 @@ namespace widemelon
     inline constexpr std::chrono::milliseconds UiNavigationCooldown{100};
     inline constexpr std::chrono::milliseconds UiNavigationInitialDelay{250};
     inline constexpr std::chrono::milliseconds UiNavigationRetriggerDelay{150};
+    inline constexpr int UiRangeFastStepMultiplier{10};
 
     inline constexpr int UiTitleFontSize{34};
     inline constexpr int UiGameFooterFontSize{16};
