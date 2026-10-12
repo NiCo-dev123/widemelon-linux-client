@@ -19,12 +19,16 @@ namespace
 constexpr std::string_view ActivePresetFile{"input-presets.conf"};
 constexpr std::string_view ActivePresetKey{"active-preset"};
 
-const std::array<std::filesystem::path, 4> StorageRoots{
-    "/mnt/SDCARD/.userdata/shared/WideMelonClient",
-    "/mnt/SDCARD/.userdata/tg5050/WideMelonClient",
-    "/mnt/sdcard/Saves/WideMelonClient",
-    "/mnt/SDCARD/Saves/WideMelonClient",
-};
+// SpruceOS keeps application data in Saves. Other front-ends currently use
+// the shared .userdata location. Select one root up front: never probe/write
+// several locations, otherwise a preset can appear to vanish between runs.
+std::filesystem::path storageRoot()
+{
+    std::error_code error;
+    if (std::filesystem::exists("/mnt/SDCARD/spruce", error) && !error)
+        return "/mnt/SDCARD/Saves/WideMelonClient";
+    return "/mnt/SDCARD/.userdata/shared/WideMelonClient";
+}
 
 std::filesystem::path presetPath(const std::filesystem::path &root, std::string_view name)
 {
@@ -144,15 +148,10 @@ std::string json(const InputPreset &preset)
         const InputMapping &mapping = preset.mappings[index];
         const std::string key(physicalInputStorageName(input));
         result += "  \"map_" + key + "_output\": \"" + std::string(mappingOutputName(mapping.output)) + "\",\n";
-        result += "  \"map_" + key + "_button\": \"" + std::string(dsButtonName(mapping.button)) + "\",\n";
+        result += "  \"map_" + key + "_button\": \"" + std::string(dsButtonName(mapping.button)) + "\"";
+        result += index + 1 == preset.mappings.size() ? "\n" : ",\n";
     }
-    return result + "  \"left_stick_calibration\": {\n"
-           "    \"left\": " + std::to_string(preset.leftStickCalibration[0]) + ",\n"
-           "    \"right\": " + std::to_string(preset.leftStickCalibration[1]) + ",\n"
-           "    \"up\": " + std::to_string(preset.leftStickCalibration[2]) + ",\n"
-           "    \"down\": " + std::to_string(preset.leftStickCalibration[3]) + "\n"
-           "  }\n"
-           "}\n";
+    return result + "}\n";
 }
 
 std::optional<InputPreset> parse(std::string_view document)
@@ -192,11 +191,28 @@ std::optional<InputPreset> parse(std::string_view document)
     const std::size_t r2 = static_cast<std::size_t>(PhysicalInput::R2);
     if (!jsonString(document, "map_l2_output")) preset.mappings[l2].output = legacyStylusOutput("l2_stylus_mapping");
     if (!jsonString(document, "map_r2_output")) preset.mappings[r2].output = legacyStylusOutput("r2_stylus_mapping");
-    preset.leftStickCalibration[0] = static_cast<std::uint8_t>(clampValue(jsonInt(document, "left"), 100, 50, 150));
-    preset.leftStickCalibration[1] = static_cast<std::uint8_t>(clampValue(jsonInt(document, "right"), 100, 50, 150));
-    preset.leftStickCalibration[2] = static_cast<std::uint8_t>(clampValue(jsonInt(document, "up"), 100, 50, 150));
-    preset.leftStickCalibration[3] = static_cast<std::uint8_t>(clampValue(jsonInt(document, "down"), 100, 50, 150));
     return preset;
+}
+
+std::optional<LeftStickCalibration> parseLegacyCalibration(std::string_view document)
+{
+    if (document.find("\"left_stick_calibration\"") == std::string_view::npos) return std::nullopt;
+    return LeftStickCalibration{
+        static_cast<std::uint8_t>(clampValue(jsonInt(document, "left"), 100, 50, 150)),
+        static_cast<std::uint8_t>(clampValue(jsonInt(document, "right"), 100, 50, 150)),
+        static_cast<std::uint8_t>(clampValue(jsonInt(document, "up"), 100, 50, 150)),
+        static_cast<std::uint8_t>(clampValue(jsonInt(document, "down"), 100, 50, 150))};
+}
+
+std::optional<LeftStickCalibration> legacyCalibrationInRoot(const std::filesystem::path &root)
+{
+    const std::optional<std::string> active = readFile(root / ActivePresetFile);
+    const std::string prefix = std::string(ActivePresetKey) + "=";
+    if (!active || active->compare(0, prefix.size(), prefix) != 0) return std::nullopt;
+    const std::string name = active->substr(prefix.size(), active->find_first_of("\r\n", prefix.size()) - prefix.size());
+    if (!InputPresetStore::isValidName(name)) return std::nullopt;
+    const std::optional<std::string> preset = readFile(presetPath(root, name));
+    return preset ? parseLegacyCalibration(*preset) : std::nullopt;
 }
 }
 
@@ -249,10 +265,9 @@ InputPreset InputPresetStore::defaultPreset()
 std::optional<InputPreset> InputPresetStore::load(std::string_view name)
 {
     if (!isValidName(name)) return std::nullopt;
-    for (const std::filesystem::path &root : StorageRoots)
+    const std::optional<std::string> document = readFile(presetPath(storageRoot(), name));
+    if (document)
     {
-        const std::optional<std::string> document = readFile(presetPath(root, name));
-        if (!document) continue;
         const std::optional<InputPreset> preset = parse(*document);
         if (preset && preset->name == name) return preset;
         if (name == DefaultPresetName) return defaultPreset();
@@ -261,35 +276,47 @@ std::optional<InputPreset> InputPresetStore::load(std::string_view name)
     return name == DefaultPresetName ? std::optional<InputPreset>(defaultPreset()) : std::nullopt;
 }
 
+std::optional<LeftStickCalibration> InputPresetStore::legacyLeftStickCalibration(std::string_view name)
+{
+    if (!isValidName(name)) return std::nullopt;
+    const std::optional<std::string> document = readFile(presetPath(storageRoot(), name));
+    return document ? parseLegacyCalibration(*document) : std::nullopt;
+}
+
+std::optional<LeftStickCalibration> InputPresetStore::legacyActiveStickCalibration()
+{
+    const std::array<std::filesystem::path, 4> roots{
+        storageRoot(),
+        "/mnt/SDCARD/.userdata/shared/WideMelonClient",
+        "/mnt/SDCARD/.userdata/tg5050/WideMelonClient",
+        "/mnt/sdcard/Saves/WideMelonClient"};
+    for (const std::filesystem::path &root : roots)
+        if (const std::optional<LeftStickCalibration> calibration = legacyCalibrationInRoot(root)) return calibration;
+    return std::nullopt;
+}
+
 std::optional<std::string> InputPresetStore::activeName()
 {
     const std::string prefix = std::string(ActivePresetKey) + "=";
-    for (const std::filesystem::path &root : StorageRoots)
-    {
-        const std::optional<std::string> document = readFile(root / ActivePresetFile);
-        if (!document) continue;
-        if (document->compare(0, prefix.size(), prefix) != 0) continue;
-        const std::string name = document->substr(prefix.size());
-        const std::size_t newline = name.find_first_of("\r\n");
-        const std::string trimmed = name.substr(0, newline);
-        if (isValidName(trimmed)) return trimmed;
-    }
+    const std::optional<std::string> document = readFile(storageRoot() / ActivePresetFile);
+    if (!document || document->compare(0, prefix.size(), prefix) != 0) return std::nullopt;
+    const std::string name = document->substr(prefix.size());
+    const std::size_t newline = name.find_first_of("\r\n");
+    const std::string trimmed = name.substr(0, newline);
+    if (isValidName(trimmed)) return trimmed;
     return std::nullopt;
 }
 
 std::vector<std::string> InputPresetStore::names()
 {
     std::vector<std::string> result{std::string(DefaultPresetName)};
-    for (const std::filesystem::path &root : StorageRoots)
+    std::error_code error;
+    const std::filesystem::path directory = storageRoot() / "input-presets";
+    for (const std::filesystem::directory_entry &entry : std::filesystem::directory_iterator(directory, error))
     {
-        std::error_code error;
-        const std::filesystem::path directory = root / "input-presets";
-        for (const std::filesystem::directory_entry &entry : std::filesystem::directory_iterator(directory, error))
-        {
-            if (error || !entry.is_regular_file(error) || entry.path().extension() != ".json") continue;
-            const std::string name = entry.path().stem().string();
-            if (isValidName(name)) result.push_back(name);
-        }
+        if (error || !entry.is_regular_file(error) || entry.path().extension() != ".json") continue;
+        const std::string name = entry.path().stem().string();
+        if (isValidName(name)) result.push_back(name);
     }
     std::sort(result.begin(), result.end());
     result.erase(std::unique(result.begin(), result.end()), result.end());
@@ -315,20 +342,10 @@ bool InputPresetStore::save(const InputPreset &preset, bool makeActive, std::str
         error = "Invalid preset name";
         return false;
     }
-    for (const std::filesystem::path &root : StorageRoots)
-    {
-        std::string candidateError;
-        if (!writeAtomically(presetPath(root, preset.name), json(preset), candidateError))
-        {
-            error = root.string() + ": " + candidateError;
-            continue;
-        }
-        if (!makeActive) return true;
-        if (writeAtomically(root / ActivePresetFile, std::string(ActivePresetKey) + "=" + preset.name + "\n", candidateError)) return true;
-        error = root.string() + ": " + candidateError;
-        return false;
-    }
-    return false;
+    const std::filesystem::path root = storageRoot();
+    if (!writeAtomically(presetPath(root, preset.name), json(preset), error)) return false;
+    if (!makeActive) return true;
+    return writeAtomically(root / ActivePresetFile, std::string(ActivePresetKey) + "=" + preset.name + "\n", error);
 }
 
 bool InputPresetStore::rename(std::string_view previousName, std::string_view nextName, std::string &error)
@@ -370,13 +387,7 @@ bool InputPresetStore::setActive(std::string_view name, std::string &error)
         error = "Preset does not exist";
         return false;
     }
-    for (const std::filesystem::path &root : StorageRoots)
-    {
-        std::string candidateError;
-        if (writeAtomically(root / ActivePresetFile, std::string(ActivePresetKey) + "=" + std::string(name) + "\n", candidateError)) return true;
-        error = root.string() + ": " + candidateError;
-    }
-    return false;
+    return writeAtomically(storageRoot() / ActivePresetFile, std::string(ActivePresetKey) + "=" + std::string(name) + "\n", error);
 }
 
 bool InputPresetStore::remove(std::string_view name, std::string &error)
@@ -393,19 +404,18 @@ bool InputPresetStore::remove(std::string_view name, std::string &error)
     }
 
     std::error_code removeError;
-    for (const std::filesystem::path &root : StorageRoots)
+    const std::filesystem::path path = presetPath(storageRoot(), name);
+    if (!std::filesystem::exists(path, removeError))
     {
-        const std::filesystem::path path = presetPath(root, name);
-        if (!std::filesystem::exists(path, removeError)) continue;
-        if (removeError || !std::filesystem::remove(path, removeError))
-        {
-            error = root.string() + ": Cannot remove preset file";
-            return false;
-        }
-        return true;
+        error = "Preset does not exist";
+        return false;
     }
+    if (removeError || !std::filesystem::remove(path, removeError))
+    {
+        error = "Cannot remove preset file";
+        return false;
+    }
+    return true;
 
-    error = "Preset does not exist";
-    return false;
 }
 }

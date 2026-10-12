@@ -1,5 +1,7 @@
 #pragma once
 
+#include "input/LeftStickCalibration.h"
+
 #include <array>
 #include <cstdint>
 #include <cstddef>
@@ -61,7 +63,6 @@ namespace widemelon
         std::uint8_t sm64DpadDeadzonePercent{75};
         std::uint16_t leftCursorSpeedLimit{300};
         std::uint16_t rightCursorSpeedLimit{300};
-        std::array<std::uint8_t, 4> leftStickCalibration{{100, 100, 100, 100}};
         std::array<InputMapping, PhysicalInputCount> mappings{};
     };
 
@@ -72,6 +73,12 @@ namespace widemelon
 
         static InputPreset defaultPreset();
         static std::optional<InputPreset> load(std::string_view name);
+        // Reads the old per-preset calibration only to migrate it to
+        // tsps-stick.conf. New presets never contain these values.
+        static std::optional<LeftStickCalibration> legacyLeftStickCalibration(std::string_view name);
+        // One-time migration from the storage locations used before
+        // frontend-specific paths were introduced.
+        static std::optional<LeftStickCalibration> legacyActiveStickCalibration();
         static std::optional<InputPreset> loadActive();
         static std::optional<std::string> activeName();
         static std::vector<std::string> names();

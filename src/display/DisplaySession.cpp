@@ -16,6 +16,7 @@
 #include "common/Logger.h"
 #include "input/CursorStickMod.h"
 #include "input/LeftStickCalibration.h"
+#include "input/TspsStickConfig.h"
 #include "input/EvdevInput.h"
 #include "input/InputPreset.h"
 #include "input/Sm64ManualStickMod.h"
@@ -224,11 +225,6 @@ namespace widemelon
                 migrated.sm64DpadDeadzonePercent = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigSm64DpadDeadzoneKey, LegacySm64DpadDeadzoneDefaultPercent, LegacySm64DpadDeadzoneMinimumPercent, LegacySm64DpadDeadzoneMaximumPercent));
                 migrated.leftCursorSpeedLimit = static_cast<std::uint16_t>(uiConfig.readInt(UiConfigCursorSpeedKey, widemelon::CursorSpeedDefault, widemelon::CursorSpeedMinimum, widemelon::CursorSpeedMaximum));
                 migrated.rightCursorSpeedLimit = migrated.leftCursorSpeedLimit;
-                migrated.leftStickCalibration = {
-                    static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleLeftKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)),
-                    static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleRightKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)),
-                    static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleUpKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)),
-                    static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleDownKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent))};
                 std::string migrationError;
                 if (widemelon::InputPresetStore::save(migrated, true, migrationError))
                 {
@@ -255,10 +251,15 @@ namespace widemelon
 
             const std::string &leftStickMode = activePreset->leftStickMode;
             const std::string &rightStickMode = activePreset->rightStickMode;
-            leftStickCalibration.left = activePreset->leftStickCalibration[0];
-            leftStickCalibration.right = activePreset->leftStickCalibration[1];
-            leftStickCalibration.up = activePreset->leftStickCalibration[2];
-            leftStickCalibration.down = activePreset->leftStickCalibration[3];
+            const widemelon::LeftStickCalibration legacyCalibration{
+                static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleLeftKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)),
+                static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleRightKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)),
+                static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleUpKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent)),
+                static_cast<std::uint8_t>(uiConfig.readInt(UiConfigLeftStickScaleDownKey, widemelon::LeftStickScaleDefaultPercent, widemelon::LeftStickScaleMinimumPercent, widemelon::LeftStickScaleMaximumPercent))};
+            std::optional<widemelon::LeftStickCalibration> previousCalibration =
+                widemelon::InputPresetStore::legacyLeftStickCalibration(activePreset->name);
+            if (!previousCalibration) previousCalibration = widemelon::InputPresetStore::legacyActiveStickCalibration();
+            leftStickCalibration = widemelon::TspsStickConfig::loadOrMigrate(previousCalibration.value_or(legacyCalibration));
             analogCenteredEnabled = leftStickMode == "Analog centered" || leftStickMode == "SM64 Manual";
             cursorEnabled = leftStickMode == "Cursor";
             rightCursorEnabled = rightStickMode == "Cursor";

@@ -42,6 +42,7 @@ add_executable(widemelon-client
     src/input/configs/Default.cpp
     src/input/InputMapper.cpp
     src/input/LeftStickCalibration.cpp
+    src/input/TspsStickConfig.cpp
     src/input/MphAutoStickMod.cpp
     src/input/MphManualStickMod.cpp
     src/input/CursorStickMod.cpp

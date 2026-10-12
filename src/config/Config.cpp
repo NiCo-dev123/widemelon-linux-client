@@ -8,7 +8,6 @@
 #include <system_error>
 #include <string_view>
 #include <unistd.h>
-#include <vector>
 
 namespace
 {
@@ -42,17 +41,14 @@ std::filesystem::path executableConfigPath()
     return std::filesystem::path(executablePath.data()).parent_path() / "widemelon-client.conf";
 }
 
-std::vector<std::filesystem::path> persistentConfigPaths()
+std::filesystem::path persistentConfigPath()
 {
-    // NextUI stores persistent data on the SD card under .userdata. Prefer
-    // its card-wide location, then the Smart Pro S platform-specific directory.
-    // SpruceOS paths remain as compatibility fallbacks.
-    return {
-        "/mnt/SDCARD/.userdata/shared/WideMelonClient/widemelon-client.conf",
-        "/mnt/SDCARD/.userdata/tg5050/WideMelonClient/widemelon-client.conf",
-        "/mnt/sdcard/Saves/WideMelonClient/widemelon-client.conf",
-        "/mnt/SDCARD/Saves/WideMelonClient/widemelon-client.conf"
-    };
+    // Choose a single SD-card location before reading or writing. SpruceOS
+    // owns /mnt/SDCARD/Saves; other front-ends currently use .userdata.
+    std::error_code error;
+    if (std::filesystem::exists("/mnt/SDCARD/spruce", error) && !error)
+        return "/mnt/SDCARD/Saves/WideMelonClient/widemelon-client.conf";
+    return "/mnt/SDCARD/.userdata/shared/WideMelonClient/widemelon-client.conf";
 }
 
 bool writeConfigFile(const std::filesystem::path& path, const widemelon::Config& config, std::string& error)
@@ -154,11 +150,9 @@ ConfigLoadResult ConfigLoader::validate(Config config)
 
 ConfigLoadResult ConfigLoader::loadNextToExecutable()
 {
-    for (const auto& saved : persistentConfigPaths())
-    {
-        std::error_code existsError;
-        if (std::filesystem::exists(saved, existsError)) return loadFile(saved);
-    }
+    const std::filesystem::path saved = persistentConfigPath();
+    std::error_code existsError;
+    if (std::filesystem::exists(saved, existsError)) return loadFile(saved);
     const std::filesystem::path bundled = executableConfigPath();
     if (bundled.empty())
         return failure("Cannot determine executable path");
@@ -173,14 +167,8 @@ bool ConfigLoader::saveConfiguration(const Config& config, std::string& error)
         error = checked.error;
         return false;
     }
-    std::string lastError;
-    for (const auto& saved : persistentConfigPaths())
-    {
-        std::string candidateError;
-        if (writeConfigFile(saved, config, candidateError)) return true;
-        lastError = saved.string() + ": " + candidateError;
-    }
-    error = "Cannot persist configuration (continuing without save): " + lastError;
+    if (writeConfigFile(persistentConfigPath(), config, error)) return true;
+    error = "Cannot persist configuration (continuing without save): " + error;
     return false;
 }
 
