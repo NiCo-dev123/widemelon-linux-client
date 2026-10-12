@@ -1,7 +1,7 @@
 {
     "name": "Dark Slice",
     "author": "Nicolas C",
-    "Description": "Dark theme inspired by the DS",
+    "description": "Dark theme inspired by the DS",
     "title-font-size": 34,
     "footer-font-size": 16,
     "gameplay-status-font-size": 25,
