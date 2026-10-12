@@ -54,9 +54,29 @@ bool StylusRouter::setMappedPressed(bool pressed, bool hasAbsolutePosition, std:
     return changed;
 }
 
-bool StylusRouter::requestScreenPress(std::uint16_t x, std::uint16_t y, std::uint8_t releaseDelayFrames)
+bool StylusRouter::setScreenPress(bool held, std::uint16_t x, std::uint16_t y, std::uint8_t releaseDelayFrames)
 {
+    if (!held)
+    {
+        if (screenPressPhase == ScreenPressPhase::None) return false;
+        screenPressPhase = ScreenPressPhase::None;
+        screenPressFramesRemaining = 0;
+        const StylusState released{mappedPressed, mappedPosition ? mappedPosition->x : stylusState.x,
+            mappedPosition ? mappedPosition->y : stylusState.y};
+        const bool changed = stylusState.pressed != released.pressed || stylusState.x != released.x || stylusState.y != released.y;
+        stylusState = released;
+        return changed;
+    }
+
     screenPressPosition = {true, x, y};
+    if (screenPressPhase == ScreenPressPhase::Pressing)
+    {
+        const StylusState pressed{true, x, y};
+        const bool changed = stylusState.x != pressed.x || stylusState.y != pressed.y;
+        stylusState = pressed;
+        return changed;
+    }
+    if (screenPressPhase == ScreenPressPhase::Releasing) return false;
     if (stylusState.pressed)
     {
         screenPressPhase = ScreenPressPhase::Releasing;
@@ -68,7 +88,7 @@ bool StylusRouter::requestScreenPress(std::uint16_t x, std::uint16_t y, std::uin
     }
 
     screenPressPhase = ScreenPressPhase::Pressing;
-    screenPressFramesRemaining = ScreenPressActiveFrames;
+    screenPressFramesRemaining = 0;
     const StylusState pressed{true, x, y};
     const bool changed = stylusState.pressed != pressed.pressed || stylusState.x != pressed.x || stylusState.y != pressed.y;
     stylusState = pressed;
@@ -84,18 +104,14 @@ bool StylusRouter::advanceScreenPress()
     if (screenPressPhase == ScreenPressPhase::Releasing)
     {
         screenPressPhase = ScreenPressPhase::Pressing;
-        screenPressFramesRemaining = ScreenPressActiveFrames;
+        screenPressFramesRemaining = 0;
         const StylusState pressed{true, screenPressPosition.x, screenPressPosition.y};
         const bool changed = stylusState.pressed != pressed.pressed || stylusState.x != pressed.x || stylusState.y != pressed.y;
         stylusState = pressed;
         return changed;
     }
 
-    screenPressPhase = ScreenPressPhase::None;
-    const StylusState released{false, stylusState.x, stylusState.y};
-    const bool changed = stylusState.pressed != released.pressed;
-    stylusState = released;
-    return changed;
+    return false;
 }
 
 void StylusRouter::reset()

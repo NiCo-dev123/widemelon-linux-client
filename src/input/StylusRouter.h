@@ -7,8 +7,6 @@
 
 namespace widemelon
 {
-    inline constexpr std::uint8_t ScreenPressActiveFrames{2};
-
     struct StylusState
     {
         bool pressed{false};
@@ -27,10 +25,10 @@ namespace widemelon
         // Button mappings control contact independently from the source that
         // owns the current stylus position.
         bool setMappedPressed(bool pressed, bool hasAbsolutePosition = false, std::uint16_t x = 127, std::uint16_t y = 95);
-        // A Screen press can safely reposition an already pressed stylus by
-        // releasing it first, waiting a configurable number of frames, then
-        // pressing at its absolute DS coordinates.
-        bool requestScreenPress(std::uint16_t x, std::uint16_t y, std::uint8_t releaseDelayFrames);
+        // A Screen press holds the stylus at absolute coordinates while its
+        // mapped physical input is held. It safely repositions an active
+        // stylus by releasing it first, waiting, then pressing again.
+        bool setScreenPress(bool held, std::uint16_t x = 127, std::uint16_t y = 95, std::uint8_t releaseDelayFrames = 0);
         bool advanceScreenPress();
         void reset();
 

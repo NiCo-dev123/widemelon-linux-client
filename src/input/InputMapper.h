@@ -18,10 +18,10 @@ namespace widemelon
 
         std::uint16_t buttonMask() const { return virtualButtonMask; }
         bool touchPressed() const { return stylusPressed; }
-        bool screenPressRequested() const { return requestScreenPress; }
-        std::uint16_t screenPressX() const { return requestedScreenX; }
-        std::uint16_t screenPressY() const { return requestedScreenY; }
-        std::uint8_t screenPressReleaseDelayFrames() const { return requestedScreenPressReleaseDelayFrames; }
+        bool screenPressActive() const { return screenPressHeld; }
+        std::uint16_t screenPressX() const { return screenPressXValue; }
+        std::uint16_t screenPressY() const { return screenPressYValue; }
+        std::uint8_t screenPressReleaseDelayFrames() const { return screenPressReleaseDelayFramesValue; }
         bool hasStylusMapping() const;
 
     private:
@@ -34,9 +34,9 @@ namespace widemelon
         std::array<bool, PhysicalInputCount> singlePressPending{};
         std::uint16_t virtualButtonMask{0};
         bool stylusPressed{false};
-        bool requestScreenPress{false};
-        std::uint16_t requestedScreenX{127};
-        std::uint16_t requestedScreenY{95};
-        std::uint8_t requestedScreenPressReleaseDelayFrames{ScreenPressReleaseDelayFramesDefault};
+        bool screenPressHeld{false};
+        std::uint16_t screenPressXValue{127};
+        std::uint16_t screenPressYValue{95};
+        std::uint8_t screenPressReleaseDelayFramesValue{ScreenPressReleaseDelayFramesDefault};
     };
 }
