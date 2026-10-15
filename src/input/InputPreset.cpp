@@ -116,6 +116,7 @@ MappingOutput mappingOutputFromName(const std::optional<std::string> &value)
     if (value && *value == "key-press") return MappingOutput::KeyPress;
     if (value && *value == "stylus-press") return MappingOutput::StylusPress;
     if (value && *value == "stylus-hold") return MappingOutput::StylusHold;
+    if (value && *value == "screen-press") return MappingOutput::ScreenPress;
     return MappingOutput::Disabled;
 }
 
@@ -148,7 +149,10 @@ std::string json(const InputPreset &preset)
         const InputMapping &mapping = preset.mappings[index];
         const std::string key(physicalInputStorageName(input));
         result += "  \"map_" + key + "_output\": \"" + std::string(mappingOutputName(mapping.output)) + "\",\n";
-        result += "  \"map_" + key + "_button\": \"" + std::string(dsButtonName(mapping.button)) + "\"";
+        result += "  \"map_" + key + "_button\": \"" + std::string(dsButtonName(mapping.button)) + "\",\n";
+        result += "  \"map_" + key + "_screen_x\": " + std::to_string(mapping.screenX) + ",\n";
+        result += "  \"map_" + key + "_screen_y\": " + std::to_string(mapping.screenY) + ",\n";
+        result += "  \"map_" + key + "_screen_press_release_delay_frames\": " + std::to_string(mapping.screenPressReleaseDelayFrames);
         result += index + 1 == preset.mappings.size() ? "\n" : ",\n";
     }
     return result + "}\n";
@@ -179,6 +183,11 @@ std::optional<InputPreset> parse(std::string_view document)
         const std::optional<std::string> output = jsonString(document, "map_" + key + "_output");
         if (output) preset.mappings[index].output = mappingOutputFromName(output);
         preset.mappings[index].button = dsButtonFromName(jsonString(document, "map_" + key + "_button"));
+        preset.mappings[index].screenX = static_cast<std::uint16_t>(clampValue(jsonInt(document, "map_" + key + "_screen_x"), 127, 0, 255));
+        preset.mappings[index].screenY = static_cast<std::uint16_t>(clampValue(jsonInt(document, "map_" + key + "_screen_y"), 95, 0, 191));
+        preset.mappings[index].screenPressReleaseDelayFrames = static_cast<std::uint8_t>(clampValue(
+            jsonInt(document, "map_" + key + "_screen_press_release_delay_frames"), ScreenPressReleaseDelayFramesDefault,
+            ScreenPressReleaseDelayFramesMinimum, ScreenPressReleaseDelayFramesMaximum));
     }
     // Compatibility with the L2/R2 stylus POC stored by older presets.
     const auto legacyStylusOutput = [&](std::string_view key)
@@ -237,6 +246,7 @@ std::string_view mappingOutputName(MappingOutput output)
     case MappingOutput::KeyPress: return "key-press";
     case MappingOutput::StylusPress: return "stylus-press";
     case MappingOutput::StylusHold: return "stylus-hold";
+    case MappingOutput::ScreenPress: return "screen-press";
     default: return "disabled";
     }
 }

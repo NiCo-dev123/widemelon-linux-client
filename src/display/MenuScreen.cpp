@@ -353,15 +353,18 @@ Result editSettings(SDL_Renderer *renderer, int width, int height, const Config 
         if (action == UiAction::Up || action == UiAction::Down) { selected = MenuNavigation::nextSelection(nav, selected, action == UiAction::Up ? -1 : 1); SDL_Delay(10); continue; }
         if (selected < 0 || selected >= static_cast<int>(entries.size())) { SDL_Delay(10); continue; }
         const FieldDefinition &field = *entries[static_cast<std::size_t>(selected)].field;
-        if ((action == UiAction::Left || action == UiAction::Right) && isAdjustable(field)) {
-            const int direction = action == UiAction::Left ? -1 : 1;
+        const bool normalAdjustment = action == UiAction::Left || action == UiAction::Right;
+        const bool fastRangeAdjustment = action == UiAction::L || action == UiAction::R;
+        if ((normalAdjustment && isAdjustable(field)) || (fastRangeAdjustment && field.type == FieldType::Range)) {
+            const int direction = (action == UiAction::Left || action == UiAction::L) ? -1 : 1;
+            const int stepMultiplier = fastRangeAdjustment ? UiRangeFastStepMultiplier : 1;
             if (field.value == ValueId::ActiveTheme) { auto it = std::find(availableThemes.begin(), availableThemes.end(), state.theme); const int index = it == availableThemes.end() ? 0 : static_cast<int>(std::distance(availableThemes.begin(), it)); state.theme = availableThemes[static_cast<std::size_t>((index + direction + static_cast<int>(availableThemes.size())) % static_cast<int>(availableThemes.size()))]; if (uiConfig.writeValue(ThemeKey, state.theme)) reloadUiResources(renderer); }
             else if (field.value == ValueId::ActiveInputPreset && !state.presetNames.empty()) { auto it = std::find(state.presetNames.begin(), state.presetNames.end(), state.activePreset); const int index = it == state.presetNames.end() ? 0 : static_cast<int>(std::distance(state.presetNames.begin(), it)); const std::string next = state.presetNames[static_cast<std::size_t>((index + direction + static_cast<int>(state.presetNames.size())) % static_cast<int>(state.presetNames.size()))]; std::string presetError; if (InputPresetStore::setActive(next, presetError)) state.activePreset = next; else Logger::error("Cannot select input preset: " + presetError); }
             else if (field.value == ValueId::LeftStickMode) { auto it = std::find(modes.begin(), modes.end(), state.mode); const int index = it == modes.end() ? 0 : static_cast<int>(std::distance(modes.begin(), it)); state.mode = modes[static_cast<std::size_t>((index + direction + static_cast<int>(modes.size())) % static_cast<int>(modes.size()))]; if (!editing) uiConfig.writeValue(ModeKey, state.mode); }
             else if (field.value == ValueId::RightStickMode) { static const std::array<std::string, 3> rightModes{"Disabled", "D-pad", "Cursor"}; auto it = std::find(rightModes.begin(), rightModes.end(), state.rightMode); const int index = it == rightModes.end() ? 0 : static_cast<int>(std::distance(rightModes.begin(), it)); state.rightMode = rightModes[static_cast<std::size_t>((index + direction + static_cast<int>(rightModes.size())) % static_cast<int>(rightModes.size()))]; if (!editing) uiConfig.writeValue(RightModeKey, state.rightMode); }
             else
             {
-                updateRange(field, direction, state, uiConfig, !editing);
+                updateRange(field, direction * stepMultiplier, state, uiConfig, !editing);
                 const bool isCalibration = field.value == ValueId::LeftStickScaleLeftPercent || field.value == ValueId::LeftStickScaleRightPercent
                     || field.value == ValueId::LeftStickScaleUpPercent || field.value == ValueId::LeftStickScaleDownPercent;
                 if (isCalibration)

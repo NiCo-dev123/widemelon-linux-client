@@ -12,6 +12,9 @@
 
 namespace widemelon
 {
+    inline constexpr std::uint8_t ScreenPressReleaseDelayFramesMinimum{1};
+    inline constexpr std::uint8_t ScreenPressReleaseDelayFramesDefault{2};
+    inline constexpr std::uint8_t ScreenPressReleaseDelayFramesMaximum{10};
     enum class PhysicalInput : std::uint8_t
     {
         A, B, X, Y, L, R, L2, R2,
@@ -26,6 +29,7 @@ namespace widemelon
         KeyPress,
         StylusPress,
         StylusHold,
+        ScreenPress,
     };
 
     enum class DsButton : std::uint8_t
@@ -37,10 +41,15 @@ namespace widemelon
     {
         MappingOutput output{MappingOutput::Disabled};
         DsButton button{DsButton::A};
+        std::uint16_t screenX{127};
+        std::uint16_t screenY{95};
+        std::uint8_t screenPressReleaseDelayFrames{ScreenPressReleaseDelayFramesDefault};
 
         bool operator==(const InputMapping &other) const
         {
-            return output == other.output && button == other.button;
+            return output == other.output && button == other.button
+                && screenX == other.screenX && screenY == other.screenY
+                && screenPressReleaseDelayFrames == other.screenPressReleaseDelayFrames;
         }
         bool operator!=(const InputMapping &other) const { return !(*this == other); }
     };

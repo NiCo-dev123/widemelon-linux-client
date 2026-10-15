@@ -5,8 +5,29 @@
 #include "input/Sm64StickMod.h"
 #include "network/WebSocketClient.h"
 
+#include <chrono>
+
 namespace widemelon::display
 {
+    namespace
+    {
+        struct CursorVisibilityState
+        {
+            bool initialized{false};
+            bool wasPressed{false};
+            bool visible{false};
+            std::uint16_t x{0};
+            std::uint16_t y{0};
+            std::chrono::steady_clock::time_point lastActivity{};
+        };
+
+        CursorVisibilityState &cursorVisibilityState()
+        {
+            static CursorVisibilityState state;
+            return state;
+        }
+    }
+
 
     bool GameplayScreen::updateVideoTexture(SDL_Renderer *renderer, SDL_Texture *&texture, const DecodedVideoFrame &frame)
     {
@@ -30,6 +51,31 @@ namespace widemelon::display
         return true;
     }
 
+    bool GameplayScreen::updateCursorVisibility(const Sm64TouchState *cursor)
+    {
+        CursorVisibilityState &state = cursorVisibilityState();
+        if (!cursor)
+        {
+            const bool changed = state.visible;
+            state = {};
+            return changed;
+        }
+
+        const auto now = std::chrono::steady_clock::now();
+        const bool moved = !state.initialized || cursor->x != state.x || cursor->y != state.y;
+        const bool pressChanged = state.initialized && cursor->active != state.wasPressed;
+        if (moved || pressChanged || cursor->active) state.lastActivity = now;
+
+        state.initialized = true;
+        state.x = cursor->x;
+        state.y = cursor->y;
+        state.wasPressed = cursor->active;
+        const bool visible = cursor->active || now - state.lastActivity < StylusSpriteInactivityHideDelay;
+        const bool changed = visible != state.visible;
+        state.visible = visible;
+        return changed;
+    }
+
     void GameplayScreen::render(SDL_Renderer *renderer, int width, int height, const std::string &status,
                                 SDL_Texture *videoTexture, const Sm64TouchState *cursor)
     {
@@ -45,7 +91,8 @@ namespace widemelon::display
             SDL_RenderCopy(renderer, videoTexture, nullptr, &video);
         else
             SDL_RenderFillRect(renderer, &video);
-        if (cursor)
+        updateCursorVisibility(cursor);
+        if (cursor && cursorVisibilityState().visible)
         {
             const SDL_Rect pointer{video.x + static_cast<int>(cursor->x) * video.w / 256,
                                    video.y + static_cast<int>(cursor->y) * video.h / 192, 48, 48};

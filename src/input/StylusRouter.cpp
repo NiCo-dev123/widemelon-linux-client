@@ -4,7 +4,11 @@ namespace widemelon
 {
 bool StylusRouter::submit(const StylusIntent &intent)
 {
-    const StylusState nextState{intent.pressed || mappedPressed, intent.x, intent.y};
+    const bool releaseForScreenPress = screenPressPhase == ScreenPressPhase::Releasing;
+    const bool pressForScreenPress = screenPressPhase == ScreenPressPhase::Pressing;
+    const StylusState nextState{releaseForScreenPress ? false : pressForScreenPress || intent.pressed || mappedPressed,
+        pressForScreenPress ? screenPressPosition.x : mappedPressed && mappedPosition ? mappedPosition->x : intent.x,
+        pressForScreenPress ? screenPressPosition.y : mappedPressed && mappedPosition ? mappedPosition->y : intent.y};
 
     // Any active stick claims ownership immediately. This is intentional:
     // after a left-stick cooldown begins, a newly moved right stick must not
@@ -31,14 +35,83 @@ bool StylusRouter::submit(const StylusIntent &intent)
     return stateChanged;
 }
 
-bool StylusRouter::setMappedPressed(bool pressed)
+bool StylusRouter::setMappedPressed(bool pressed, bool hasAbsolutePosition, std::uint16_t x, std::uint16_t y)
 {
-    if (mappedPressed == pressed) return false;
+    const std::optional<StylusState> nextPosition = pressed && hasAbsolutePosition
+        ? std::optional<StylusState>(StylusState{true, x, y}) : std::nullopt;
+    const bool samePosition = mappedPosition.has_value() == nextPosition.has_value()
+        && (!mappedPosition || (mappedPosition->x == nextPosition->x && mappedPosition->y == nextPosition->y));
+    if (mappedPressed == pressed && samePosition) return false;
     mappedPressed = pressed;
-    const bool nextPressed = mappedPressed;
-    if (stylusState.pressed == nextPressed) return false;
-    stylusState.pressed = nextPressed;
-    return true;
+    mappedPosition = nextPosition;
+    const bool releaseForScreenPress = screenPressPhase == ScreenPressPhase::Releasing;
+    const bool pressForScreenPress = screenPressPhase == ScreenPressPhase::Pressing;
+    const StylusState nextState{releaseForScreenPress ? false : pressForScreenPress || mappedPressed,
+        pressForScreenPress ? screenPressPosition.x : mappedPosition ? mappedPosition->x : stylusState.x,
+        pressForScreenPress ? screenPressPosition.y : mappedPosition ? mappedPosition->y : stylusState.y};
+    const bool changed = stylusState.pressed != nextState.pressed || stylusState.x != nextState.x || stylusState.y != nextState.y;
+    stylusState = nextState;
+    return changed;
+}
+
+bool StylusRouter::setScreenPress(bool held, std::uint16_t x, std::uint16_t y, std::uint8_t releaseDelayFrames)
+{
+    if (!held)
+    {
+        if (screenPressPhase == ScreenPressPhase::None) return false;
+        screenPressPhase = ScreenPressPhase::None;
+        screenPressFramesRemaining = 0;
+        const StylusState released{mappedPressed, mappedPosition ? mappedPosition->x : stylusState.x,
+            mappedPosition ? mappedPosition->y : stylusState.y};
+        const bool changed = stylusState.pressed != released.pressed || stylusState.x != released.x || stylusState.y != released.y;
+        stylusState = released;
+        return changed;
+    }
+
+    screenPressPosition = {true, x, y};
+    if (screenPressPhase == ScreenPressPhase::Pressing)
+    {
+        const StylusState pressed{true, x, y};
+        const bool changed = stylusState.x != pressed.x || stylusState.y != pressed.y;
+        stylusState = pressed;
+        return changed;
+    }
+    if (screenPressPhase == ScreenPressPhase::Releasing) return false;
+    if (stylusState.pressed)
+    {
+        screenPressPhase = ScreenPressPhase::Releasing;
+        screenPressFramesRemaining = releaseDelayFrames;
+        const StylusState released{false, stylusState.x, stylusState.y};
+        const bool changed = stylusState.pressed != released.pressed;
+        stylusState = released;
+        return changed;
+    }
+
+    screenPressPhase = ScreenPressPhase::Pressing;
+    screenPressFramesRemaining = 0;
+    const StylusState pressed{true, x, y};
+    const bool changed = stylusState.pressed != pressed.pressed || stylusState.x != pressed.x || stylusState.y != pressed.y;
+    stylusState = pressed;
+    return changed;
+}
+
+bool StylusRouter::advanceScreenPress()
+{
+    if (screenPressPhase == ScreenPressPhase::None) return false;
+    if (screenPressFramesRemaining > 0) --screenPressFramesRemaining;
+    if (screenPressFramesRemaining > 0) return false;
+
+    if (screenPressPhase == ScreenPressPhase::Releasing)
+    {
+        screenPressPhase = ScreenPressPhase::Pressing;
+        screenPressFramesRemaining = 0;
+        const StylusState pressed{true, screenPressPosition.x, screenPressPosition.y};
+        const bool changed = stylusState.pressed != pressed.pressed || stylusState.x != pressed.x || stylusState.y != pressed.y;
+        stylusState = pressed;
+        return changed;
+    }
+
+    return false;
 }
 
 void StylusRouter::reset()
@@ -46,5 +119,8 @@ void StylusRouter::reset()
     stylusState = {};
     currentOwner.reset();
     mappedPressed = false;
+    mappedPosition.reset();
+    screenPressPhase = ScreenPressPhase::None;
+    screenPressFramesRemaining = 0;
 }
 }

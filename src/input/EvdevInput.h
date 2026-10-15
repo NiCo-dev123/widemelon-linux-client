@@ -31,6 +31,7 @@ enum class UiAction
     Start,
     Y,
     L,
+    R,
 };
 
 class EvdevInput
