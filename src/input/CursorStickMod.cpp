@@ -26,6 +26,11 @@ void CursorStickMod::setSpeedLimit(std::uint16_t pixelsPerSecond)
     speedLimit = std::clamp(pixelsPerSecond, CursorSpeedMinimum, CursorSpeedMaximum);
 }
 
+void CursorStickMod::setDeadzonePercent(std::uint8_t percent)
+{
+    deadzonePercent = std::clamp(percent, CursorDeadzoneMinimumPercent, CursorDeadzoneMaximumPercent);
+}
+
 float CursorStickMod::normalizeAxis(int value, int center, int minimum, int maximum)
 {
     const int distance = value < center ? center - minimum : maximum - center;
@@ -33,11 +38,16 @@ float CursorStickMod::normalizeAxis(int value, int center, int minimum, int maxi
     return std::clamp(static_cast<float>(value - center) / static_cast<float>(distance), -1.0F, 1.0F);
 }
 
+bool CursorStickMod::outsideDeadzone(float magnitude) const
+{
+    return magnitude > static_cast<float>(deadzonePercent) / 100.0F;
+}
+
 bool CursorStickMod::isStickActive(const LeftStickState &stick) const
 {
     const float horizontal = normalizeAxis(stick.x, stick.xCenter, stick.xMinimum, stick.xMaximum);
     const float vertical = normalizeAxis(stick.y, stick.yCenter, stick.yMinimum, stick.yMaximum);
-    return isEnabled && std::sqrt(horizontal * horizontal + vertical * vertical) > 0.05F;
+    return isEnabled && outsideDeadzone(std::sqrt(horizontal * horizontal + vertical * vertical));
 }
 
 void CursorStickMod::setCursorPosition(std::uint16_t x, std::uint16_t y)
@@ -60,20 +70,21 @@ bool CursorStickMod::update(const LeftStickState& stick)
     float horizontal = normalizeAxis(stick.x, stick.xCenter, stick.xMinimum, stick.xMaximum);
     float vertical = normalizeAxis(stick.y, stick.yCenter, stick.yMinimum, stick.yMaximum);
     const float magnitude = std::sqrt(horizontal * horizontal + vertical * vertical);
+    const bool active = outsideDeadzone(magnitude);
     if (magnitude > 1.0F)
     {
         horizontal /= magnitude;
         vertical /= magnitude;
     }
 
-    const float speed = speedLimit * std::min(magnitude, 1.0F);
+    const float speed = active ? speedLimit * std::min(magnitude, 1.0F) : 0.0F;
     cursorX = std::clamp(cursorX + horizontal * speed * elapsedSeconds, 0.0F, 255.0F);
     cursorY = std::clamp(cursorY + vertical * speed * elapsedSeconds, 0.0F, 191.0F);
 
     StylusIntent next = stylusIntent;
     next.source = source;
     next.pressed = false;
-    next.sourceActive = magnitude > 0.05F;
+    next.sourceActive = active;
     next.x = static_cast<std::uint16_t>(std::lround(cursorX));
     next.y = static_cast<std::uint16_t>(std::lround(cursorY));
     if (sameStylusIntent(next, stylusIntent)) return false;

@@ -14,9 +14,15 @@ namespace widemelon::display::pages
         std::vector<FieldDefinition> leftStickFields{{FieldType::Choice, "Left stick mode", ValueId::LeftStickMode}};
         std::vector<FieldDefinition> rightStickFields{{FieldType::Choice, "Right stick mode", ValueId::RightStickMode}};
         if (leftMode == "Cursor")
+        {
+            leftStickFields.push_back({FieldType::Range, "Cursor deadzone", ValueId::LeftCursorDeadzonePercent, PageId::Home, ActionId::None, CursorDeadzoneMinimumPercent, CursorDeadzoneMaximumPercent, CursorDeadzoneStepPercent});
             leftStickFields.push_back({FieldType::Range, "Cursor speed", ValueId::LeftCursorSpeedLimit, PageId::Home, ActionId::None, 100, 500, 25});
+        }
         if (rightMode == "Cursor")
+        {
+            rightStickFields.push_back({FieldType::Range, "Cursor deadzone", ValueId::RightCursorDeadzonePercent, PageId::Home, ActionId::None, CursorDeadzoneMinimumPercent, CursorDeadzoneMaximumPercent, CursorDeadzoneStepPercent});
             rightStickFields.push_back({FieldType::Range, "Cursor speed", ValueId::RightCursorSpeedLimit, PageId::Home, ActionId::None, 100, 500, 25});
+        }
         const std::array<ValueId, PhysicalInputCount> mappingValues{
             ValueId::MappingA, ValueId::MappingB, ValueId::MappingX, ValueId::MappingY, ValueId::MappingL, ValueId::MappingR,
             ValueId::MappingL2, ValueId::MappingR2, ValueId::MappingDpadLeft, ValueId::MappingDpadRight, ValueId::MappingDpadUp,

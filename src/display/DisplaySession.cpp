@@ -268,9 +268,11 @@ namespace widemelon
             sm64ManualStick.setEnabled(analogCenteredEnabled);
             leftCursorStick.setSource(StylusSource::LeftStick);
             leftCursorStick.setSpeedLimit(activePreset->leftCursorSpeedLimit);
+            leftCursorStick.setDeadzonePercent(activePreset->leftCursorDeadzonePercent);
             leftCursorStick.setEnabled(cursorEnabled);
             rightCursorStick.setSource(StylusSource::RightStick);
             rightCursorStick.setSpeedLimit(activePreset->rightCursorSpeedLimit);
+            rightCursorStick.setDeadzonePercent(activePreset->rightCursorDeadzonePercent);
             rightCursorStick.setEnabled(rightCursorEnabled);
             leftStickDpad.setEnabled(leftStickDpadEnabled);
             rightStickDpad.setEnabled(rightStickDpadEnabled);
