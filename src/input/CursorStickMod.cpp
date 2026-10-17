@@ -60,6 +60,9 @@ void CursorStickMod::setCursorPosition(std::uint16_t x, std::uint16_t y)
 {
     cursorX = std::clamp(static_cast<float>(x), 0.0F, 255.0F);
     cursorY = std::clamp(static_cast<float>(y), 0.0F, 191.0F);
+    // Publish the next active intent even when rounding leaves it at the
+    // same pixel, so the router can grant ownership after a screen press.
+    stylusIntent.sourceActive = false;
     lastUpdateAt = std::chrono::steady_clock::now();
 }
 
