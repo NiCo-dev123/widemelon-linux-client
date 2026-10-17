@@ -9,6 +9,7 @@ namespace widemelon
 void CursorStickMod::setEnabled(bool enabled)
 {
     isEnabled = enabled;
+    didWrap = false;
     cursorX = Sm64TouchCenterX;
     cursorY = Sm64TouchCenterY;
     lastUpdateAt = {};
@@ -29,6 +30,11 @@ void CursorStickMod::setSpeedLimit(std::uint16_t pixelsPerSecond)
 void CursorStickMod::setDeadzonePercent(std::uint8_t percent)
 {
     deadzonePercent = std::clamp(percent, CursorDeadzoneMinimumPercent, CursorDeadzoneMaximumPercent);
+}
+
+void CursorStickMod::setWarpEnabled(bool enabled)
+{
+    warpEnabled = enabled;
 }
 
 float CursorStickMod::normalizeAxis(int value, int center, int minimum, int maximum)
@@ -59,6 +65,7 @@ void CursorStickMod::setCursorPosition(std::uint16_t x, std::uint16_t y)
 
 bool CursorStickMod::update(const LeftStickState& stick)
 {
+    didWrap = false;
     if (!isEnabled) return false;
 
     const auto now = std::chrono::steady_clock::now();
@@ -78,7 +85,13 @@ bool CursorStickMod::update(const LeftStickState& stick)
     }
 
     const float speed = active ? speedLimit * std::min(magnitude, 1.0F) : 0.0F;
-    cursorX = std::clamp(cursorX + horizontal * speed * elapsedSeconds, 0.0F, 255.0F);
+    const float nextX = cursorX + horizontal * speed * elapsedSeconds;
+    if (warpEnabled && (nextX < 0.0F || nextX > 255.0F))
+    {
+        cursorX = nextX < 0.0F ? 255.0F : 0.0F;
+        didWrap = true;
+    }
+    else cursorX = std::clamp(nextX, 0.0F, 255.0F);
     cursorY = std::clamp(cursorY + vertical * speed * elapsedSeconds, 0.0F, 191.0F);
 
     StylusIntent next = stylusIntent;

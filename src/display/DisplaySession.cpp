@@ -261,18 +261,20 @@ namespace widemelon
             if (!previousCalibration) previousCalibration = widemelon::InputPresetStore::legacyActiveStickCalibration();
             leftStickCalibration = widemelon::TspsStickConfig::loadOrMigrate(previousCalibration.value_or(legacyCalibration));
             analogCenteredEnabled = leftStickMode == "Analog centered" || leftStickMode == "SM64 Manual";
-            cursorEnabled = leftStickMode == "Cursor";
-            rightCursorEnabled = rightStickMode == "Cursor";
+            cursorEnabled = leftStickMode == "Cursor" || leftStickMode == "Cursor warped";
+            rightCursorEnabled = rightStickMode == "Cursor" || rightStickMode == "Cursor warped";
             leftStickDpadEnabled = leftStickMode == "D-pad";
             rightStickDpadEnabled = rightStickMode == "D-pad";
             sm64ManualStick.setEnabled(analogCenteredEnabled);
             leftCursorStick.setSource(StylusSource::LeftStick);
             leftCursorStick.setSpeedLimit(activePreset->leftCursorSpeedLimit);
             leftCursorStick.setDeadzonePercent(activePreset->leftCursorDeadzonePercent);
+            leftCursorStick.setWarpEnabled(leftStickMode == "Cursor warped");
             leftCursorStick.setEnabled(cursorEnabled);
             rightCursorStick.setSource(StylusSource::RightStick);
             rightCursorStick.setSpeedLimit(activePreset->rightCursorSpeedLimit);
             rightCursorStick.setDeadzonePercent(activePreset->rightCursorDeadzonePercent);
+            rightCursorStick.setWarpEnabled(rightStickMode == "Cursor warped");
             rightCursorStick.setEnabled(rightCursorEnabled);
             leftStickDpad.setEnabled(leftStickDpadEnabled);
             rightStickDpad.setEnabled(rightStickDpadEnabled);
@@ -340,6 +342,10 @@ namespace widemelon
         std::uint64_t inputConnectionGeneration = 0;
         bool sendReleasedSnapshot = false;
         auto nextInputSnapshot = std::chrono::steady_clock::now();
+        bool warpReleasePending = false;
+        bool warpReleaseSent = false;
+        std::uint16_t warpReleaseX = 0, warpReleaseY = 0;
+        std::chrono::steady_clock::time_point warpReleaseUntil{};
         while (running)
         {
             SDL_Event event;
@@ -368,6 +374,8 @@ namespace widemelon
             const std::string inputEvent = exitInput.pollEvent();
             if (exitInput.exitComboPressed())
             {
+                warpReleasePending = false;
+                warpReleaseSent = false;
                 Logger::info("Opening in-game settings with Start + L + R");
                 if (widemelon::display::MenuScreen::editInGameSettings(renderer, width, height, config, exitInput))
                 {
@@ -396,8 +404,23 @@ namespace widemelon
             const bool mappedInputChanged = inputMapper.update(exitInput);
             bool stylusChanged = stylusRouter.advanceScreenPress();
             if (sm64ManualTouchChanged) stylusChanged = stylusRouter.submit(sm64ManualStick.intent()) || stylusChanged;
-            if (leftCursorTouchChanged) stylusChanged = stylusRouter.submit(leftCursorStick.intent()) || stylusChanged;
-            if (rightCursorTouchChanged) stylusChanged = stylusRouter.submit(rightCursorStick.intent()) || stylusChanged;
+            const auto submitCursor = [&](const CursorStickMod &cursor)
+            {
+                const StylusState before = stylusRouter.state();
+                const bool changed = stylusRouter.submit(cursor.intent());
+                const StylusState &after = stylusRouter.state();
+                if (cursor.wrapped() && before.pressed && after.pressed && after.x == cursor.intent().x
+                    && after.x != before.x && !warpReleasePending)
+                {
+                    warpReleasePending = true;
+                    warpReleaseSent = false;
+                    warpReleaseX = before.x;
+                    warpReleaseY = before.y;
+                }
+                return changed;
+            };
+            if (leftCursorTouchChanged) stylusChanged = submitCursor(leftCursorStick) || stylusChanged;
+            if (rightCursorTouchChanged) stylusChanged = submitCursor(rightCursorStick) || stylusChanged;
             if (mappedInputChanged)
             {
                 stylusChanged = stylusRouter.setMappedPressed(inputMapper.touchPressed()) || stylusChanged;
@@ -449,8 +472,16 @@ namespace widemelon
                     videoTexture = nullptr;
                     inputDirty = true;
                     sendReleasedSnapshot = true;
+                    warpReleasePending = false;
+                    warpReleaseSent = false;
                     nextInputSnapshot = now;
                     widemelon::display::GameplayScreen::render(renderer, width, height, status, videoTexture, sm64ModeEnabled() ? &sm64TouchState() : nullptr);
+                }
+                if (warpReleasePending && warpReleaseSent && now >= warpReleaseUntil)
+                {
+                    warpReleasePending = false;
+                    warpReleaseSent = false;
+                    inputDirty = true;
                 }
                 if (sendReleasedSnapshot)
                 {
@@ -458,10 +489,21 @@ namespace widemelon
                     client->sendInputSnapshot(sequence, 0, false, sm64TouchState().x, sm64TouchState().y);
                     sendReleasedSnapshot = false;
                 }
+                else if (warpReleasePending && !warpReleaseSent)
+                {
+                    const std::uint32_t sequence = ++inputSequence;
+                    const std::uint16_t buttons = static_cast<std::uint16_t>(inputMapper.buttonMask() | leftStickDpad.additionalButtons() | rightStickDpad.additionalButtons());
+                    if (client->sendInputSnapshot(sequence, buttons, false, warpReleaseX, warpReleaseY))
+                    {
+                        warpReleaseSent = true;
+                        warpReleaseUntil = std::chrono::steady_clock::now() + CursorWarpReleaseDuration;
+                        inputDirty = true;
+                    }
+                }
                 else if (inputDirty || now >= nextInputSnapshot)
                 {
                     const std::uint32_t sequence = ++inputSequence;
-                    const bool touchActive = sm64TouchState().active;
+                    const bool touchActive = sm64TouchState().active && !warpReleasePending;
                     client->sendInputSnapshot(sequence, static_cast<std::uint16_t>(inputMapper.buttonMask() | leftStickDpad.additionalButtons() | rightStickDpad.additionalButtons()),
                         touchActive, sm64TouchState().x, sm64TouchState().y);
                     inputDirty = false;

@@ -23,16 +23,20 @@ public:
     void setSource(StylusSource value);
     void setSpeedLimit(std::uint16_t pixelsPerSecond);
     void setDeadzonePercent(std::uint8_t percent);
+    void setWarpEnabled(bool enabled);
     bool isStickActive(const LeftStickState &stick) const;
     void setCursorPosition(std::uint16_t x, std::uint16_t y);
     bool update(const LeftStickState& stick);
     const StylusIntent &intent() const { return stylusIntent; }
+    bool wrapped() const { return didWrap; }
 
 private:
     static float normalizeAxis(int value, int center, int minimum, int maximum);
     bool outsideDeadzone(float magnitude) const;
 
     bool isEnabled = false;
+    bool warpEnabled = false;
+    bool didWrap = false;
     std::uint16_t speedLimit = CursorSpeedDefault;
     std::uint8_t deadzonePercent = CursorDeadzoneDefaultPercent;
     float cursorX = Sm64TouchCenterX;

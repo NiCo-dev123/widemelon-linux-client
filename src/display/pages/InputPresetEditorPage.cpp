@@ -13,12 +13,12 @@ namespace widemelon::display::pages
         displayedPresetName = presetName;
         std::vector<FieldDefinition> leftStickFields{{FieldType::Choice, "Left stick mode", ValueId::LeftStickMode}};
         std::vector<FieldDefinition> rightStickFields{{FieldType::Choice, "Right stick mode", ValueId::RightStickMode}};
-        if (leftMode == "Cursor")
+        if (leftMode == "Cursor" || leftMode == "Cursor warped")
         {
             leftStickFields.push_back({FieldType::Range, "Cursor deadzone", ValueId::LeftCursorDeadzonePercent, PageId::Home, ActionId::None, CursorDeadzoneMinimumPercent, CursorDeadzoneMaximumPercent, CursorDeadzoneStepPercent});
             leftStickFields.push_back({FieldType::Range, "Cursor speed", ValueId::LeftCursorSpeedLimit, PageId::Home, ActionId::None, 100, 500, 25});
         }
-        if (rightMode == "Cursor")
+        if (rightMode == "Cursor" || rightMode == "Cursor warped")
         {
             rightStickFields.push_back({FieldType::Range, "Cursor deadzone", ValueId::RightCursorDeadzonePercent, PageId::Home, ActionId::None, CursorDeadzoneMinimumPercent, CursorDeadzoneMaximumPercent, CursorDeadzoneStepPercent});
             rightStickFields.push_back({FieldType::Range, "Cursor speed", ValueId::RightCursorSpeedLimit, PageId::Home, ActionId::None, 100, 500, 25});
