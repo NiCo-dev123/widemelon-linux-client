@@ -12,6 +12,7 @@ namespace widemelon
 class Sm64ManualStickMod
 {
 public:
+    void setSource(StylusSource source);
     void setEnabled(bool enabled);
     bool enabled() const { return isEnabled; }
     bool update(const LeftStickState& stick);
@@ -24,6 +25,7 @@ private:
     static int mapRelativeAxis(int value, int center, int minimum, int maximum, std::uint16_t radius);
 
     bool isEnabled = false;
+    StylusSource source = StylusSource::LeftStick;
     StylusIntent stylusIntent{StylusSource::LeftStick, Sm64TouchCenterX, Sm64TouchCenterY, false, false, StylusPressSemantics::Toggle};
 };
 

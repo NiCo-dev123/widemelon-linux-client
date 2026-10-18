@@ -176,12 +176,14 @@ namespace widemelon
         };
 
         std::unique_ptr<widemelon::WebSocketClient> client = std::make_unique<widemelon::WebSocketClient>();
-        widemelon::Sm64ManualStickMod sm64ManualStick;
+        widemelon::Sm64ManualStickMod leftAnalogCenteredStick;
+        widemelon::Sm64ManualStickMod rightAnalogCenteredStick;
         widemelon::CursorStickMod leftCursorStick;
         widemelon::CursorStickMod rightCursorStick;
         widemelon::StickDpadMod leftStickDpad;
         widemelon::StickDpadMod rightStickDpad;
-        bool analogCenteredEnabled = false;
+        bool leftAnalogCenteredEnabled = false;
+        bool rightAnalogCenteredEnabled = false;
         bool cursorEnabled = false;
         bool rightCursorEnabled = false;
         bool leftStickDpadEnabled = false;
@@ -190,7 +192,7 @@ namespace widemelon
         widemelon::StylusRouter stylusRouter;
         widemelon::InputMapper inputMapper;
         bool stylusButtonMappingEnabled = false;
-        auto sm64ModeEnabled = [&] { return analogCenteredEnabled || cursorEnabled || rightCursorEnabled || stylusButtonMappingEnabled; };
+        auto sm64ModeEnabled = [&] { return leftAnalogCenteredEnabled || rightAnalogCenteredEnabled || cursorEnabled || rightCursorEnabled || stylusButtonMappingEnabled; };
         Sm64TouchState displayedStylusState;
         auto sm64TouchState = [&]() -> const Sm64TouchState&
         {
@@ -261,12 +263,16 @@ namespace widemelon
                 widemelon::InputPresetStore::legacyLeftStickCalibration(activePreset->name);
             if (!previousCalibration) previousCalibration = widemelon::InputPresetStore::legacyActiveStickCalibration();
             leftStickCalibration = widemelon::TspsStickConfig::loadOrMigrate(previousCalibration.value_or(legacyCalibration));
-            analogCenteredEnabled = leftStickMode == "Analog centered" || leftStickMode == "SM64 Manual";
+            leftAnalogCenteredEnabled = leftStickMode == "Analog centered" || leftStickMode == "SM64 Manual";
+            rightAnalogCenteredEnabled = rightStickMode == "Analog centered";
             cursorEnabled = leftStickMode == "Cursor" || leftStickMode == "Cursor wrapped";
             rightCursorEnabled = rightStickMode == "Cursor" || rightStickMode == "Cursor wrapped";
             leftStickDpadEnabled = leftStickMode == "D-pad";
             rightStickDpadEnabled = rightStickMode == "D-pad";
-            sm64ManualStick.setEnabled(analogCenteredEnabled);
+            leftAnalogCenteredStick.setSource(StylusSource::LeftStick);
+            leftAnalogCenteredStick.setEnabled(leftAnalogCenteredEnabled);
+            rightAnalogCenteredStick.setSource(StylusSource::RightStick);
+            rightAnalogCenteredStick.setEnabled(rightAnalogCenteredEnabled);
             leftCursorStick.setSource(StylusSource::LeftStick);
             leftCursorStick.setSpeedLimit(activePreset->leftCursorSpeedLimit);
             leftCursorStick.setDeadzonePercent(activePreset->leftCursorDeadzonePercent);
@@ -421,8 +427,9 @@ namespace widemelon
                 continue;
             }
             const widemelon::LeftStickState calibratedStick = widemelon::applyLeftStickCalibration(exitInput.leftStickState(), leftStickCalibration);
-            const bool sm64ManualTouchChanged = sm64ManualStick.update(calibratedStick);
+            const bool leftAnalogTouchChanged = leftAnalogCenteredStick.update(calibratedStick);
             const widemelon::LeftStickState rightStick = exitInput.rightStickState();
+            const bool rightAnalogTouchChanged = rightAnalogCenteredStick.update(rightStick);
             if (leftCursorStick.isStickActive(calibratedStick) && stylusRouter.owner() != StylusSource::LeftStick)
                 leftCursorStick.setCursorPosition(stylusRouter.state().x, stylusRouter.state().y);
             if (rightCursorStick.isStickActive(rightStick) && stylusRouter.owner() != StylusSource::RightStick)
@@ -433,7 +440,8 @@ namespace widemelon
             const bool rightStickDpadChanged = rightStickDpad.update(rightStick);
             const bool mappedInputChanged = inputMapper.update(exitInput);
             bool stylusChanged = stylusRouter.advanceScreenPress();
-            if (sm64ManualTouchChanged) stylusChanged = stylusRouter.submit(sm64ManualStick.intent()) || stylusChanged;
+            if (leftAnalogTouchChanged) stylusChanged = stylusRouter.submit(leftAnalogCenteredStick.intent()) || stylusChanged;
+            if (rightAnalogTouchChanged) stylusChanged = stylusRouter.submit(rightAnalogCenteredStick.intent()) || stylusChanged;
             const auto submitCursor = [&](const CursorStickMod &cursor)
             {
                 const StylusState before = stylusRouter.state();
