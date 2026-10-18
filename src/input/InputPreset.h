@@ -1,6 +1,7 @@
 #pragma once
 
 #include "input/LeftStickCalibration.h"
+#include "input/CursorSettings.h"
 
 #include <array>
 #include <cstdint>
@@ -72,6 +73,8 @@ namespace widemelon
         std::uint8_t sm64DpadDeadzonePercent{75};
         std::uint16_t leftCursorSpeedLimit{300};
         std::uint16_t rightCursorSpeedLimit{300};
+        std::uint8_t leftCursorDeadzonePercent{CursorDeadzoneDefaultPercent};
+        std::uint8_t rightCursorDeadzonePercent{CursorDeadzoneDefaultPercent};
         std::array<InputMapping, PhysicalInputCount> mappings{};
     };
 

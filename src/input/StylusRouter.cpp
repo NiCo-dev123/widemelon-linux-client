@@ -4,11 +4,12 @@ namespace widemelon
 {
 bool StylusRouter::submit(const StylusIntent &intent)
 {
-    const bool releaseForScreenPress = screenPressPhase == ScreenPressPhase::Releasing;
-    const bool pressForScreenPress = screenPressPhase == ScreenPressPhase::Pressing;
-    const StylusState nextState{releaseForScreenPress ? false : pressForScreenPress || intent.pressed || mappedPressed,
-        pressForScreenPress ? screenPressPosition.x : mappedPressed && mappedPosition ? mappedPosition->x : intent.x,
-        pressForScreenPress ? screenPressPosition.y : mappedPressed && mappedPosition ? mappedPosition->y : intent.y};
+    // Absolute screen presses own the stylus until they finish, including
+    // their optional release delay. Stick positions cannot claim it yet.
+    if (screenPressPhase != ScreenPressPhase::None) return false;
+    const StylusState nextState{intent.pressed || mappedPressed,
+        mappedPressed && mappedPosition ? mappedPosition->x : intent.x,
+        mappedPressed && mappedPosition ? mappedPosition->y : intent.y};
 
     // Any active stick claims ownership immediately. This is intentional:
     // after a left-stick cooldown begins, a newly moved right stick must not
@@ -77,6 +78,8 @@ bool StylusRouter::setScreenPress(bool held, std::uint16_t x, std::uint16_t y, s
         return changed;
     }
     if (screenPressPhase == ScreenPressPhase::Releasing) return false;
+    // A stick must reacquire from the absolute position after this press ends.
+    currentOwner.reset();
     if (stylusState.pressed)
     {
         screenPressPhase = ScreenPressPhase::Releasing;

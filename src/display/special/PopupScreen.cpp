@@ -4,6 +4,7 @@
 #include "display/MenuNavigation.h"
 #include "display/UiTheme.h"
 #include "input/EvdevInput.h"
+#include "network/WebSocketClient.h"
 
 #include <algorithm>
 #include <array>
@@ -108,6 +109,44 @@ PopupScreen::Result PopupScreen::acknowledge(SDL_Renderer *renderer, int width, 
 PopupScreen::Result PopupScreen::cannotDeleteLastPreset(SDL_Renderer *renderer, int width, int height, EvdevInput &input)
 {
     return acknowledge(renderer, width, height, input, "Cannot delete the last preset.");
+}
+
+void PopupScreen::renderConnection(SDL_Renderer *renderer, int width, int height, const ConnectionProgress &progress)
+{
+    const ThemeTextSettings &text = uiTextSettings();
+    const UiTextures &textures = uiTextures();
+    const SDL_Rect popup{(width - PopupSize) / 2, (height - PopupSize) / 2, PopupSize, PopupSize};
+    drawPopupBackground(renderer, popup);
+    const auto centered = [&](std::string_view value, int y, int size, SDL_Color color)
+    {
+        drawTextColored(renderer, value, (width - textWidth(value, size)) / 2, y, size, color);
+    };
+    centered("Connection", popup.y + 70, text.titleFontSize, uiPalette().primary);
+    centered(progress.status, popup.y + 150, text.formFontSize, uiPalette().primary);
+    std::size_t start = 0;
+    int line = 0;
+    while (start < progress.error.size())
+    {
+        const std::size_t end = progress.error.find('\n', start);
+        const std::string_view message(progress.error.data() + start,
+            (end == std::string::npos ? progress.error.size() : end) - start);
+        centered(message, popup.y + 230 + line * (text.formFontSize + 12), text.formFontSize, uiPalette().primary);
+        ++line;
+        if (end == std::string::npos) break;
+        start = end + 1;
+    }
+    if (!progress.serverCode.empty())
+        centered("Server code: " + progress.serverCode, popup.y + 340, text.formFontSize, uiPalette().hint);
+    const SDL_Rect button{(width - 360) / 2, popup.y + 475, 360, UiFormFieldHeight};
+    drawPill(renderer, button, true);
+    centered("OK", button.y + (button.h - text.formFontSize) / 2, text.formFontSize, uiPalette().primary);
+    const int hintY = popup.y + popup.h - 72;
+    const int total = controlHintWidth(textures.hintA, "A", "SELECT", text.hintFontSize)
+        + controlHintWidth(textures.hintB, "B", "BACK", text.hintFontSize);
+    int hintX = (width - total) / 2;
+    hintX = drawControlHint(renderer, textures.hintA, "A", "SELECT", hintX, hintY, text.hintFontSize);
+    drawControlHint(renderer, textures.hintB, "B", "BACK", hintX, hintY, text.hintFontSize);
+    SDL_RenderPresent(renderer);
 }
 
 PopupScreen::MappingResult PopupScreen::editInputMapping(SDL_Renderer *renderer, int width, int height, EvdevInput &input,

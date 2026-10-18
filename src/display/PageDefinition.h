@@ -69,6 +69,8 @@ namespace widemelon::display
         Sm64DpadDeadzonePercent,
         LeftCursorSpeedLimit,
         RightCursorSpeedLimit,
+        LeftCursorDeadzonePercent,
+        RightCursorDeadzonePercent,
         LeftStickScaleUpPercent,
         LeftStickScaleDownPercent,
         LeftStickScaleLeftPercent,

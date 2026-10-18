@@ -142,7 +142,9 @@ std::string json(const InputPreset &preset)
            "  \"sm64_auto_release_delay_ms\": " + std::to_string(preset.sm64AutoReleaseDelayMs) + ",\n"
            "  \"sm64_dpad_deadzone_percent\": " + std::to_string(preset.sm64DpadDeadzonePercent) + ",\n"
            "  \"left_cursor_speed_limit\": " + std::to_string(preset.leftCursorSpeedLimit) + ",\n"
-           "  \"right_cursor_speed_limit\": " + std::to_string(preset.rightCursorSpeedLimit) + ",\n";
+           "  \"right_cursor_speed_limit\": " + std::to_string(preset.rightCursorSpeedLimit) + ",\n"
+           "  \"left_cursor_deadzone_percent\": " + std::to_string(preset.leftCursorDeadzonePercent) + ",\n"
+           "  \"right_cursor_deadzone_percent\": " + std::to_string(preset.rightCursorDeadzonePercent) + ",\n";
     for (std::size_t index = 0; index < preset.mappings.size(); ++index)
     {
         const PhysicalInput input = static_cast<PhysicalInput>(index);
@@ -176,6 +178,8 @@ std::optional<InputPreset> parse(std::string_view document)
     const int legacyCursorSpeed = clampValue(jsonInt(document, "cursor_speed_limit"), 300, 100, 500);
     preset.leftCursorSpeedLimit = static_cast<std::uint16_t>(clampValue(jsonInt(document, "left_cursor_speed_limit"), legacyCursorSpeed, 100, 500));
     preset.rightCursorSpeedLimit = static_cast<std::uint16_t>(clampValue(jsonInt(document, "right_cursor_speed_limit"), legacyCursorSpeed, 100, 500));
+    preset.leftCursorDeadzonePercent = static_cast<std::uint8_t>(clampValue(jsonInt(document, "left_cursor_deadzone_percent"), CursorDeadzoneDefaultPercent, CursorDeadzoneMinimumPercent, CursorDeadzoneMaximumPercent));
+    preset.rightCursorDeadzonePercent = static_cast<std::uint8_t>(clampValue(jsonInt(document, "right_cursor_deadzone_percent"), CursorDeadzoneDefaultPercent, CursorDeadzoneMinimumPercent, CursorDeadzoneMaximumPercent));
     for (std::size_t index = 0; index < preset.mappings.size(); ++index)
     {
         const PhysicalInput input = static_cast<PhysicalInput>(index);
