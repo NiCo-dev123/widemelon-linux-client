@@ -114,6 +114,7 @@ int clampValue(const std::optional<int> &value, int defaultValue, int minimum, i
 MappingOutput mappingOutputFromName(const std::optional<std::string> &value)
 {
     if (value && *value == "key-press") return MappingOutput::KeyPress;
+    if (value && *value == "key-hold") return MappingOutput::KeyHold;
     if (value && *value == "stylus-press") return MappingOutput::StylusPress;
     if (value && *value == "stylus-hold") return MappingOutput::StylusHold;
     if (value && *value == "screen-press") return MappingOutput::ScreenPress;
@@ -248,6 +249,7 @@ std::string_view mappingOutputName(MappingOutput output)
     switch (output)
     {
     case MappingOutput::KeyPress: return "key-press";
+    case MappingOutput::KeyHold: return "key-hold";
     case MappingOutput::StylusPress: return "stylus-press";
     case MappingOutput::StylusHold: return "stylus-hold";
     case MappingOutput::ScreenPress: return "screen-press";

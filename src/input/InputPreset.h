@@ -35,6 +35,7 @@ namespace widemelon
         StylusPress,
         StylusHold,
         ScreenPress,
+        KeyHold,
     };
 
     enum class DsButton : std::uint8_t

@@ -70,7 +70,9 @@ std::optional<std::size_t> mappingIndex(ValueId value)
 
 std::string mappingLabel(PhysicalInput input, const InputMapping &mapping)
 {
-    const std::string output = mapping.output == MappingOutput::KeyPress ? std::string(dsButtonName(mapping.button)) : std::string(mappingOutputName(mapping.output));
+    const std::string output = mapping.output == MappingOutput::KeyPress ? std::string(dsButtonName(mapping.button))
+        : mapping.output == MappingOutput::KeyHold ? std::string(dsButtonName(mapping.button)) + " (hold)"
+        : std::string(mappingOutputName(mapping.output));
     return std::string(physicalInputName(input)) + " : " + output;
 }
 

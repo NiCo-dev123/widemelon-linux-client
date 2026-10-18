@@ -33,6 +33,7 @@ namespace widemelon
         std::array<bool, PhysicalInputCount> togglePressed{};
         std::array<bool, PhysicalInputCount> singlePressPending{};
         std::uint16_t virtualButtonMask{0};
+        std::uint16_t toggledButtonMask{0};
         bool stylusPressed{false};
         bool screenPressHeld{false};
         std::uint16_t screenPressXValue{127};

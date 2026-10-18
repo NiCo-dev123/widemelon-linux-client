@@ -34,6 +34,7 @@ void InputMapper::setMappings(const std::array<InputMapping, PhysicalInputCount>
     togglePressed.fill(false);
     singlePressPending.fill(false);
     virtualButtonMask = 0;
+    toggledButtonMask = 0;
     stylusPressed = false;
     screenPressHeld = false;
     screenPressXValue = 127;
@@ -90,6 +91,8 @@ bool InputMapper::update(const EvdevInput &input)
         const InputMapping &mapping = mappings[index];
         if (mapping.output == MappingOutput::KeyPress && pressed)
             virtualButtonMask |= dsButtonMask(mapping.button);
+        if (mapping.output == MappingOutput::KeyHold && pressed && !previousPressed[index])
+            toggledButtonMask ^= dsButtonMask(mapping.button);
         if (mapping.output == MappingOutput::StylusPress && pressed && !previousPressed[index])
             singlePressPending[index] = true;
         if (mapping.output == MappingOutput::ScreenPress && pressed)
@@ -110,6 +113,7 @@ bool InputMapper::update(const EvdevInput &input)
         if (mapping.output == MappingOutput::StylusPress && (singlePressActive[index] || singlePressPending[index])) stylusPressed = true;
         previousPressed[index] = pressed;
     }
+    virtualButtonMask |= toggledButtonMask;
     return previousButtons != virtualButtonMask || previousStylus != stylusPressed
         || previousScreenPressHeld != screenPressHeld || previousScreenPressX != screenPressXValue
         || previousScreenPressY != screenPressYValue || previousScreenPressDelay != screenPressReleaseDelayFramesValue;
