@@ -218,8 +218,8 @@ namespace widemelon
             {
                 widemelon::InputPreset migrated = widemelon::InputPresetStore::defaultPreset();
                 migrated.name = "Config 1";
-                migrated.leftStickMode = uiConfig.readValue(UiConfigLeftStickModeKey).value_or("D-pad");
-                migrated.rightStickMode = uiConfig.readValue(UiConfigRightStickModeKey).value_or("Disabled");
+                migrated.leftStickMode = widemelon::normalizeStickMode(uiConfig.readValue(UiConfigLeftStickModeKey).value_or("D-pad"));
+                migrated.rightStickMode = widemelon::normalizeStickMode(uiConfig.readValue(UiConfigRightStickModeKey).value_or("Disabled"));
                 migrated.mphCameraSpeed = static_cast<std::uint16_t>(uiConfig.readInt(UiConfigMphManualSpeedKey, LegacyMphManualSpeedDefault, LegacyMphManualSpeedMinimum, LegacyMphManualSpeedMaximum));
                 migrated.sm64AutoCenterHoldFrames = static_cast<std::uint8_t>(uiConfig.readInt(UiConfigSm64AutoFramesKey, widemelon::Sm64TouchCenterHoldFramesDefault, widemelon::Sm64TouchCenterHoldFramesMinimum, widemelon::Sm64TouchCenterHoldFramesMaximum));
                 migrated.sm64AutoReleaseDelayMs = static_cast<std::uint16_t>(uiConfig.readInt(UiConfigSm64AutoReleaseDelayKey, widemelon::Sm64TouchReleaseDelayDefaultMs, widemelon::Sm64TouchReleaseDelayMinimumMs, widemelon::Sm64TouchReleaseDelayMaximumMs));
@@ -262,20 +262,20 @@ namespace widemelon
             if (!previousCalibration) previousCalibration = widemelon::InputPresetStore::legacyActiveStickCalibration();
             leftStickCalibration = widemelon::TspsStickConfig::loadOrMigrate(previousCalibration.value_or(legacyCalibration));
             analogCenteredEnabled = leftStickMode == "Analog centered" || leftStickMode == "SM64 Manual";
-            cursorEnabled = leftStickMode == "Cursor" || leftStickMode == "Cursor warped";
-            rightCursorEnabled = rightStickMode == "Cursor" || rightStickMode == "Cursor warped";
+            cursorEnabled = leftStickMode == "Cursor" || leftStickMode == "Cursor wrapped";
+            rightCursorEnabled = rightStickMode == "Cursor" || rightStickMode == "Cursor wrapped";
             leftStickDpadEnabled = leftStickMode == "D-pad";
             rightStickDpadEnabled = rightStickMode == "D-pad";
             sm64ManualStick.setEnabled(analogCenteredEnabled);
             leftCursorStick.setSource(StylusSource::LeftStick);
             leftCursorStick.setSpeedLimit(activePreset->leftCursorSpeedLimit);
             leftCursorStick.setDeadzonePercent(activePreset->leftCursorDeadzonePercent);
-            leftCursorStick.setWarpEnabled(leftStickMode == "Cursor warped");
+            leftCursorStick.setWrapEnabled(leftStickMode == "Cursor wrapped");
             leftCursorStick.setEnabled(cursorEnabled);
             rightCursorStick.setSource(StylusSource::RightStick);
             rightCursorStick.setSpeedLimit(activePreset->rightCursorSpeedLimit);
             rightCursorStick.setDeadzonePercent(activePreset->rightCursorDeadzonePercent);
-            rightCursorStick.setWarpEnabled(rightStickMode == "Cursor warped");
+            rightCursorStick.setWrapEnabled(rightStickMode == "Cursor wrapped");
             rightCursorStick.setEnabled(rightCursorEnabled);
             leftStickDpad.setEnabled(leftStickDpadEnabled);
             rightStickDpad.setEnabled(rightStickDpadEnabled);

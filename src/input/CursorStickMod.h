@@ -23,7 +23,7 @@ public:
     void setSource(StylusSource value);
     void setSpeedLimit(std::uint16_t pixelsPerSecond);
     void setDeadzonePercent(std::uint8_t percent);
-    void setWarpEnabled(bool enabled);
+    void setWrapEnabled(bool enabled);
     bool isStickActive(const LeftStickState &stick) const;
     void setCursorPosition(std::uint16_t x, std::uint16_t y);
     bool update(const LeftStickState& stick);
@@ -35,7 +35,7 @@ private:
     bool outsideDeadzone(float magnitude) const;
 
     bool isEnabled = false;
-    bool warpEnabled = false;
+    bool wrapEnabled = false;
     bool didWrap = false;
     std::uint16_t speedLimit = CursorSpeedDefault;
     std::uint8_t deadzonePercent = CursorDeadzoneDefaultPercent;

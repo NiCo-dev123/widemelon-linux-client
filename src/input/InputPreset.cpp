@@ -167,8 +167,8 @@ std::optional<InputPreset> parse(std::string_view document)
 
     InputPreset preset = InputPresetStore::defaultPreset();
     preset.name = *name;
-    preset.leftStickMode = jsonString(document, "left_stick_mode").value_or(preset.leftStickMode);
-    preset.rightStickMode = jsonString(document, "right_stick_mode").value_or(preset.rightStickMode);
+    preset.leftStickMode = normalizeStickMode(jsonString(document, "left_stick_mode").value_or(preset.leftStickMode));
+    preset.rightStickMode = normalizeStickMode(jsonString(document, "right_stick_mode").value_or(preset.rightStickMode));
     preset.mphCameraSpeed = static_cast<std::uint16_t>(clampValue(jsonInt(document, "mph_camera_speed"), 100, 50, 500));
     preset.mphAutoReleaseDelayMs = static_cast<std::uint16_t>(clampValue(jsonInt(document, "mph_auto_release_delay_ms"), 400, 100, 1000));
     preset.sm64AutoCenterHoldFrames = static_cast<std::uint8_t>(clampValue(jsonInt(document, "sm64_auto_center_hold_frames"), 12, 2, 20));

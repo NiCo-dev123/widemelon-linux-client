@@ -32,9 +32,9 @@ void CursorStickMod::setDeadzonePercent(std::uint8_t percent)
     deadzonePercent = std::clamp(percent, CursorDeadzoneMinimumPercent, CursorDeadzoneMaximumPercent);
 }
 
-void CursorStickMod::setWarpEnabled(bool enabled)
+void CursorStickMod::setWrapEnabled(bool enabled)
 {
-    warpEnabled = enabled;
+    wrapEnabled = enabled;
 }
 
 float CursorStickMod::normalizeAxis(int value, int center, int minimum, int maximum)
@@ -89,7 +89,7 @@ bool CursorStickMod::update(const LeftStickState& stick)
 
     const float speed = active ? speedLimit * std::min(magnitude, 1.0F) : 0.0F;
     const float nextX = cursorX + horizontal * speed * elapsedSeconds;
-    if (warpEnabled && (nextX < 0.0F || nextX > 255.0F))
+    if (wrapEnabled && (nextX < 0.0F || nextX > 255.0F))
     {
         cursorX = nextX < 0.0F ? 255.0F : 0.0F;
         didWrap = true;

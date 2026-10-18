@@ -16,6 +16,10 @@ namespace widemelon
     inline constexpr std::uint8_t ScreenPressReleaseDelayFramesMinimum{1};
     inline constexpr std::uint8_t ScreenPressReleaseDelayFramesDefault{2};
     inline constexpr std::uint8_t ScreenPressReleaseDelayFramesMaximum{10};
+    inline std::string normalizeStickMode(std::string mode)
+    {
+        return mode == "Cursor warped" ? "Cursor wrapped" : mode;
+    }
     enum class PhysicalInput : std::uint8_t
     {
         A, B, X, Y, L, R, L2, R2,
