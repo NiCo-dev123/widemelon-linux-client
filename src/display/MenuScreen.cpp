@@ -181,7 +181,7 @@ const char *iconFallback(FooterIcon value)
 { switch (value) { case FooterIcon::A: return "A"; case FooterIcon::B: return "B"; case FooterIcon::X: return "X"; case FooterIcon::Y: return "Y"; case FooterIcon::Start: return "START"; case FooterIcon::L: return "L"; case FooterIcon::R: return "R"; } return ""; }
 
 void render(SDL_Renderer *renderer, int width, int height, const PageDefinition &page, const Config &config,
-            const MenuState &state, const std::vector<MenuEntry> &entries, int selected, int scroll)
+            const MenuState &state, const std::vector<MenuEntry> &entries, int selected, int scroll, bool present = true)
 {
     const ThemeTextSettings &fonts = uiTextSettings();
     const int center = width / 2, fieldX = center - UiFormFieldWidth / 2;
@@ -202,7 +202,7 @@ void render(SDL_Renderer *renderer, int width, int height, const PageDefinition 
         text(renderer, center, yText, value, uiPalette().primary, fonts.formFontSize);
     };
     context.renderFooter = [&] { int total = 0; for (const FooterItem &item : page.footer) total += controlHintWidth(icon(item.icon), iconFallback(item.icon), item.text, fonts.hintFontSize); int x = width - total - 20; for (const FooterItem &item : page.footer) x = drawControlHint(renderer, icon(item.icon), iconFallback(item.icon), item.text, x, footerTop(height), fonts.hintFontSize); };
-    context.present = [=] { SDL_RenderPresent(renderer); }; PageRenderer::renderMenu(context);
+    context.present = [=] { if (present) SDL_RenderPresent(renderer); }; PageRenderer::renderMenu(context);
 }
 
 std::vector<std::string> themes(const std::string &directory)
@@ -547,6 +547,6 @@ bool MenuScreen::editConfiguration(SDL_Renderer *renderer, int width, int height
 
 void MenuScreen::renderConnecting(SDL_Renderer *renderer, int width, int height, const Config &config)
 {
-    MenuState state; const PageDefinition &page = pages::homePage(); const std::vector<MenuEntry> entries = entriesFor(page); render(renderer, width, height, page, config, state, entries, 0, 0);
+    MenuState state; const PageDefinition &page = pages::homePage(); const std::vector<MenuEntry> entries = entriesFor(page); render(renderer, width, height, page, config, state, entries, 0, 0, false);
 }
 }

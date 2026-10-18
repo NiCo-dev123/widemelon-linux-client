@@ -4,6 +4,7 @@
 #include "display/MenuNavigation.h"
 #include "display/MenuScreen.h"
 #include "display/special/NumpadScreen.h"
+#include "display/special/PopupScreen.h"
 #include "display/PageRenderer.h"
 #include "display/UiConfig.h"
 #include "display/UiTheme.h"
@@ -300,9 +301,11 @@ namespace widemelon
                 connection = std::async(std::launch::async, [&client, &config]
                                         { return client->connectAndAuthenticate(config, std::chrono::seconds(5)); });
 
+                bool connectionCancelled = false;
                 while (connection.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready && client->connectionState() != widemelon::ConnectionState::Connected)
                 {
                     display::MenuScreen::renderConnecting(renderer, width, height, config);
+                    display::PopupScreen::renderConnection(renderer, width, height, client->connectionProgress());
                     exitInput.pollEvent();
                     if (exitInput.exitComboPressed())
                     {
@@ -311,15 +314,42 @@ namespace widemelon
                         closeDisplay();
                         return true;
                     }
+                    const UiAction action = exitInput.takeUiAction();
+                    if (action == UiAction::Confirm || action == UiAction::Back || action == UiAction::Delete)
+                    {
+                        client->requestStop();
+                        connection.get();
+                        Logger::info("Connection cancelled by user");
+                        connectionCancelled = true;
+                        break;
+                    }
                     SDL_Delay(10);
                 }
 
+                if (connectionCancelled) continue;
                 if (client->connectionState() == widemelon::ConnectionState::Connected)
                     break;
                 const std::string connectionError = connection.get();
                 client->requestStop();
                 if (connectionError != "Cancelled")
+                {
                     Logger::error("Configuration connection test failed: " + connectionError);
+                    const ConnectionProgress progress = client->connectionProgress();
+                    while (true)
+                    {
+                        display::MenuScreen::renderConnecting(renderer, width, height, config);
+                        display::PopupScreen::renderConnection(renderer, width, height, progress);
+                        exitInput.pollEvent();
+                        if (exitInput.exitComboPressed())
+                        {
+                            closeDisplay();
+                            return true;
+                        }
+                        const UiAction action = exitInput.takeUiAction();
+                        if (action == UiAction::Confirm || action == UiAction::Back || action == UiAction::Delete) break;
+                        SDL_Delay(10);
+                    }
+                }
                 continue;
             }
         }

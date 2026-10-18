@@ -133,8 +133,11 @@ bool readHttpResponse(int fd, std::string& response, const std::atomic<bool>& st
     while (!stopped.load() && std::chrono::steady_clock::now() < deadline)
     {
         const short events = pollSocket(fd, POLLIN, 100);
-        if (events & (POLLERR | POLLHUP | POLLNVAL)) return false;
-        if (!(events & POLLIN)) continue;
+        if (!(events & POLLIN))
+        {
+            if (events & (POLLERR | POLLHUP | POLLNVAL)) return false;
+            continue;
+        }
         const ssize_t count = recv(fd, buffer.data(), buffer.size(), 0);
         if (count <= 0) return false;
         response.append(buffer.data(), static_cast<std::size_t>(count));
@@ -212,6 +215,18 @@ void WebSocketClient::requestStop()
 ConnectionState WebSocketClient::connectionState() const
 {
     return state.load();
+}
+
+ConnectionProgress WebSocketClient::connectionProgress() const
+{
+    std::lock_guard<std::mutex> lock(progressMutex);
+    return progress;
+}
+
+void WebSocketClient::setConnectionProgress(std::string status, std::string error, std::string serverCode)
+{
+    std::lock_guard<std::mutex> lock(progressMutex);
+    progress = {std::move(status), std::move(error), std::move(serverCode)};
 }
 
 std::uint64_t WebSocketClient::connectionGeneration() const
@@ -355,8 +370,12 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
     const auto initialDeadline = std::chrono::steady_clock::now() + timeout;
     const std::string port = std::to_string(config.port);
     bool hasConnected = false;
+    std::string lastError = "Could not reach the server.";
+    std::string lastServerCode;
     while (!stopRequested.load() && (hasConnected || std::chrono::steady_clock::now() < initialDeadline))
     {
+        lastServerCode.clear();
+        setConnectionProgress("Connecting...");
         Logger::info("Attempting TCP connection to " + config.host + ':' + port);
         addrinfo hints{};
         hints.ai_family = AF_INET;
@@ -365,6 +384,7 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
         if (getaddrinfo(config.host.c_str(), port.c_str(), &hints, &result) != 0)
         {
             Logger::error("Cannot resolve configured host");
+            setConnectionProgress("Connection failed", "Invalid server address.");
             state.store(ConnectionState::Failed);
             return "Invalid host";
         }
@@ -375,6 +395,7 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
             const int socketError = errno;
             Logger::error("Cannot create TCP socket (errno " + std::to_string(socketError) + ": "
                 + std::strerror(socketError) + ')');
+            lastError = "Could not create a network socket.";
             Logger::info("Connection attempt failed; retrying in " + std::to_string(RetryDelayMs) + " ms");
             if (!waitForRetry(RetryDelayMs, stopRequested)) break;
             continue;
@@ -391,21 +412,30 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
         address.sin_port = htons(config.port);
         inet_pton(AF_INET, config.host.c_str(), &address.sin_addr);
         bool connected = connect(fd, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == 0;
+        int connectError = connected ? 0 : errno;
         if (!connected && errno == EINPROGRESS)
         {
             const short events = pollSocket(fd, POLLOUT, 1000);
-            if (events & POLLOUT)
+            if (events & (POLLOUT | POLLERR | POLLHUP))
             {
                 int error = 0;
                 socklen_t length = sizeof(error);
-                connected = getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &length) == 0 && error == 0;
+                if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &length) == 0)
+                {
+                    connectError = error;
+                    connected = error == 0;
+                }
+                else connectError = errno;
             }
+            else connectError = ETIMEDOUT;
         }
 
         bool authenticated = false;
+        bool serverRejected = false;
         std::string inbound;
         if (connected && !stopRequested.load())
         {
+            setConnectionProgress("Establishing WebSocket...");
             Logger::info("TCP connection established; sending WebSocket upgrade request");
             const std::string host = config.host + ':' + port;
             const std::string request = "GET /bridge HTTP/1.1\r\nHost: " + host + "\r\nOrigin: http://" + host
@@ -415,15 +445,40 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
                 && response.rfind("HTTP/1.1 101", 0) == 0
                 && response.find("s3pPLMBiTxaQ9kYGzzhZRbK+xOo=") != std::string::npos)
             {
+                const std::size_t headerEnd = response.find("\r\n\r\n");
+                if (headerEnd != std::string::npos) inbound = response.substr(headerEnd + 4);
+                setConnectionProgress("Authenticating...");
                 Logger::info("WebSocket upgrade accepted; sending auth message");
                 const std::string auth = "{\"v\":2,\"type\":\"auth\",\"credential\":\"" + config.pairingCode + "\"}";
-                if (sendAll(fd, clientFrame(0x1, auth), stopRequested))
+                const auto handleClose = [&](const Frame &frame)
+                {
+                    if (frame.opcode != 0x8) return false;
+                    serverRejected = true;
+                    if (frame.payload.size() >= 2)
+                    {
+                        const unsigned int code = (static_cast<unsigned char>(frame.payload[0]) << 8)
+                            | static_cast<unsigned char>(frame.payload[1]);
+                        lastServerCode = "WebSocket " + std::to_string(code);
+                    }
+                    const std::string reason = frame.payload.size() >= 2 ? frame.payload.substr(2) : std::string{};
+                    if (reason == "Authentication failed") lastError = "Authentication failed.\nCheck the session code.";
+                    else if (reason == "Pairing unavailable") lastError = "Pairing unavailable.\nCheck for another connected client.";
+                    else if (reason == "Authentication timeout") lastError = "Authentication timed out.";
+                    else lastError = "The server closed the connection.";
+                    const std::string category = reason == "Authentication failed" || reason == "Pairing unavailable"
+                        || reason == "Authentication timeout" || reason == "Invalid endpoint" ? reason : "Connection closed";
+                    Logger::error("Server rejected connection: " + category + (lastServerCode.empty() ? std::string{} : " (" + lastServerCode + ")"));
+                    return true;
+                };
+                Frame bufferedFrame;
+                while (takeFrame(inbound, bufferedFrame) == FrameResult::Ready)
+                    if (handleClose(bufferedFrame)) break;
+                if (!serverRejected && sendAll(fd, clientFrame(0x1, auth), stopRequested))
                 {
                     const auto authDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
                     while (!stopRequested.load() && std::chrono::steady_clock::now() < authDeadline && !authenticated)
                     {
                         const short events = pollSocket(fd, POLLIN, 100);
-                        if (events & (POLLERR | POLLHUP | POLLNVAL)) break;
                         if (events & POLLIN)
                         {
                             std::array<char, 4096> buffer{};
@@ -439,6 +494,7 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
                                 Logger::error("Fragmented WebSocket frames are not supported");
                                 break;
                             }
+                            if (handleClose(frame)) break;
                             if (frame.opcode == 0x9)
                             {
                                 Logger::info("Received WebSocket ping; sending pong");
@@ -456,13 +512,48 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
                                 break;
                             }
                         }
+                        if (serverRejected || (events & (POLLERR | POLLHUP | POLLNVAL))) break;
+                    }
+                    if (!authenticated && !serverRejected && !stopRequested.load())
+                    {
+                        lastError = "Authentication failed or timed out.\nCheck the session code.";
+                        Logger::error("Authentication failed or timed out without a server close reason");
                     }
                 }
-                else Logger::error("Failed to send WebSocket auth message");
+                else if (!serverRejected && !stopRequested.load())
+                {
+                    // A server may close immediately after the HTTP upgrade;
+                    // its close frame can still be waiting when send fails.
+                    if (pollSocket(fd, POLLIN, 100) & POLLIN)
+                    {
+                        std::array<char, 4096> buffer{};
+                        const ssize_t count = recv(fd, buffer.data(), buffer.size(), 0);
+                        if (count > 0) inbound.append(buffer.data(), static_cast<std::size_t>(count));
+                        Frame frame;
+                        while (takeFrame(inbound, frame) == FrameResult::Ready)
+                            if (handleClose(frame)) break;
+                    }
+                    if (!serverRejected)
+                    {
+                        lastError = "Could not send authentication.";
+                        Logger::error("Failed to send WebSocket auth message");
+                    }
+                }
             }
-            else Logger::error("WebSocket upgrade was rejected or timed out");
+            else
+            {
+                lastError = "WebSocket connection failed.";
+                if (response.rfind("HTTP/1.1 ", 0) == 0 && response.size() >= 12
+                    && response.substr(9, 3) != "101")
+                    lastServerCode = "HTTP " + response.substr(9, 3);
+                Logger::error("WebSocket upgrade was rejected or timed out" + (lastServerCode.empty() ? std::string{} : " (" + lastServerCode + ")"));
+            }
         }
-        else if (!stopRequested.load()) Logger::error("TCP connection attempt failed");
+        else if (!stopRequested.load())
+        {
+            lastError = "Could not reach the server.\nCheck the address, port and Wi-Fi.";
+            Logger::error("TCP connection attempt failed (errno " + std::to_string(connectError) + ": " + std::strerror(connectError) + ')');
+        }
 
         if (authenticated)
         {
@@ -583,6 +674,12 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
 
         closeSocket(fd);
         if (stopRequested.load()) break;
+        if (serverRejected && !hasConnected)
+        {
+            setConnectionProgress("Connection failed", lastError, lastServerCode);
+            state.store(ConnectionState::Failed);
+            return lastError;
+        }
         Logger::info("Connection attempt failed; retrying in " + std::to_string(RetryDelayMs) + " ms");
         if (!waitForRetry(RetryDelayMs, stopRequested)) break;
     }
@@ -593,6 +690,7 @@ std::string WebSocketClient::connectAndAuthenticate(const Config& config, std::c
         return "Cancelled";
     }
     state.store(ConnectionState::Failed);
+    setConnectionProgress("Connection failed", lastError, lastServerCode);
     Logger::error("Connection timed out after " + std::to_string(timeout.count()) + " seconds");
     return "Timed out after " + std::to_string(timeout.count()) + " seconds";
 }

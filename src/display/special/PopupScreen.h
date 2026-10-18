@@ -9,6 +9,7 @@ struct SDL_Renderer;
 namespace widemelon
 {
     class EvdevInput;
+    struct ConnectionProgress;
 }
 
 namespace widemelon::display
@@ -31,6 +32,7 @@ namespace widemelon::display
         static Result acknowledge(SDL_Renderer *renderer, int width, int height, EvdevInput &input,
                                   std::string_view message);
         static Result cannotDeleteLastPreset(SDL_Renderer *renderer, int width, int height, EvdevInput &input);
+        static void renderConnection(SDL_Renderer *renderer, int width, int height, const ConnectionProgress &progress);
         static MappingResult editInputMapping(SDL_Renderer *renderer, int width, int height, EvdevInput &input,
                                               std::string_view inputName, InputMapping current);
     };

@@ -23,6 +23,13 @@ enum class ConnectionState
     Stopped,
 };
 
+struct ConnectionProgress
+{
+    std::string status{"Connecting..."};
+    std::string error;
+    std::string serverCode;
+};
+
 struct DecodedVideoFrame
 {
     std::uint32_t sequence = 0;
@@ -44,6 +51,7 @@ public:
     std::string connectAndAuthenticate(const Config& config, std::chrono::seconds timeout);
     void requestStop();
     ConnectionState connectionState() const;
+    ConnectionProgress connectionProgress() const;
     std::uint64_t connectionGeneration() const;
     bool sendInputSnapshot(std::uint32_t sequence, std::uint16_t buttons, bool touchActive = false, std::uint16_t touchX = 0, std::uint16_t touchY = 0);
     bool latestJpegFrame(VideoJpegFrame& frame) const;
@@ -54,6 +62,7 @@ private:
     void closeSocket(int fileDescriptor);
     bool sendOnSocket(int fileDescriptor, const std::string& frame);
     void clearVideoFrames();
+    void setConnectionProgress(std::string status, std::string error = {}, std::string serverCode = {});
 #ifdef WIDEMELON_HAVE_JPEG
     struct FrameAck
     {
@@ -74,6 +83,8 @@ private:
     std::atomic<bool> stopRequested{false};
     std::atomic<ConnectionState> state{ConnectionState::Connecting};
     std::atomic<std::uint64_t> generation{0};
+    mutable std::mutex progressMutex;
+    ConnectionProgress progress;
     std::mutex socketMutex;
     std::mutex sendMutex;
     mutable std::mutex videoMutex;
