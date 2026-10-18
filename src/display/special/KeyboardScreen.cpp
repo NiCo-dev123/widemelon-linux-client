@@ -78,8 +78,8 @@ namespace widemelon::display
         {
             const PageDefinition page{PageId::Numpad, title, {
                                                                  {FooterItemType::Icon, FooterIcon::A, "SELECT"},
-                                                                 {FooterItemType::Icon, FooterIcon::B, "BACK"},
-                                                                 {FooterItemType::Icon, FooterIcon::Y, "DELETE"},
+                                                                 {FooterItemType::Icon, FooterIcon::B, "DELETE"},
+                                                                 {FooterItemType::Icon, FooterIcon::X, "BACK"},
                                                                  {FooterItemType::Icon, FooterIcon::L, "SHIFT"},
                                                                  {FooterItemType::Icon, FooterIcon::Start, "OK"},
                                                              },
@@ -121,11 +121,11 @@ namespace widemelon::display
             for (const FooterItem &item : page.footer)
             {
                 SDL_Texture *texture = item.icon == FooterIcon::A ? textures.hintA : item.icon == FooterIcon::B ? textures.hintB
-                                                                                 : item.icon == FooterIcon::Y   ? textures.hintY
+                                                                                 : item.icon == FooterIcon::X   ? textures.hintX
                                                                                  : item.icon == FooterIcon::L   ? textures.hintL
                                                                                                                 : textures.hintStart;
                 const std::string_view fallback = item.icon == FooterIcon::A ? "A" : item.icon == FooterIcon::B ? "B"
-                                                                                 : item.icon == FooterIcon::Y   ? "Y"
+                                                                                 : item.icon == FooterIcon::X   ? "X"
                                                                                  : item.icon == FooterIcon::L   ? "L"
                                                                                                                 : "START";
                 total += controlHintWidth(texture, fallback, item.text, text.hintFontSize);
@@ -134,7 +134,7 @@ namespace widemelon::display
             const int hintY = height - 64;
             hintX = drawControlHint(renderer, textures.hintA, "A", page.footer[0].text, hintX, hintY, text.hintFontSize);
             hintX = drawControlHint(renderer, textures.hintB, "B", page.footer[1].text, hintX, hintY, text.hintFontSize);
-            hintX = drawControlHint(renderer, textures.hintY, "Y", page.footer[2].text, hintX, hintY, text.hintFontSize);
+            hintX = drawControlHint(renderer, textures.hintX, "X", page.footer[2].text, hintX, hintY, text.hintFontSize);
             hintX = drawControlHint(renderer, textures.hintL, "L", page.footer[3].text, hintX, hintY, text.hintFontSize);
             drawControlHint(renderer, textures.hintStart, "START", page.footer[4].text, hintX, hintY, text.hintFontSize);
             SDL_RenderPresent(renderer);
@@ -170,9 +170,6 @@ namespace widemelon::display
                 selectedKey = (selectedKey + 1) % static_cast<int>(Keys.size());
                 break;
             case UiAction::Delete:
-                value = original;
-                return Result::Cancelled;
-            case UiAction::Y:
                 if (!value.empty())
                     value.pop_back();
                 break;
@@ -186,7 +183,8 @@ namespace widemelon::display
                     shift = true;
                 break;
             case UiAction::Back:
-                break;
+                value = original;
+                return Result::Cancelled;
             case UiAction::Start:
                 return Result::Accepted;
             case UiAction::Confirm:
