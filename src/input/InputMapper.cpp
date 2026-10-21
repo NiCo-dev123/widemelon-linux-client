@@ -32,7 +32,6 @@ void InputMapper::setMappings(const std::array<InputMapping, PhysicalInputCount>
     mappings = value;
     previousPressed.fill(false);
     togglePressed.fill(false);
-    singlePressPending.fill(false);
     virtualButtonMask = 0;
     toggledButtonMask = 0;
     stylusPressed = false;
@@ -83,8 +82,6 @@ bool InputMapper::update(const EvdevInput &input)
     virtualButtonMask = 0;
     stylusPressed = false;
     screenPressHeld = false;
-    const std::array<bool, PhysicalInputCount> singlePressActive = singlePressPending;
-    singlePressPending.fill(false);
     for (std::size_t index = 0; index < mappings.size(); ++index)
     {
         const bool pressed = isPressed(input, static_cast<PhysicalInput>(index));
@@ -93,8 +90,6 @@ bool InputMapper::update(const EvdevInput &input)
             virtualButtonMask |= dsButtonMask(mapping.button);
         if (mapping.output == MappingOutput::KeyHold && pressed && !previousPressed[index])
             toggledButtonMask ^= dsButtonMask(mapping.button);
-        if (mapping.output == MappingOutput::StylusPress && pressed && !previousPressed[index])
-            singlePressPending[index] = true;
         if (mapping.output == MappingOutput::ScreenPress && pressed)
         {
             screenPressHeld = true;
@@ -106,11 +101,9 @@ bool InputMapper::update(const EvdevInput &input)
             togglePressed[index] = !togglePressed[index];
         if (mapping.output != MappingOutput::StylusHold)
             togglePressed[index] = false;
-        if (mapping.output != MappingOutput::StylusPress)
-            singlePressPending[index] = false;
         if (mapping.output == MappingOutput::StylusHold && togglePressed[index])
             stylusPressed = true;
-        if (mapping.output == MappingOutput::StylusPress && (singlePressActive[index] || singlePressPending[index])) stylusPressed = true;
+        if (mapping.output == MappingOutput::StylusPress && pressed) stylusPressed = true;
         previousPressed[index] = pressed;
     }
     virtualButtonMask |= toggledButtonMask;
