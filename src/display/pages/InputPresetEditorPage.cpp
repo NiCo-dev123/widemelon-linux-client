@@ -23,12 +23,10 @@ namespace widemelon::display::pages
             rightStickFields.push_back({FieldType::Range, "Cursor deadzone", ValueId::RightCursorDeadzonePercent, PageId::Home, ActionId::None, CursorDeadzoneMinimumPercent, CursorDeadzoneMaximumPercent, CursorDeadzoneStepPercent});
             rightStickFields.push_back({FieldType::Range, "Cursor speed", ValueId::RightCursorSpeedLimit, PageId::Home, ActionId::None, 100, 500, 25});
         }
-        const std::array<ValueId, PhysicalInputCount> mappingValues{
+        const std::array<ValueId, 16> mappingValues{
             ValueId::MappingA, ValueId::MappingB, ValueId::MappingX, ValueId::MappingY, ValueId::MappingL, ValueId::MappingR,
             ValueId::MappingL2, ValueId::MappingR2, ValueId::MappingDpadLeft, ValueId::MappingDpadRight, ValueId::MappingDpadUp,
-            ValueId::MappingDpadDown, ValueId::MappingSelect, ValueId::MappingStart, ValueId::MappingL3, ValueId::MappingR3,
-            ValueId::MappingLeftStickLeavesDeadzone, ValueId::MappingRightStickLeavesDeadzone,
-            ValueId::MappingLeftStickEntersDeadzone, ValueId::MappingRightStickEntersDeadzone};
+            ValueId::MappingDpadDown, ValueId::MappingSelect, ValueId::MappingStart, ValueId::MappingL3, ValueId::MappingR3};
         std::vector<FieldDefinition> mappingFields;
         for (std::size_t index = 0; index < mappingValues.size(); ++index)
             mappingFields.push_back({FieldType::ActionButton, "", mappingValues[index], PageId::Home, ActionId::ConfigureInputMapping});
@@ -41,10 +39,14 @@ namespace widemelon::display::pages
                 {"Left stick", {}, leftStickFields},
                 {"Right stick", {}, rightStickFields},
                 {"Key mapping", {}, mappingFields},
-                {"Left stick deadzone", {}, {
+                {"Left-stick deadzone", {}, {
+                    {FieldType::ActionButton, "When leaves", ValueId::MappingLeftStickLeavesDeadzone, PageId::Home, ActionId::ConfigureInputMapping},
+                    {FieldType::ActionButton, "When enters", ValueId::MappingLeftStickEntersDeadzone, PageId::Home, ActionId::ConfigureInputMapping},
                     {FieldType::Range, "Deadzone", ValueId::LeftStickDeadzoneInputPercent, PageId::Home, ActionId::None, StickDeadzoneInputMinimumPercent, StickDeadzoneInputMaximumPercent},
                 }},
-                {"Right stick deadzone", {}, {
+                {"Right-stick deadzone", {}, {
+                    {FieldType::ActionButton, "When leaves", ValueId::MappingRightStickLeavesDeadzone, PageId::Home, ActionId::ConfigureInputMapping},
+                    {FieldType::ActionButton, "When enters", ValueId::MappingRightStickEntersDeadzone, PageId::Home, ActionId::ConfigureInputMapping},
                     {FieldType::Range, "Deadzone", ValueId::RightStickDeadzoneInputPercent, PageId::Home, ActionId::None, StickDeadzoneInputMinimumPercent, StickDeadzoneInputMaximumPercent},
                 }},
                 {"File", {}, {

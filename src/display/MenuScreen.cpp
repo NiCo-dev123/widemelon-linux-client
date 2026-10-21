@@ -70,12 +70,61 @@ std::optional<std::size_t> mappingIndex(ValueId value)
     return index >= 0 && index < static_cast<int>(PhysicalInputCount) ? std::optional<std::size_t>(static_cast<std::size_t>(index)) : std::nullopt;
 }
 
-std::string mappingLabel(PhysicalInput input, const InputMapping &mapping)
+std::string mappingLabel(std::string_view inputName, const InputMapping &mapping)
 {
     const std::string output = mapping.output == MappingOutput::KeyPress ? std::string(dsButtonName(mapping.button))
         : mapping.output == MappingOutput::KeyHold ? std::string(dsButtonName(mapping.button)) + " (hold)"
         : std::string(mappingOutputName(mapping.output));
-    return std::string(physicalInputName(input)) + " : " + output;
+    return std::string(inputName) + " : " + output;
+}
+
+std::string_view dpadGlyph(std::string_view name)
+{
+    if (name == "D-pad up") return "↑";
+    if (name == "D-pad down") return "↓";
+    if (name == "D-pad left") return "←";
+    if (name == "D-pad right") return "→";
+    return {};
+}
+
+int mappingPartWidth(std::string_view value, int fontSize)
+{
+    return dpadGlyph(value).empty() ? textWidth(value, fontSize) : symbolWidth(dpadGlyph(value), fontSize);
+}
+
+void drawMappingPart(SDL_Renderer *renderer, std::string_view value, int x, int y, int fontSize, SDL_Color color)
+{
+    const std::string_view glyph = dpadGlyph(value);
+    if (glyph.empty()) drawTextColored(renderer, value, x, y, fontSize, color);
+    else drawSymbol(renderer, glyph, x, y, fontSize, color);
+}
+
+void drawMappingValue(SDL_Renderer *renderer, const FieldDefinition &field, std::size_t index, const MenuState &state,
+                      int center, int y, int fontSize)
+{
+    const InputMapping &mapping = state.mappings[index];
+    const std::string_view inputName = field.label.empty() ? physicalInputName(static_cast<PhysicalInput>(index)) : field.label;
+    std::string output = mapping.output == MappingOutput::KeyPress ? std::string(dsButtonName(mapping.button))
+        : mapping.output == MappingOutput::KeyHold ? std::string(dsButtonName(mapping.button)) + " (hold)"
+        : std::string(mappingOutputName(mapping.output));
+    std::string_view outputBase = output;
+    std::string_view outputSuffix;
+    if (mapping.output == MappingOutput::KeyHold && !dpadGlyph(dsButtonName(mapping.button)).empty())
+    {
+        outputBase = dsButtonName(mapping.button);
+        outputSuffix = " (hold)";
+    }
+    const int separatorWidth = textWidth(" : ", fontSize);
+    const int total = mappingPartWidth(inputName, fontSize) + separatorWidth + mappingPartWidth(outputBase, fontSize)
+        + textWidth(outputSuffix, fontSize);
+    int x = center - total / 2;
+    drawMappingPart(renderer, inputName, x, y, fontSize, uiPalette().primary);
+    x += mappingPartWidth(inputName, fontSize);
+    drawTextColored(renderer, " : ", x, y, fontSize, uiPalette().primary);
+    x += separatorWidth;
+    drawMappingPart(renderer, outputBase, x, y, fontSize, uiPalette().primary);
+    x += mappingPartWidth(outputBase, fontSize);
+    if (!outputSuffix.empty()) drawTextColored(renderer, outputSuffix, x, y, fontSize, uiPalette().primary);
 }
 
 const PageDefinition &pageDefinition(PageId id, std::string_view presetName, std::string_view leftMode, std::string_view rightMode)
@@ -139,7 +188,10 @@ int firstSelectable(const std::vector<MenuNavigationItem> &items)
 std::string fieldValue(const FieldDefinition &field, const Config &config, const MenuState &state)
 {
     if (const std::optional<std::size_t> index = mappingIndex(field.value))
-        return mappingLabel(static_cast<PhysicalInput>(*index), state.mappings[*index]);
+    {
+        const std::string_view inputName = field.label.empty() ? physicalInputName(static_cast<PhysicalInput>(*index)) : field.label;
+        return mappingLabel(inputName, state.mappings[*index]);
+    }
     switch (field.value)
     {
     case ValueId::Host: return config.host;
@@ -201,11 +253,14 @@ void render(SDL_Renderer *renderer, int width, int height, const PageDefinition 
         const MenuEntry &entry = entries[index];
         if (entry.type == MenuEntryType::SectionTitle) { text(renderer, center, y, entry.text, uiPalette().primary, fonts.formFontSize); return; }
         if (entry.type == MenuEntryType::Hint) { multiline(renderer, center, y, entry.text); return; }
-        const FieldDefinition &field = *entry.field; const std::string value = fieldValue(field, config, state);
+        const FieldDefinition &field = *entry.field;
         const SDL_Rect rect{fieldX, y, UiFormFieldWidth, UiFormFieldHeight}; drawPill(renderer, rect, static_cast<int>(index) == selected);
         const int yText = y + (rect.h - fonts.formFontSize) / 2;
         if (isAdjustable(field)) { drawTextColored(renderer, "<", rect.x + 12, yText, fonts.formFontSize, uiPalette().primary); drawTextColored(renderer, ">", rect.x + rect.w - textWidth(">", fonts.formFontSize) - 12, yText, fonts.formFontSize, uiPalette().primary); }
-        text(renderer, center, yText, value, uiPalette().primary, fonts.formFontSize);
+        if (const std::optional<std::size_t> index = mappingIndex(field.value))
+            drawMappingValue(renderer, field, *index, state, center, yText, fonts.formFontSize);
+        else
+            text(renderer, center, yText, fieldValue(field, config, state), uiPalette().primary, fonts.formFontSize);
     };
     context.renderFooter = [&] { int total = 0; for (const FooterItem &item : page.footer) total += controlHintWidth(icon(item.icon), iconFallback(item.icon), item.text, fonts.hintFontSize); int x = width - total - 20; for (const FooterItem &item : page.footer) x = drawControlHint(renderer, icon(item.icon), iconFallback(item.icon), item.text, x, footerTop(height), fonts.hintFontSize); };
     context.present = [=] { if (present) SDL_RenderPresent(renderer); }; PageRenderer::renderMenu(context);
