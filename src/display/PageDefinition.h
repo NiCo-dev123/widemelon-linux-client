@@ -71,13 +71,17 @@ namespace widemelon::display
         RightCursorSpeedLimit,
         LeftCursorDeadzonePercent,
         RightCursorDeadzonePercent,
+        LeftStickDeadzoneInputPercent,
+        RightStickDeadzoneInputPercent,
         LeftStickScaleUpPercent,
         LeftStickScaleDownPercent,
         LeftStickScaleLeftPercent,
         LeftStickScaleRightPercent,
         MappingA, MappingB, MappingX, MappingY, MappingL, MappingR, MappingL2, MappingR2,
         MappingDpadLeft, MappingDpadRight, MappingDpadUp, MappingDpadDown,
-        MappingSelect, MappingStart, MappingL3, MappingR3
+        MappingSelect, MappingStart, MappingL3, MappingR3,
+        MappingLeftStickLeavesDeadzone, MappingRightStickLeavesDeadzone,
+        MappingLeftStickEntersDeadzone, MappingRightStickEntersDeadzone
     };
 
     enum class ActionId : std::uint8_t

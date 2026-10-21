@@ -286,6 +286,8 @@ namespace widemelon
             leftStickDpad.setEnabled(leftStickDpadEnabled);
             rightStickDpad.setEnabled(rightStickDpadEnabled);
             inputMapper.setMappings(activePreset->mappings);
+            inputMapper.setStickDeadzoneInputThresholds(activePreset->leftStickDeadzoneInputPercent,
+                                                        activePreset->rightStickDeadzoneInputPercent);
             stylusButtonMappingEnabled = inputMapper.hasStylusMapping();
             exitInput.setLeftStickDpadEnabled(false);
             stylusRouter.reset();

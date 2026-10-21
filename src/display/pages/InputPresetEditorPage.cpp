@@ -26,7 +26,9 @@ namespace widemelon::display::pages
         const std::array<ValueId, PhysicalInputCount> mappingValues{
             ValueId::MappingA, ValueId::MappingB, ValueId::MappingX, ValueId::MappingY, ValueId::MappingL, ValueId::MappingR,
             ValueId::MappingL2, ValueId::MappingR2, ValueId::MappingDpadLeft, ValueId::MappingDpadRight, ValueId::MappingDpadUp,
-            ValueId::MappingDpadDown, ValueId::MappingSelect, ValueId::MappingStart, ValueId::MappingL3, ValueId::MappingR3};
+            ValueId::MappingDpadDown, ValueId::MappingSelect, ValueId::MappingStart, ValueId::MappingL3, ValueId::MappingR3,
+            ValueId::MappingLeftStickLeavesDeadzone, ValueId::MappingRightStickLeavesDeadzone,
+            ValueId::MappingLeftStickEntersDeadzone, ValueId::MappingRightStickEntersDeadzone};
         std::vector<FieldDefinition> mappingFields;
         for (std::size_t index = 0; index < mappingValues.size(); ++index)
             mappingFields.push_back({FieldType::ActionButton, "", mappingValues[index], PageId::Home, ActionId::ConfigureInputMapping});
@@ -39,6 +41,12 @@ namespace widemelon::display::pages
                 {"Left stick", {}, leftStickFields},
                 {"Right stick", {}, rightStickFields},
                 {"Key mapping", {}, mappingFields},
+                {"Left stick deadzone", {}, {
+                    {FieldType::Range, "Deadzone", ValueId::LeftStickDeadzoneInputPercent, PageId::Home, ActionId::None, StickDeadzoneInputMinimumPercent, StickDeadzoneInputMaximumPercent},
+                }},
+                {"Right stick deadzone", {}, {
+                    {FieldType::Range, "Deadzone", ValueId::RightStickDeadzoneInputPercent, PageId::Home, ActionId::None, StickDeadzoneInputMinimumPercent, StickDeadzoneInputMaximumPercent},
+                }},
                 {"File", {}, {
                     {FieldType::ActionButton, "Save and quit", ValueId::None, PageId::Home, ActionId::SaveInputPreset},
                     {FieldType::ActionButton, "Quit without saving", ValueId::None, PageId::Home, ActionId::DiscardInputPreset},

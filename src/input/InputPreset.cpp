@@ -145,7 +145,9 @@ std::string json(const InputPreset &preset)
            "  \"left_cursor_speed_limit\": " + std::to_string(preset.leftCursorSpeedLimit) + ",\n"
            "  \"right_cursor_speed_limit\": " + std::to_string(preset.rightCursorSpeedLimit) + ",\n"
            "  \"left_cursor_deadzone_percent\": " + std::to_string(preset.leftCursorDeadzonePercent) + ",\n"
-           "  \"right_cursor_deadzone_percent\": " + std::to_string(preset.rightCursorDeadzonePercent) + ",\n";
+           "  \"right_cursor_deadzone_percent\": " + std::to_string(preset.rightCursorDeadzonePercent) + ",\n"
+           "  \"left_stick_deadzone_input_percent\": " + std::to_string(preset.leftStickDeadzoneInputPercent) + ",\n"
+           "  \"right_stick_deadzone_input_percent\": " + std::to_string(preset.rightStickDeadzoneInputPercent) + ",\n";
     for (std::size_t index = 0; index < preset.mappings.size(); ++index)
     {
         const PhysicalInput input = static_cast<PhysicalInput>(index);
@@ -181,6 +183,8 @@ std::optional<InputPreset> parse(std::string_view document)
     preset.rightCursorSpeedLimit = static_cast<std::uint16_t>(clampValue(jsonInt(document, "right_cursor_speed_limit"), legacyCursorSpeed, 100, 500));
     preset.leftCursorDeadzonePercent = static_cast<std::uint8_t>(clampValue(jsonInt(document, "left_cursor_deadzone_percent"), CursorDeadzoneDefaultPercent, CursorDeadzoneMinimumPercent, CursorDeadzoneMaximumPercent));
     preset.rightCursorDeadzonePercent = static_cast<std::uint8_t>(clampValue(jsonInt(document, "right_cursor_deadzone_percent"), CursorDeadzoneDefaultPercent, CursorDeadzoneMinimumPercent, CursorDeadzoneMaximumPercent));
+    preset.leftStickDeadzoneInputPercent = static_cast<std::uint8_t>(clampValue(jsonInt(document, "left_stick_deadzone_input_percent"), StickDeadzoneInputDefaultPercent, StickDeadzoneInputMinimumPercent, StickDeadzoneInputMaximumPercent));
+    preset.rightStickDeadzoneInputPercent = static_cast<std::uint8_t>(clampValue(jsonInt(document, "right_stick_deadzone_input_percent"), StickDeadzoneInputDefaultPercent, StickDeadzoneInputMinimumPercent, StickDeadzoneInputMaximumPercent));
     for (std::size_t index = 0; index < preset.mappings.size(); ++index)
     {
         const PhysicalInput input = static_cast<PhysicalInput>(index);
@@ -194,6 +198,26 @@ std::optional<InputPreset> parse(std::string_view document)
             jsonInt(document, "map_" + key + "_screen_press_release_delay_frames"), ScreenPressReleaseDelayFramesDefault,
             ScreenPressReleaseDelayFramesMinimum, ScreenPressReleaseDelayFramesMaximum));
     }
+    // The first deadzone implementation represented only the outward
+    // transition. Preserve those mappings as the explicitly named variant.
+    const auto migrateLegacyDeadzoneMapping = [&](PhysicalInput input, std::string_view legacyKey)
+    {
+        const std::string newKey(physicalInputStorageName(input));
+        if (jsonString(document, "map_" + newKey + "_output")) return;
+        const std::string prefix = "map_" + std::string(legacyKey);
+        const std::optional<std::string> output = jsonString(document, prefix + "_output");
+        if (!output) return;
+        InputMapping &mapping = preset.mappings[static_cast<std::size_t>(input)];
+        mapping.output = mappingOutputFromName(output);
+        mapping.button = dsButtonFromName(jsonString(document, prefix + "_button"));
+        mapping.screenX = static_cast<std::uint16_t>(clampValue(jsonInt(document, prefix + "_screen_x"), 127, 0, 255));
+        mapping.screenY = static_cast<std::uint16_t>(clampValue(jsonInt(document, prefix + "_screen_y"), 95, 0, 191));
+        mapping.screenPressReleaseDelayFrames = static_cast<std::uint8_t>(clampValue(
+            jsonInt(document, prefix + "_screen_press_release_delay_frames"), ScreenPressReleaseDelayFramesDefault,
+            ScreenPressReleaseDelayFramesMinimum, ScreenPressReleaseDelayFramesMaximum));
+    };
+    migrateLegacyDeadzoneMapping(PhysicalInput::LeftStickLeavesDeadzone, "left_stick_deadzone");
+    migrateLegacyDeadzoneMapping(PhysicalInput::RightStickLeavesDeadzone, "right_stick_deadzone");
     // Compatibility with the L2/R2 stylus POC stored by older presets.
     const auto legacyStylusOutput = [&](std::string_view key)
     {
@@ -233,14 +257,14 @@ std::optional<LeftStickCalibration> legacyCalibrationInRoot(const std::filesyste
 std::string_view physicalInputName(PhysicalInput input)
 {
     static constexpr std::array<std::string_view, PhysicalInputCount> Names{
-        "A", "B", "X", "Y", "L", "R", "L2", "R2", "D-pad left", "D-pad right", "D-pad up", "D-pad down", "Select", "Start", "L3", "R3"};
+        "A", "B", "X", "Y", "L", "R", "L2", "R2", "D-pad left", "D-pad right", "D-pad up", "D-pad down", "Select", "Start", "L3", "R3", "Left stick leaves deadzone", "Right stick leaves deadzone", "Left stick enters deadzone", "Right stick enters deadzone"};
     return Names[static_cast<std::size_t>(input)];
 }
 
 std::string_view physicalInputStorageName(PhysicalInput input)
 {
     static constexpr std::array<std::string_view, PhysicalInputCount> Names{
-        "a", "b", "x", "y", "l", "r", "l2", "r2", "dpad_left", "dpad_right", "dpad_up", "dpad_down", "select", "start", "l3", "r3"};
+        "a", "b", "x", "y", "l", "r", "l2", "r2", "dpad_left", "dpad_right", "dpad_up", "dpad_down", "select", "start", "l3", "r3", "left_stick_leaves_deadzone", "right_stick_leaves_deadzone", "left_stick_enters_deadzone", "right_stick_enters_deadzone"};
     return Names[static_cast<std::size_t>(input)];
 }
 

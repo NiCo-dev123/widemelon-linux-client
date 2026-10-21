@@ -16,6 +16,10 @@ namespace widemelon
     inline constexpr std::uint8_t ScreenPressReleaseDelayFramesMinimum{1};
     inline constexpr std::uint8_t ScreenPressReleaseDelayFramesDefault{2};
     inline constexpr std::uint8_t ScreenPressReleaseDelayFramesMaximum{10};
+    inline constexpr std::uint8_t StickDeadzoneInputMinimumPercent{1};
+    inline constexpr std::uint8_t StickDeadzoneInputDefaultPercent{25};
+    inline constexpr std::uint8_t StickDeadzoneInputMaximumPercent{75};
+    inline constexpr std::uint8_t StickDeadzoneInputPulseFrames{2};
     inline std::string normalizeStickMode(std::string mode)
     {
         return mode == "Cursor warped" ? "Cursor wrapped" : mode;
@@ -25,6 +29,8 @@ namespace widemelon
         A, B, X, Y, L, R, L2, R2,
         DpadLeft, DpadRight, DpadUp, DpadDown,
         Select, Start, L3, R3,
+        LeftStickLeavesDeadzone, RightStickLeavesDeadzone,
+        LeftStickEntersDeadzone, RightStickEntersDeadzone,
         Count,
     };
 
@@ -80,6 +86,8 @@ namespace widemelon
         std::uint16_t rightCursorSpeedLimit{300};
         std::uint8_t leftCursorDeadzonePercent{CursorDeadzoneDefaultPercent};
         std::uint8_t rightCursorDeadzonePercent{CursorDeadzoneDefaultPercent};
+        std::uint8_t leftStickDeadzoneInputPercent{StickDeadzoneInputDefaultPercent};
+        std::uint8_t rightStickDeadzoneInputPercent{StickDeadzoneInputDefaultPercent};
         std::array<InputMapping, PhysicalInputCount> mappings{};
     };
 

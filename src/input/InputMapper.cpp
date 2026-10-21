@@ -2,6 +2,9 @@
 
 #include "input/EvdevInput.h"
 
+#include <algorithm>
+#include <cmath>
+
 namespace widemelon
 {
 namespace
@@ -32,6 +35,12 @@ void InputMapper::setMappings(const std::array<InputMapping, PhysicalInputCount>
     mappings = value;
     previousPressed.fill(false);
     togglePressed.fill(false);
+    leftStickWasOutsideDeadzone = false;
+    rightStickWasOutsideDeadzone = false;
+    leftStickLeavePulseFramesRemaining = 0;
+    rightStickLeavePulseFramesRemaining = 0;
+    leftStickEnterPulseFramesRemaining = 0;
+    rightStickEnterPulseFramesRemaining = 0;
     virtualButtonMask = 0;
     toggledButtonMask = 0;
     stylusPressed = false;
@@ -39,6 +48,25 @@ void InputMapper::setMappings(const std::array<InputMapping, PhysicalInputCount>
     screenPressXValue = 127;
     screenPressYValue = 95;
     screenPressReleaseDelayFramesValue = ScreenPressReleaseDelayFramesDefault;
+}
+
+void InputMapper::setStickDeadzoneInputThresholds(std::uint8_t leftPercent, std::uint8_t rightPercent)
+{
+    leftStickDeadzonePercent = std::clamp(leftPercent, StickDeadzoneInputMinimumPercent, StickDeadzoneInputMaximumPercent);
+    rightStickDeadzonePercent = std::clamp(rightPercent, StickDeadzoneInputMinimumPercent, StickDeadzoneInputMaximumPercent);
+}
+
+bool InputMapper::outsideDeadzone(const LeftStickState &stick, std::uint8_t percent)
+{
+    const auto normalize = [](int value, int center, int minimum, int maximum)
+    {
+        const int distance = value < center ? center - minimum : maximum - center;
+        if (distance <= 0) return 0.0F;
+        return std::clamp(static_cast<float>(value - center) / static_cast<float>(distance), -1.0F, 1.0F);
+    };
+    const float horizontal = normalize(stick.x, stick.xCenter, stick.xMinimum, stick.xMaximum);
+    const float vertical = normalize(stick.y, stick.yCenter, stick.yMinimum, stick.yMaximum);
+    return std::sqrt(horizontal * horizontal + vertical * vertical) > static_cast<float>(percent) / 100.0F;
 }
 
 bool InputMapper::isPressed(const EvdevInput &input, PhysicalInput source)
@@ -82,9 +110,21 @@ bool InputMapper::update(const EvdevInput &input)
     virtualButtonMask = 0;
     stylusPressed = false;
     screenPressHeld = false;
+    const bool leftOutside = outsideDeadzone(input.leftStickState(), leftStickDeadzonePercent);
+    const bool rightOutside = outsideDeadzone(input.rightStickState(), rightStickDeadzonePercent);
+    if (leftOutside && !leftStickWasOutsideDeadzone) leftStickLeavePulseFramesRemaining = StickDeadzoneInputPulseFrames;
+    if (rightOutside && !rightStickWasOutsideDeadzone) rightStickLeavePulseFramesRemaining = StickDeadzoneInputPulseFrames;
+    if (!leftOutside && leftStickWasOutsideDeadzone) leftStickEnterPulseFramesRemaining = StickDeadzoneInputPulseFrames;
+    if (!rightOutside && rightStickWasOutsideDeadzone) rightStickEnterPulseFramesRemaining = StickDeadzoneInputPulseFrames;
+    leftStickWasOutsideDeadzone = leftOutside;
+    rightStickWasOutsideDeadzone = rightOutside;
     for (std::size_t index = 0; index < mappings.size(); ++index)
     {
-        const bool pressed = isPressed(input, static_cast<PhysicalInput>(index));
+        const PhysicalInput source = static_cast<PhysicalInput>(index);
+        const bool pressed = source == PhysicalInput::LeftStickLeavesDeadzone ? leftStickLeavePulseFramesRemaining > 0
+            : source == PhysicalInput::RightStickLeavesDeadzone ? rightStickLeavePulseFramesRemaining > 0
+            : source == PhysicalInput::LeftStickEntersDeadzone ? leftStickEnterPulseFramesRemaining > 0
+            : source == PhysicalInput::RightStickEntersDeadzone ? rightStickEnterPulseFramesRemaining > 0 : isPressed(input, source);
         const InputMapping &mapping = mappings[index];
         if (mapping.output == MappingOutput::KeyPress && pressed)
             virtualButtonMask |= dsButtonMask(mapping.button);
@@ -106,6 +146,10 @@ bool InputMapper::update(const EvdevInput &input)
         if (mapping.output == MappingOutput::StylusPress && pressed) stylusPressed = true;
         previousPressed[index] = pressed;
     }
+    if (leftStickLeavePulseFramesRemaining > 0) --leftStickLeavePulseFramesRemaining;
+    if (rightStickLeavePulseFramesRemaining > 0) --rightStickLeavePulseFramesRemaining;
+    if (leftStickEnterPulseFramesRemaining > 0) --leftStickEnterPulseFramesRemaining;
+    if (rightStickEnterPulseFramesRemaining > 0) --rightStickEnterPulseFramesRemaining;
     virtualButtonMask |= toggledButtonMask;
     return previousButtons != virtualButtonMask || previousStylus != stylusPressed
         || previousScreenPressHeld != screenPressHeld || previousScreenPressX != screenPressXValue

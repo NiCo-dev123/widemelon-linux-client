@@ -14,6 +14,7 @@ namespace widemelon
     {
     public:
         void setMappings(const std::array<InputMapping, PhysicalInputCount> &value);
+        void setStickDeadzoneInputThresholds(std::uint8_t leftPercent, std::uint8_t rightPercent);
         bool update(const EvdevInput &input);
 
         std::uint16_t buttonMask() const { return virtualButtonMask; }
@@ -27,10 +28,19 @@ namespace widemelon
     private:
         static bool isPressed(const EvdevInput &input, PhysicalInput source);
         static std::uint16_t dsButtonMask(DsButton button);
+        static bool outsideDeadzone(const LeftStickState &stick, std::uint8_t percent);
 
         std::array<InputMapping, PhysicalInputCount> mappings{};
         std::array<bool, PhysicalInputCount> previousPressed{};
         std::array<bool, PhysicalInputCount> togglePressed{};
+        bool leftStickWasOutsideDeadzone{false};
+        bool rightStickWasOutsideDeadzone{false};
+        std::uint8_t leftStickLeavePulseFramesRemaining{0};
+        std::uint8_t rightStickLeavePulseFramesRemaining{0};
+        std::uint8_t leftStickEnterPulseFramesRemaining{0};
+        std::uint8_t rightStickEnterPulseFramesRemaining{0};
+        std::uint8_t leftStickDeadzonePercent{StickDeadzoneInputDefaultPercent};
+        std::uint8_t rightStickDeadzonePercent{StickDeadzoneInputDefaultPercent};
         std::uint16_t virtualButtonMask{0};
         std::uint16_t toggledButtonMask{0};
         bool stylusPressed{false};
